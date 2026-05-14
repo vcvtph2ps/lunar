@@ -33,4 +33,7 @@ x86_64_kernel_handoff:
     xor r15, r15
     cld
 
+    push qword 0x2
+    popfq
+
     ret

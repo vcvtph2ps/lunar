@@ -48,7 +48,6 @@ void pk_ptm_init(uintptr_t hhdm_offset) {
     g_x86_64_cpu_pdpe1gb_support = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PDPE1GB_PAGES);
 
     pk_log_print("ptm init: level=%d, nx %s, pdpe1gb %s\n", g_ptm.level_count, g_x86_64_cpu_nx_support ? "available" : "not available", g_x86_64_cpu_pdpe1gb_support ? "available" : "not available");
-    arch_msr_write(ARCH_MSR_EFER, arch_msr_read(ARCH_MSR_EFER) | (1 << 11));
 }
 
 

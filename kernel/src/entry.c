@@ -1,3 +1,4 @@
+#include <arch/cr.h>
 #include <arch/msr.h>
 #include <common/helpers.h>
 #include <log.h>
@@ -20,12 +21,16 @@ const size_t g_bootinfo_cpulocal_entry_size = sizeof(cpu_local_t);
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
-
 [[noreturn]] void kernel_entry_ap(uint64_t core_id) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
     log_print("kernel booted on core %d :3\n", core_id);
-    log_print("cpu_local=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
+    log_print("cr0=0x%016lx\n", arch_cr_read_cr0());
+    log_print("cr4=0x%016lx\n", arch_cr_read_cr4());
+    log_print("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+    log_print("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+    log_print("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
+    log_print_raw("\n");
 
     while(1);
 }
@@ -99,7 +104,13 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 
     log_print_raw("\n");
     log_print("cpu_count=%d\n", boot_info->core_count);
-    log_print("cpu_local=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
+    log_print_raw("\n");
+
+    log_print("cr0=0x%016lx\n", arch_cr_read_cr0());
+    log_print("cr4=0x%016lx\n", arch_cr_read_cr4());
+    log_print("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+    log_print("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+    log_print("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
     log_print_raw("\n");
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);

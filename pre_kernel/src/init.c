@@ -1,5 +1,6 @@
 #include <ap.h>
 #include <arch/gdt.h>
+#include <arch/machine.h>
 #include <arch/msr.h>
 #include <common/helpers.h>
 #include <common/mem.h>
@@ -15,25 +16,12 @@ void pk_tartarus_map_kernel();
 
 [[noreturn]] void x86_64_kernel_handoff(void (*entry)(bootinfo_t*, uint64_t core_id), void* stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
 
-void arch_ldt_load_ldt(uint16_t ldtr);
-
-void pk_kernel_setup_arch() {
-    arch_msr_write(ARCH_MSR_EFER, arch_msr_read(ARCH_MSR_EFER) | (1 << 0));
-    arch_gdt_ptr_t gdtr;
-    gdtr.base = (uintptr_t) &g_arch_gdt_static_data;
-    gdtr.limit = sizeof(g_arch_gdt_static_data) - 1;
-    arch_gdt_load_gdt(&gdtr, 0x08, 0x10, 0x00);
-    arch_ldt_load_ldt(0x00);
-}
-
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
 [[noreturn]] void pk_init_ap(pk_ap_boot_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
-    pk_kernel_setup_arch();
-
-    arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, (uintptr_t) boot_info->cpu_local);
+    pk_machine_init((uintptr_t) boot_info->cpu_local);
 
     x86_64_kernel_handoff(kernel_entry, (void*) boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
 }
@@ -86,8 +74,6 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
 
     void* ap_boot_info_block = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pk_ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_ptm.hhdm_offset;
 
-    arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, (uintptr_t) cpu_local_block);
-
     uint64_t core_id = 1;
     for(size_t i = 0; i < boot_info->core_count; i++) {
         if(pk_tartarus_core_is_bsp(i)) {
@@ -105,7 +91,6 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
 
     pk_ptm_create_hhdm_mappings(boot_info);
 
-    pk_kernel_setup_arch();
 
     size_t pmm_map_entries = g_pmm_map_size;
     void* memory_map_block;
@@ -144,6 +129,8 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
     }
 
     pk_log_print("cpu_local size: %zu\n", g_bootinfo_cpulocal_entry_size);
+
+    pk_machine_init((uintptr_t) cpu_local_block);
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
     x86_64_kernel_handoff(kernel_entry, stack, g_ptm.tplt, boot_info, 0);
