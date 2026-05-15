@@ -20,11 +20,10 @@ typedef enum : uint64_t {
 typedef struct {
     uintptr_t tplt;
     size_t level_count;
-    uintptr_t hhdm_offset;
 } ptm_t;
 
 extern ptm_t g_ptm;
 
-void pk_ptm_init(uintptr_t hhdm_offset); // NOLINT @todo: fix elysium tidy naming
+void pk_ptm_init(); // NOLINT @todo: fix elysium tidy naming
 void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags); // NOLINT @todo: fix elysium tidy naming
-void pk_ptm_create_hhdm_mappings(bootinfo_t* bootinfo); // NOLINT @todo: fix elysium tidy naming
+void pk_ptm_create_hhdm_mappings(); // NOLINT @todo: fix elysium tidy naming

@@ -18,6 +18,8 @@ void pk_tartarus_map_kernel();
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
+bootinfo_t* g_pk_boot_info = nullptr;
+
 [[noreturn]] void pk_init_ap(pk_ap_boot_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
@@ -30,6 +32,7 @@ bool pk_tartarus_core_is_bsp(uint64_t tartarus_core_index);
 void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_info);
 
 [[noreturn]] void pk_init(bootinfo_t* boot_info) {
+    g_pk_boot_info = boot_info;
     pk_log_print("Hai :333\n");
 
     for(size_t i = 0; i < g_pmm_map_size; i++) {
@@ -37,7 +40,7 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
         pk_log_print("pmm_entry[%zu]: base=0x%016lx, length=0x%016lx, type=%u\n", i, entry->base, entry->length, entry->type);
     }
 
-    pk_ptm_init(boot_info->hhdm_offset);
+    pk_ptm_init();
 
     for(size_t i = 0; i < boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t segment = boot_info->kernel_segments[i];
@@ -58,21 +61,21 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
         }
     }
 
-    void* stack = (pk_pmm_alloc(CORE_STACK_PGCNT) + g_ptm.hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
+    void* stack = (pk_pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
 
     size_t system_page_count = MATH_ALIGN_UP(boot_info->hhdm_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
     size_t pagedb_size = MATH_ALIGN_UP(system_page_count * g_bootinfo_pagedb_entry_size, PTM_PAGE_GRANULARITY);
-    void* pagedb = pk_pmm_alloc_ext(pagedb_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + g_ptm.hhdm_offset;
+    void* pagedb = pk_pmm_alloc_ext(pagedb_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
     pk_log_print("pagedb entry size: %zu\n", g_bootinfo_pagedb_entry_size);
 
     boot_info->pfndb_start = (uintptr_t) pagedb;
     boot_info->pfndb_size = pagedb_size;
 
     size_t cpu_local_block_size = MATH_ALIGN_UP(system_page_count * g_bootinfo_cpulocal_entry_size, PTM_PAGE_GRANULARITY);
-    void* cpu_local_block = pk_pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + g_ptm.hhdm_offset;
+    void* cpu_local_block = pk_pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
     pk_log_print("cpu_local size: %zu\n", g_bootinfo_cpulocal_entry_size);
 
-    void* ap_boot_info_block = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pk_ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_ptm.hhdm_offset;
+    void* ap_boot_info_block = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pk_ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
 
     uint64_t core_id = 1;
     for(size_t i = 0; i < boot_info->core_count; i++) {
@@ -84,19 +87,18 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
 
         pk_ap_boot_info_t* ap_boot_info = &((pk_ap_boot_info_t*) ap_boot_info_block)[i];
         ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * g_bootinfo_cpulocal_entry_size);
-        ap_boot_info->ap_stack = (uintptr_t) (pk_pmm_alloc(CORE_STACK_PGCNT) + g_ptm.hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
+        ap_boot_info->ap_stack = (uintptr_t) (pk_pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
         ap_boot_info->core_id = core_id++;
         pk_tartarus_start_ap(i, ap_boot_info);
     }
 
-    pk_ptm_create_hhdm_mappings(boot_info);
-
+    pk_ptm_create_hhdm_mappings();
 
     size_t pmm_map_entries = g_pmm_map_size;
     void* memory_map_block;
     while(true) {
         size_t memory_map_block_size = MATH_ALIGN_UP(pmm_map_entries, PTM_PAGE_GRANULARITY);
-        memory_map_block = pk_pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY) + g_ptm.hhdm_offset;
+        memory_map_block = pk_pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
         if(g_pmm_map_size > pmm_map_entries) {
             pk_pmm_free(memory_map_block, memory_map_block_size / PTM_PAGE_GRANULARITY);
             pmm_map_entries *= 2;

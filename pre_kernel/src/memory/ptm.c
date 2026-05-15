@@ -7,8 +7,9 @@
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <panic.h>
+#include <protocol/bootinfo.h>
 
-#include "protocol/bootinfo.h"
+extern bootinfo_t* g_pk_boot_info;
 
 #define ENTRY_FLAG_PRESENT (1 << 0)
 #define ENTRY_FLAG_RW (1 << 1)
@@ -26,11 +27,9 @@ ptm_t g_ptm = {};
 static bool g_x86_64_cpu_nx_support = false;
 static bool g_x86_64_cpu_pdpe1gb_support = false;
 
-void pk_ptm_init(uintptr_t hhdm_offset) {
-    g_ptm.hhdm_offset = hhdm_offset;
-
+void pk_ptm_init() {
     uintptr_t top_pagemap = (uintptr_t) pk_pmm_alloc(1);
-    memset((void*) (top_pagemap + hhdm_offset), 0, PTM_PAGE_GRANULARITY);
+    memset((void*) (top_pagemap + g_pk_boot_info->hhdm_offset), 0, PTM_PAGE_GRANULARITY);
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_LA57)) {
         if(arch_cr_read_cr4() & (1 << 12)) {
             g_ptm.level_count = 5;
@@ -59,14 +58,14 @@ static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, 
         case PTM_PAGE_SIZE_1G: lowest_level = 3; break;
     }
 
-    uint64_t* current_table = (uint64_t*) (g_ptm.tplt + g_ptm.hhdm_offset);
+    uint64_t* current_table = (uint64_t*) (g_ptm.tplt + g_pk_boot_info->hhdm_offset);
     for(int level = g_ptm.level_count; level > lowest_level; level--) {
         int index = VADDR_TO_INDEX(vaddr, level);
 
         uint64_t entry = current_table[index];
         if((entry & ENTRY_FLAG_PRESENT) == 0) {
             uint64_t* new_table = pk_pmm_alloc(1);
-            memset((void*) (((uintptr_t) new_table) + g_ptm.hhdm_offset), 0, PTM_PAGE_GRANULARITY);
+            memset((void*) (((uintptr_t) new_table) + g_pk_boot_info->hhdm_offset), 0, PTM_PAGE_GRANULARITY);
             entry = ENTRY_FLAG_PRESENT | ((uint64_t) (uintptr_t) new_table & ENTRY_4K_ADDRESS_MASK);
             if(nx) entry |= ENTRY_FLAG_NX;
         } else {
@@ -77,7 +76,7 @@ static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, 
 
         if(current_table[index] != entry) current_table[index] = entry;
 
-        current_table = (uint64_t*) ((entry & ENTRY_4K_ADDRESS_MASK) + g_ptm.hhdm_offset);
+        current_table = (uint64_t*) ((entry & ENTRY_4K_ADDRESS_MASK) + g_pk_boot_info->hhdm_offset);
     }
 
     int index = VADDR_TO_INDEX(vaddr, lowest_level);
@@ -114,7 +113,7 @@ void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) 
     }
 }
 
-void pk_ptm_create_hhdm_mappings(bootinfo_t* boot_info) {
+void pk_ptm_create_hhdm_mappings() {
     size_t frozen_map_size = g_pmm_map_size;
     pmm_map_entry_t* frozen_map = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
     memcpy(frozen_map, &g_pmm_map, sizeof(pmm_map_entry_t) * frozen_map_size);
@@ -137,7 +136,6 @@ void pk_ptm_create_hhdm_mappings(bootinfo_t* boot_info) {
         }
         if(length % PTM_PAGE_GRANULARITY != 0) length += PTM_PAGE_GRANULARITY - length % PTM_PAGE_GRANULARITY;
 
-        // ptm_map(base, base, length, PTM_FLAG_READ | PTM_FLAG_WRITE | PTM_FLAG_EXEC);
-        pk_ptm_map(boot_info->hhdm_offset + base, base, length, PTM_FLAG_READ | PTM_FLAG_WRITE);
+        pk_ptm_map(g_pk_boot_info->hhdm_offset + base, base, length, PTM_FLAG_READ | PTM_FLAG_WRITE);
     }
 }
