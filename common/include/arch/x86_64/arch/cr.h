@@ -32,7 +32,7 @@ static inline void arch_cr_write_xcr0(uint64_t value) {
     asm volatile("xsetbv" : : "a"(value), "d"(value >> 32), "c"(0) : "memory");
 }
 
-static inline uint64_t arch_cr_read_xcr0() {
+[[nodiscard]] static inline uint64_t arch_cr_read_xcr0() {
     uint32_t hi, lo;
     asm volatile("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
     return ((uint64_t) hi << 32) | lo;

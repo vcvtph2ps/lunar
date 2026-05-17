@@ -6,6 +6,7 @@
 #include <common/spinlock.h>
 
 #include "arch/interrupt.h"
+#include "common/arch.h"
 
 // @todo: refactor this
 #define MAX_LOG_SINKS 8
@@ -25,7 +26,13 @@ void log_init() {
         .write = sink_debug,
         .ctx = nullptr,
     };
-    log_add_sink(&debug_sink);
+    if(!log_add_sink(&debug_sink)) {
+        // we really can't do much about that can we?
+        while(1) {
+            (void) arch_interrupt_disable();
+            arch_wait_for_interrupt();
+        }
+    }
 }
 
 bool log_add_sink(const log_sink_t* sink) {

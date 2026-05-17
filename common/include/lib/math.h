@@ -8,10 +8,10 @@
 #define MATH_ALIGN_UP(x, align) ((((uintptr_t) (x)) + ((align) - 1)) & ~((uintptr_t) ((align) - 1)))
 #define MATH_ALIGN_DOWN(x, align) (((uintptr_t) (x)) & ~((uintptr_t) ((align) - 1)))
 
-static inline int math_min(int a, int b) {
+[[nodiscard]] static inline int math_min(int a, int b) {
     return a < b ? a : b;
 }
 
-static inline int math_max(int a, int b) {
+[[nodiscard]] static inline int math_max(int a, int b) {
     return a > b ? a : b;
 }

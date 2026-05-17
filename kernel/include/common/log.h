@@ -22,7 +22,7 @@ typedef struct log_sink {
  * @brief Registers a new log sink dynamically.
  * @return true if the sink was added successfully, false otherwise
  */
-bool log_add_sink(const log_sink_t* sink);
+[[nodiscard]] bool log_add_sink(const log_sink_t* sink);
 
 /**
  * @brief Initializes the logging system.

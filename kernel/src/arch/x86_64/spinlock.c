@@ -4,7 +4,7 @@
 #include <lib/helpers.h>
 #include <stdint.h>
 
-static inline bool spinlock_try_lock(ATOMIC_PARAM uint32_t* lock) {
+[[nodiscard]] static inline bool spinlock_try_lock(ATOMIC_PARAM uint32_t* lock) {
     return !ATOMIC_XCHG(lock, 1, ATOMIC_ACQUIRE);
 }
 
@@ -16,7 +16,7 @@ static inline void spinlock_lock_raw(ATOMIC_PARAM uint32_t* lock) {
     while(true) {
         if(spinlock_try_lock(lock)) return;
         while(ATOMIC_LOAD(lock, ATOMIC_RELAXED)) {
-            arch_relax();
+            arch_spin_hint();
         }
     }
 }
