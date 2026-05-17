@@ -2,13 +2,14 @@
 OUTPUT_FORMAT(elf64-x86-64)
 
 /* We want the symbol kmain to be our entry point */
-ENTRY(kernel_main)
+ENTRY(kernel_entry)
 
 /* Define the program headers we want so the bootloader gives us the right */
 /* MMU permissions; this also allows us to exert more control over the linking */
 /* process. */
 PHDRS
 {
+    prekernel_boot_info PT_LOAD;
     text PT_LOAD;
     rodata PT_LOAD;
     data PT_LOAD;
@@ -24,6 +25,12 @@ SECTIONS
     kernel_start = .;
     /* Move to the next memory page for .text */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
+
+    prekernel_boot_info_start = .;
+    .prekernel_boot_info : {
+        *(.prekernel_boot_info .prekernel_boot_info.*)
+    } :prekernel_boot_info
+    prekernel_boot_info_end = .;
 
     text_start = .;
     .text : {

@@ -19,6 +19,11 @@ typedef struct [[gnu::packed, gnu::aligned(16)]] {
 const size_t g_bootinfo_pagedb_entry_size = sizeof(page_t);
 const size_t g_bootinfo_cpulocal_entry_size = sizeof(cpu_local_t);
 
+[[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_boot_info = {
+    .pagedb_entry_size = sizeof(page_t),
+    .cpu_local_size = sizeof(cpu_local_t),
+};
+
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
 [[noreturn]] void kernel_entry_ap(uint64_t core_id) {
@@ -35,9 +40,7 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 }
 
 [[noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
-    if(core_id != 0) {
-        kernel_entry_ap(core_id);
-    }
+    if(core_id != 0) { kernel_entry_ap(core_id); }
 
     log_init();
 

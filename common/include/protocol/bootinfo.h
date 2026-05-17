@@ -7,6 +7,11 @@
 #define BOOTINFO_SEGMENT_FLAG_EXECUTE (1 << 2)
 
 typedef struct [[gnu::packed]] {
+    size_t pagedb_entry_size;
+    size_t cpu_local_size;
+} bootinfo_kernel_info_t;
+
+typedef struct [[gnu::packed]] {
     uint64_t vaddr;
     uint64_t paddr;
     uint64_t size;
@@ -99,7 +104,4 @@ typedef struct [[gnu::packed]] {
     bootinfo_module_t* modules;
 } bootinfo_t;
 
-extern const size_t g_bootinfo_pagedb_entry_size;
-extern const size_t g_bootinfo_cpulocal_entry_size;
-
-[[noreturn]] extern void kernel_entry(bootinfo_t* boot_info, uint64_t core_id); // NOLINT
+typedef void (*bootinfo_kernel_entry_point_t)(bootinfo_t* boot_info, uint64_t core_id);

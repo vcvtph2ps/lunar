@@ -55,9 +55,7 @@ static void dispatch_to_sinks(int c, void* ctx) {
     log_print_ctx_t* print_ctx = (log_print_ctx_t*) ctx;
 
     for(size_t i = 0; i < print_ctx->sink_count; i++) {
-        if(print_ctx->selected_sinks[i]->write != nullptr) {
-            print_ctx->selected_sinks[i]->write(c, print_ctx->selected_sinks[i]->ctx);
-        }
+        if(print_ctx->selected_sinks[i]->write != nullptr) { print_ctx->selected_sinks[i]->write(c, print_ctx->selected_sinks[i]->ctx); }
     }
 }
 
@@ -66,14 +64,10 @@ void log_vprint(log_level_t level, const char* fmt, va_list val) {
     log_sink_t* selected_sinks[MAX_LOG_SINKS];
     size_t selected_sink_count = 0;
     for(size_t i = 0; i < g_sink_count; i++) {
-        if(level >= g_sinks[i].min_level && g_sinks[i].write != nullptr) {
-            selected_sinks[selected_sink_count++] = &g_sinks[i];
-        }
+        if(level >= g_sinks[i].min_level && g_sinks[i].write != nullptr) { selected_sinks[selected_sink_count++] = &g_sinks[i]; }
     }
 
-    if(selected_sink_count == 0) {
-        return;
-    }
+    if(selected_sink_count == 0) { return; }
 
     log_print_ctx_t ctx = {
         .selected_sinks = (const struct log_sink**) &selected_sinks,
