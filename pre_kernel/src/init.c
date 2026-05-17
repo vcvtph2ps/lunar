@@ -2,8 +2,8 @@
 #include <arch/gdt.h>
 #include <arch/machine.h>
 #include <arch/msr.h>
-#include <common/helpers.h>
 #include <common/mem.h>
+#include <lib/helpers.h>
 #include <lib/math.h>
 #include <log.h>
 #include <memory/pmm.h>

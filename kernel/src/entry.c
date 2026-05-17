@@ -1,7 +1,7 @@
 #include <arch/cr.h>
 #include <arch/msr.h>
-#include <common/helpers.h>
-#include <log.h>
+#include <common/log.h>
+#include <lib/helpers.h>
 #include <protocol/bootinfo.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -24,13 +24,12 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 [[noreturn]] void kernel_entry_ap(uint64_t core_id) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
-    log_print("kernel booted on core %d :3\n", core_id);
-    log_print("cr0=0x%016lx\n", arch_cr_read_cr0());
-    log_print("cr4=0x%016lx\n", arch_cr_read_cr4());
-    log_print("xcr0=0x%016lx\n", arch_cr_read_xcr0());
-    log_print("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
-    log_print("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
-    log_print_raw("\n");
+    LOG_STRC("kernel booted on core %ld :3\n", core_id);
+    LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
+    LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
+    LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+    LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+    LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
     while(1);
 }
@@ -40,22 +39,20 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
         kernel_entry_ap(core_id);
     }
 
-    log_print("kernel booted on core %d :3\n", core_id);
+    log_init();
 
-    log_print("boot_timestamp=%d\n", boot_info->boot_timestamp);
-    log_print_raw("\n");
-    log_print("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
-    log_print_raw("\n");
-    log_print("hhdm_offset=0x%016lx\n", boot_info->hhdm_offset);
-    log_print("hhdm_size=0x%016lx\n", boot_info->hhdm_size);
-    log_print_raw("\n");
-    log_print("pfndb_start=0x%016lx\n", boot_info->pfndb_start);
-    log_print("pfndb_size=0x%016lx\n", boot_info->pfndb_size);
-    log_print_raw("\n");
-    log_print("kernel_segment_count=%zu\n", boot_info->kernel_segment_count);
+    LOG_STRC("kernel booted on core %ld :3\n", core_id);
+
+    LOG_STRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
+    LOG_STRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
+    LOG_STRC("hhdm_offset=0x%016lx\n", boot_info->hhdm_offset);
+    LOG_STRC("hhdm_size=0x%016lx\n", boot_info->hhdm_size);
+    LOG_STRC("pfndb_start=0x%016lx\n", boot_info->pfndb_start);
+    LOG_STRC("pfndb_size=0x%016lx\n", boot_info->pfndb_size);
+    LOG_STRC("kernel_segment_count=%zu\n", boot_info->kernel_segment_count);
     for(size_t i = 0; i < boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* segment = &boot_info->kernel_segments[i];
-        log_print(
+        LOG_STRC(
             "kernel_segment[%zu]: paddr=0x%016lx, vaddr=0x%016lx, size=0x%016lx, flags=%c%c%c\n",
             i,
             segment->paddr,
@@ -66,52 +63,45 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
             (segment->flags & BOOTINFO_SEGMENT_FLAG_EXECUTE) ? 'x' : '-'
         );
     }
-    log_print_raw("\n");
-    log_print("mm_entry_count=%zu\n", boot_info->mm_entry_count);
+    LOG_STRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
     for(size_t i = 0; i < boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &boot_info->mm_entries[i];
-        log_print("mm_entry[%zu]: paddr=0x%016lx, size=0x%016lx, type=%d\n", i, entry->phys_base, entry->length, entry->type);
+        LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, size=0x%016lx, type=%ld\n", i, entry->phys_base, entry->length, entry->type);
     }
 
-    log_print_raw("\n");
-    log_print("framebuffer_count=%zu\n", boot_info->framebuffer_count);
+    LOG_STRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);
     for(size_t i = 0; i < boot_info->framebuffer_count; i++) {
         bootinfo_framebuffer_t* framebuffer = &boot_info->framebuffers[i];
-        log_print("framebuffer[%zu]: vaddr=0x%016lx, paddr=0x%016lx, width=%d, height=%d, pitch=%d, format=", i, framebuffer->vaddr, framebuffer->paddr, framebuffer->width, framebuffer->height, framebuffer->pitch);
+        LOG_STRC("framebuffer[%zu]: vaddr=0x%016lx, paddr=0x%016lx, width=%d, height=%d, pitch=%d, format=", i, (uintptr_t) framebuffer->vaddr, framebuffer->paddr, framebuffer->width, framebuffer->height, framebuffer->pitch);
 
-        uint32_t bit_position = 0;
-        for(int i = 0; i < 3; i++) {
-            if(framebuffer->red_position == bit_position) {
-                log_print_raw("r%d", framebuffer->red_size);
-                bit_position += framebuffer->red_size;
-            } else if(framebuffer->green_position == bit_position) {
-                log_print_raw("g%d", framebuffer->green_size);
-                bit_position += framebuffer->green_size;
-            } else if(framebuffer->blue_position == bit_position) {
-                log_print_raw("b%d", framebuffer->blue_size);
-                bit_position += framebuffer->blue_size;
-            }
-        }
-        log_print_raw("\n");
+        // uint32_t bit_position = 0;
+        // for(int i = 0; i < 3; i++) {
+        //     if(framebuffer->red_position == bit_position) {
+        //         LOG_STRC_raw("r%d", framebuffer->red_size);
+        //         bit_position += framebuffer->red_size;
+        //     } else if(framebuffer->green_position == bit_position) {
+        //         LOG_STRC_raw("g%d", framebuffer->green_size);
+        //         bit_position += framebuffer->green_size;
+        //     } else if(framebuffer->blue_position == bit_position) {
+        //         LOG_STRC_raw("b%d", framebuffer->blue_size);
+        //         bit_position += framebuffer->blue_size;
+        //     }
+        // }
     }
-    log_print_raw("\n");
-    log_print("module_count=%zu\n", boot_info->module_count);
+    LOG_STRC("module_count=%zu\n", boot_info->module_count);
 
     for(size_t i = 0; i < boot_info->module_count; i++) {
         bootinfo_module_t* module = &boot_info->modules[i];
-        log_print("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
+        LOG_STRC("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
     }
 
-    log_print_raw("\n");
-    log_print("cpu_count=%d\n", boot_info->core_count);
-    log_print_raw("\n");
+    LOG_STRC("cpu_count=%ld\n", boot_info->core_count);
 
-    log_print("cr0=0x%016lx\n", arch_cr_read_cr0());
-    log_print("cr4=0x%016lx\n", arch_cr_read_cr4());
-    log_print("xcr0=0x%016lx\n", arch_cr_read_xcr0());
-    log_print("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
-    log_print("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
-    log_print_raw("\n");
+    LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
+    LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
+    LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+    LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+    LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
 
