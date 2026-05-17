@@ -16,9 +16,6 @@ typedef struct [[gnu::packed, gnu::aligned(16)]] {
     uint64_t asf;
 } cpu_local_t;
 
-const size_t g_bootinfo_pagedb_entry_size = sizeof(page_t);
-const size_t g_bootinfo_cpulocal_entry_size = sizeof(cpu_local_t);
-
 [[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_boot_info = {
     .pagedb_entry_size = sizeof(page_t),
     .cpu_local_size = sizeof(cpu_local_t),
