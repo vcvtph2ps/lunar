@@ -98,7 +98,6 @@ static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, 
 void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
     if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) pk_panic("unaligned mapping (%#llx -> %#llx / %#llx)", paddr, vaddr, length);
     if((flags & PTM_FLAG_READ) == 0) pk_log_print("mapping with no read permission\n");
-    // if(!g_x86_64_cpu_nx_support && (flags & PTM_FLAG_EXEC) == 0) pk_log_print("no-execute permissions not supported\n");
 
     uint64_t offset = 0;
     while(offset < length) {
