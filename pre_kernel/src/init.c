@@ -23,7 +23,7 @@ bootinfo_t* g_pk_boot_info = nullptr;
 [[noreturn]] void pk_init_ap(pk_ap_boot_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
-    pk_machine_init((uintptr_t) boot_info->cpu_local);
+    pk_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local);
 
     x86_64_kernel_handoff(kernel_entry, (void*) boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
 }
@@ -55,7 +55,7 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
             flags |= PTM_FLAG_EXEC;
         }
 
-        pk_log_print("kernel segment: 0x%llx -> 0x%llx - %zu [%c%c%c]\n", segment.paddr, segment.vaddr, segment.size, (flags & PTM_FLAG_READ) ? 'r' : '-', (flags & PTM_FLAG_WRITE) ? 'w' : '-', (flags & PTM_FLAG_EXEC) ? 'x' : '-');
+        pk_log_print("kernel segment: 0x%lx -> 0x%lx - %zu [%c%c%c]\n", segment.paddr, segment.vaddr, segment.size, (flags & PTM_FLAG_READ) ? 'r' : '-', (flags & PTM_FLAG_WRITE) ? 'w' : '-', (flags & PTM_FLAG_EXEC) ? 'x' : '-');
         for(uintptr_t i = 0; i < segment.size; i += PTM_PAGE_GRANULARITY) {
             pk_ptm_map(segment.vaddr + i, segment.paddr + i, PTM_PAGE_GRANULARITY, flags);
         }
@@ -78,12 +78,12 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
     void* ap_boot_info_block = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pk_ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
 
     uint64_t core_id = 1;
-    for(size_t i = 0; i < boot_info->core_count; i++) {
+    for(uint64_t i = 0; i < boot_info->core_count; i++) {
         if(pk_tartarus_core_is_bsp(i)) {
             continue;
         }
 
-        pk_log_print("starting ap %d\n", i);
+        pk_log_print("starting ap %lu\n", i);
 
         pk_ap_boot_info_t* ap_boot_info = &((pk_ap_boot_info_t*) ap_boot_info_block)[i];
         ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * g_bootinfo_cpulocal_entry_size);
@@ -132,7 +132,7 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
 
     pk_log_print("cpu_local size: %zu\n", g_bootinfo_cpulocal_entry_size);
 
-    pk_machine_init((uintptr_t) cpu_local_block);
+    pk_machine_init(0, (uintptr_t) cpu_local_block);
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
     x86_64_kernel_handoff(kernel_entry, stack, g_ptm.tplt, boot_info, 0);

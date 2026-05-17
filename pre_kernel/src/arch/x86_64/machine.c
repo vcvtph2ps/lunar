@@ -6,7 +6,7 @@
 #include <panic.h>
 #include <stdint.h>
 
-static void machine_setup_control_registers() {
+static void machine_setup_control_registers(uint64_t core_id) {
     if(!arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_FXSR)) {
         pk_panic("FXSR not supported on this CPU!");
     }
@@ -26,7 +26,7 @@ static void machine_setup_control_registers() {
     bool write_xcr0 = false;
     uint64_t xcr0 = 0;
 
-    pk_log_print("Enabled optional features: [");
+    pk_log_print("Enabled optional features for core %lu: [", core_id);
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_UMIP)) {
         cr4 |= (1 << 11); // CR4.UMIP
         pk_log_print_raw("UMIP, ");
@@ -80,8 +80,8 @@ void machine_setup_gdt() {
     arch_ldt_load_ldt(0x00);
 }
 
-void pk_machine_init(uintptr_t cpu_local_ptr) {
-    machine_setup_control_registers();
+void pk_machine_init(uint64_t core_id, uintptr_t cpu_local_ptr) {
+    machine_setup_control_registers(core_id);
     machine_setup_gdt();
     arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, cpu_local_ptr);
 }
