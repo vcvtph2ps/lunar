@@ -2,14 +2,13 @@
 OUTPUT_FORMAT(elf64-x86-64)
 
 /* We want the symbol kmain to be our entry point */
-ENTRY(pk_entry_tartarus)
+ENTRY(kernel_main)
 
 /* Define the program headers we want so the bootloader gives us the right */
 /* MMU permissions; this also allows us to exert more control over the linking */
 /* process. */
 PHDRS
 {
-    limine_requests PT_LOAD;
     text PT_LOAD;
     rodata PT_LOAD;
     data PT_LOAD;
@@ -23,14 +22,6 @@ SECTIONS
     /* that is the beginning of the region. */
     . = 0xffffffff80000000;
     kernel_start = .;
-    requests_start = .;
-    /* Define a section to contain the Limine requests and assign it to its own PHDR */
-    .limine_requests : {
-        KEEP(*(.limine_requests_start))
-        KEEP(*(.limine_requests))
-        KEEP(*(.limine_requests_end))
-    } :limine_requests
-    requests_end = .;
     /* Move to the next memory page for .text */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
 
