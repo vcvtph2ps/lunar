@@ -14,32 +14,11 @@ assert(nasm ~= nil, "No nasm found")
 local ld = linker.get_linker("ld.lld")
 assert(ld ~= nil, "No ld.lld found")
 
-
-local function get_common_objs(kernel_flags)
-    local common_sources = sources(fab.glob("common/src/**/*.c", "!common/src/arch/**"))
-    table.extend(common_sources, sources(fab.glob(path("common/src/arch", opt_arch, "**/*.c"))))
-
-    if opt_arch == "x86_64" then
-        table.extend(common_sources, sources(fab.glob("common/src/arch/x86_64/**/*.asm")))
-    end
-
-    local common_include_dirs = {
-        c.include_dir(path("common/include/arch/", opt_arch)),
-        c.include_dir("common/include"),
-        c.include_dir(path("common/include/arch/", opt_arch)),
-    }
-
-    local generators = {
-        c = function(sources) return clang:generate(sources, kernel_flags, common_include_dirs) end
-    }
-
-    if opt_arch == "x86_64" then
-        local nasm_flags = { "-f", "elf64", "-Werror" }
-        generators.asm = function(sources) return nasm:generate(sources, nasm_flags) end
-    end
-
-    return generate(common_sources, generators)
-end
+local prekernel_protocol = fab.git(
+    "prekernel-protocol",
+    "https://github.com/vcvtph2ps/lunar-prekernel",
+    "b64f3f4a9ca5ccb7b6ece61f780e311e1102a58b"
+)
 
 local function get_kernel_objs(kernel_flags)
     local kernel_sources = sources(fab.glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
@@ -52,9 +31,9 @@ local function get_kernel_objs(kernel_flags)
     local kernel_include_dirs = {
         c.include_dir(path("kernel/include/arch/", opt_arch)),
         c.include_dir("kernel/include"),
-        c.include_dir("common/include"),
-        c.include_dir(path("common/include/arch/", opt_arch))
     }
+    table.insert(kernel_include_dirs,
+        c.include_dir(path(fab.build_dir(), prekernel_protocol.path, "pre_kernel", "public")))
 
     local generators = {
         c = function(sources) return clang:generate(sources, kernel_flags, kernel_include_dirs) end
@@ -122,7 +101,6 @@ table.extend(kernel_flags, {
 local linker_script = fab.def_source("support/" .. opt_arch .. ".lds")
 
 
-local common_objs = get_common_objs(kernel_flags)
 -- if opt_build_type == "debug" then
 --     table.extend(kernel_flags, {
 --         "-fsanitize=undefined",
@@ -132,7 +110,6 @@ local common_objs = get_common_objs(kernel_flags)
 
 local kernel_objs = get_kernel_objs(kernel_flags)
 
-table.extend(objects, common_objs)
 table.extend(objects, kernel_objs)
 
 local kernel = ld:link("kernel.elf", objects, {
