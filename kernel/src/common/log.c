@@ -33,6 +33,7 @@ void log_init() {
             arch_wait_for_interrupt();
         }
     }
+    sink_debug('\n', nullptr);
 }
 
 bool log_add_sink(const log_sink_t* sink) {
