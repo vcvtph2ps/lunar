@@ -95,6 +95,9 @@ table.extend(kernel_flags, {
     "-Wextra",
     "-Wvla",
     "-Werror",
+    "-Wpedantic",
+    "-Wno-language-extension-token",
+    "-Wno-gnu-zero-variadic-macro-arguments",
     "-Wno-error=unused-function"
 })
 
