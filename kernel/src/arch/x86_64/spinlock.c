@@ -19,7 +19,6 @@ static inline void spinlock_lock_raw(ATOMIC_PARAM uint32_t* lock) {
     }
 }
 
-
 [[nodiscard]] arch_interrupt_state_t spinlock_noint_lock(spinlock_no_int_t* lock) {
     arch_interrupt_state_t state = arch_interrupt_disable();
     spinlock_lock_raw(&lock->lock);

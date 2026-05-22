@@ -29,6 +29,9 @@ typedef struct log_sink {
  */
 void log_init();
 
+void log_vprint_lockless(log_level_t log, const char* fmt, va_list val);
+[[gnu::format(printf, 2, 3)]] void log_print_lockless(log_level_t log, const char* fmt, ...);
+
 void log_vprint(log_level_t log, const char* fmt, va_list val);
 [[gnu::format(printf, 2, 3)]] void log_print(log_level_t log, const char* fmt, ...);
 

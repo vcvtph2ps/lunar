@@ -17,7 +17,7 @@ assert(ld ~= nil, "No ld.lld found")
 local prekernel_protocol = fab.git(
     "prekernel-protocol",
     "https://github.com/vcvtph2ps/lunar-prekernel",
-    "b64f3f4a9ca5ccb7b6ece61f780e311e1102a58b"
+    "80fe129cf70d053613aa1df76a78d8ac07cf2f56"
 )
 
 local function get_kernel_objs(kernel_flags)
@@ -98,18 +98,18 @@ table.extend(kernel_flags, {
     "-Wpedantic",
     "-Wno-language-extension-token",
     "-Wno-gnu-zero-variadic-macro-arguments",
+    "-Wno-gnu-statement-expression-from-macro-expansion",
     "-Wno-error=unused-function"
 })
 
 local linker_script = fab.def_source("support/" .. opt_arch .. ".lds")
 
-
--- if opt_build_type == "debug" then
---     table.extend(kernel_flags, {
---         "-fsanitize=undefined",
---         "-fstack-protector-all"
---     })
--- end
+if opt_build_type == "debug" then
+    table.extend(kernel_flags, {
+        "-fsanitize=undefined",
+        "-fstack-protector-all"
+    })
+end
 
 local kernel_objs = get_kernel_objs(kernel_flags)
 

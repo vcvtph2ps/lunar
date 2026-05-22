@@ -1,12 +1,11 @@
 #include <nanoprintf/nanoprintf.h>
 
 ///
+#include <arch/interrupt.h>
 #include <arch/io.h>
+#include <common/arch.h>
 #include <common/log.h>
 #include <common/spinlock.h>
-
-#include "arch/interrupt.h"
-#include "common/arch.h"
 
 // @todo: refactor this
 #define MAX_LOG_SINKS 8
@@ -60,8 +59,7 @@ static void dispatch_to_sinks(int c, void* ctx) {
     }
 }
 
-
-void log_vprint(log_level_t level, const char* fmt, va_list val) {
+void log_vprint_lockless(log_level_t level, const char* fmt, va_list val) {
     log_sink_t* selected_sinks[MAX_LOG_SINKS];
     size_t selected_sink_count = 0;
     for(size_t i = 0; i < g_sink_count; i++) {
@@ -78,9 +76,24 @@ void log_vprint(log_level_t level, const char* fmt, va_list val) {
     npf_vpprintf(dispatch_to_sinks, &ctx, fmt, val);
 }
 
-void log_print(log_level_t level, const char* fmt, ...) {
+void log_print_lockless(log_level_t level, const char* fmt, ...) {
     va_list val;
     va_start(val, fmt);
     log_vprint(level, fmt, val);
+    va_end(val);
+}
+
+void log_vprint(log_level_t level, const char* fmt, va_list val) {
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_log_lock);
+    log_vprint_lockless(level, fmt, val);
+    spinlock_noint_unlock(&g_log_lock, state);
+}
+
+void log_print(log_level_t level, const char* fmt, ...) {
+    va_list val;
+    va_start(val, fmt);
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_log_lock);
+    log_vprint_lockless(level, fmt, val);
+    spinlock_noint_unlock(&g_log_lock, state);
     va_end(val);
 }

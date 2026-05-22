@@ -1,5 +1,6 @@
 #include <arch/cr.h>
 #include <arch/msr.h>
+#include <common/cpu_local.h>
 #include <common/log.h>
 #include <lib/helpers.h>
 #include <protocol/bootinfo.h>
@@ -10,21 +11,16 @@ typedef struct [[gnu::packed, gnu::aligned(16)]] {
     uint64_t asdf;
 } page_t;
 
-typedef struct [[gnu::packed, gnu::aligned(16)]] {
-    uint64_t asdf;
-    uint64_t asd;
-    uint64_t asf;
-} cpu_local_t;
-
 [[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_boot_info = {
     .pagedb_entry_size = sizeof(page_t),
-    .cpu_local_size = sizeof(cpu_local_t),
+    .cpu_local_size = sizeof(arch_cpu_local_t),
 };
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
 [[noreturn]] void kernel_entry_ap(uint64_t core_id) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
+    cpu_local_init(core_id);
 
     LOG_STRC("kernel booted on core %ld :3\n", core_id);
     LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
@@ -39,9 +35,10 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 [[noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
     if(core_id != 0) { kernel_entry_ap(core_id); }
 
+    cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
 
-    LOG_STRC("kernel booted on core %ld :3\n", core_id);
+    LOG_STRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
 
     LOG_STRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
     LOG_STRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
@@ -73,20 +70,6 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
     for(size_t i = 0; i < boot_info->framebuffer_count; i++) {
         bootinfo_framebuffer_t* framebuffer = &boot_info->framebuffers[i];
         LOG_STRC("framebuffer[%zu]: vaddr=0x%016lx, paddr=0x%016lx, width=%d, height=%d, pitch=%d, format=", i, (uintptr_t) framebuffer->vaddr, framebuffer->paddr, framebuffer->width, framebuffer->height, framebuffer->pitch);
-
-        // uint32_t bit_position = 0;
-        // for(int i = 0; i < 3; i++) {
-        //     if(framebuffer->red_position == bit_position) {
-        //         LOG_STRC_raw("r%d", framebuffer->red_size);
-        //         bit_position += framebuffer->red_size;
-        //     } else if(framebuffer->green_position == bit_position) {
-        //         LOG_STRC_raw("g%d", framebuffer->green_size);
-        //         bit_position += framebuffer->green_size;
-        //     } else if(framebuffer->blue_position == bit_position) {
-        //         LOG_STRC_raw("b%d", framebuffer->blue_size);
-        //         bit_position += framebuffer->blue_size;
-        //     }
-        // }
     }
     LOG_STRC("module_count=%zu\n", boot_info->module_count);
 
