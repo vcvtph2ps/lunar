@@ -31,6 +31,7 @@ local function get_kernel_objs(kernel_flags)
     local kernel_include_dirs = {
         c.include_dir(path("kernel/include/arch/", opt_arch)),
         c.include_dir("kernel/include"),
+        c.include_dir("third_party"),
     }
     table.insert(kernel_include_dirs,
         c.include_dir(path(fab.build_dir(), prekernel_protocol.path, "pre_kernel", "public")))

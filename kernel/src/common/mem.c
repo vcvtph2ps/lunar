@@ -25,9 +25,3 @@ int memcmp(const void* lhs, const void* rhs, size_t count) {
     }
     return 0;
 }
-
-int strlen(const char* str) {
-    int length = 0;
-    while(str[length] != '\0') length++;
-    return length;
-}
