@@ -1,4 +1,5 @@
 #pragma once
+#include <arch/memory.h>
 #include <stdint.h>
 
 /**
@@ -20,3 +21,14 @@ uint64_t arch_get_core_id();
  *
  */
 [[noreturn, gnu::format(printf, 1, 2)]] void arch_panic(const char* format, ...);
+
+/**
+ *
+ */
+[[noreturn]] void arch_init_bsp();
+
+
+/**
+ *
+ */
+[[noreturn]] void arch_init_ap(uint32_t core_id);

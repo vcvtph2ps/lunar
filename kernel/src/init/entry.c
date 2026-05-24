@@ -1,18 +1,16 @@
 #include <arch/cr.h>
 #include <arch/msr.h>
+#include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/log.h>
 #include <lib/helpers.h>
+#include <memory/pagedb.h>
 #include <protocol/bootinfo.h>
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct [[gnu::packed, gnu::aligned(16)]] {
-    uint64_t asdf;
-} page_t;
-
-[[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_boot_info = {
-    .pagedb_entry_size = sizeof(page_t),
+[[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_prekernel_boot_info = {
+    .pagedb_entry_size = sizeof(pagedb_page_t),
     .cpu_local_size = sizeof(arch_cpu_local_t),
 };
 
@@ -29,12 +27,15 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
     LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
     LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
-    while(1);
+    arch_init_ap(core_id);
 }
+
+bootinfo_t* g_init_boot_info;
 
 [[noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
     if(core_id != 0) { kernel_entry_ap(core_id); }
 
+    g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
 
@@ -86,7 +87,9 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
     LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
     LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
+    pagedb_init();
+
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
 
-    while(1);
+    arch_init_bsp();
 }

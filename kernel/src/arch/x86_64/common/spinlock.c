@@ -19,6 +19,25 @@ static inline void spinlock_lock_raw(ATOMIC_PARAM uint32_t* lock) {
     }
 }
 
+// @TODO: disable preemption
+void spinlock_lock(spinlock_t* lock) {
+    spinlock_lock_raw(&lock->lock);
+}
+
+void spinlock_unlock(spinlock_t* lock) {
+    spinlock_unlock_raw(&lock->lock);
+}
+
+// @TODO: disable dw and preemption
+void spinlock_nodw_lock(spinlock_no_dw_t* lock) {
+    spinlock_lock_raw(&lock->lock);
+}
+
+void spinlock_nodw_unlock(spinlock_no_dw_t* lock) {
+    spinlock_unlock_raw(&lock->lock);
+}
+
+
 [[nodiscard]] arch_interrupt_state_t spinlock_noint_lock(spinlock_no_int_t* lock) {
     arch_interrupt_state_t state = arch_interrupt_disable();
     spinlock_lock_raw(&lock->lock);
