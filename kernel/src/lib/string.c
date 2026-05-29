@@ -1,4 +1,4 @@
-#include <common/mem.h>
+#include <lib/string.h>
 #include <stdint.h>
 
 [[gnu::weak]] void memset(void* dest, int ch, size_t count) {
@@ -24,4 +24,10 @@ int memcmp(const void* lhs, const void* rhs, size_t count) {
         if(*((uint8_t*) lhs + i) < *((uint8_t*) rhs + i)) return 1;
     }
     return 0;
+}
+
+int strlen(const char* str) {
+    int length = 0;
+    while(str[length] != '\0') length++;
+    return length;
 }

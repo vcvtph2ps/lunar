@@ -1,8 +1,9 @@
+#pragma once
+
 #include <lib/helpers.h>
+#include <protocol/bootinfo.h>
 #include <stdbool.h>
 #include <stdint.h>
-
-#include "protocol/bootinfo.h"
 
 typedef enum {
     INIT_STAGE_BASE_MEM

@@ -1,5 +1,5 @@
 #include <arch/cpu_local.h>
-#include <arch/msr.h>
+#include <arch/internal/msr.h>
 
 arch_cpu_local_t* g_cpu_local_storage;
 

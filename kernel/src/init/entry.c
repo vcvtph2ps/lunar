@@ -1,5 +1,5 @@
-#include <arch/cr.h>
-#include <arch/msr.h>
+#include <arch/internal/cr.h>
+#include <arch/internal/msr.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/log.h>

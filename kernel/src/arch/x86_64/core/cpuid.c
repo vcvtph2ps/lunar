@@ -1,4 +1,4 @@
-#include <arch/cpuid.h>
+#include <arch/internal/cpuid.h>
 #include <stdbool.h>
 #include <stdint.h>
 

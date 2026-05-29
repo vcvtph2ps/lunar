@@ -4,6 +4,7 @@
 
 typedef struct [[gnu::packed, gnu::aligned(16)]] {
     ATOMIC uint64_t ref_count;
+    ATOMIC uint16_t page_level_mapping_count;
 } pagedb_page_t;
 
 void pagedb_init();

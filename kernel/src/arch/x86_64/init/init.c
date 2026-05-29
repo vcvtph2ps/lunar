@@ -1,9 +1,8 @@
 #include <common/arch.h>
 #include <common/init.h>
 #include <common/log.h>
+#include <lib/helpers.h>
 #include <stddef.h>
-
-#include "lib/helpers.h"
 
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
@@ -28,6 +27,7 @@ ATOMIC uint32_t g_init_finished_core_count = 0;
 
 void arch_init_bsp() {
     run_stage(INIT_STAGE_BASE_MEM, 0);
+    arch_panic("mroaww");
 
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);

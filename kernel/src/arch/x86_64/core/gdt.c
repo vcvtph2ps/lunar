@@ -1,4 +1,4 @@
-#include <arch/gdt.h>
+#include <arch/internal/gdt.h>
 
 #define DEFINE_SEGMENT(ACCESS, FLAGS) { .limit_low = 0, .base_low = 0, .base_mid = 0, .access = (ACCESS), .limit_high_flags = ((FLAGS) << 4), .base_high = 0 }
 
