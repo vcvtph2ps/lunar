@@ -1,8 +1,18 @@
 #pragma once
 #include <stdint.h>
 
+static inline void arch_io_wait() {
+    asm volatile("outb %%al, $0x80" : : "a"(0));
+}
+
 static inline void arch_io_port_write_u8(uint16_t port, uint8_t value) {
     asm volatile("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline uint8_t arch_io_port_read_u8(uint16_t port) {
+    uint8_t ret;
+    __asm__ volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
 }
 
 static inline void arch_io_mem_write_u8(uintptr_t addr, uint8_t value) {

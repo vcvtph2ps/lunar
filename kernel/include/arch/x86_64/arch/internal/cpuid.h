@@ -64,3 +64,15 @@ CPUID_FEATURE_DEFINE(LKGS, ARCH_CPUID_GET_EXTENDED_FEATURES, 1, ARCH_CPUID_EAX, 
  * @param reg The CPUID register to return the value of.
  */
 [[nodiscard]] uint32_t arch_cpuid(arch_cpuid_leaf_t leaf, uint32_t subleaf, arch_cpuid_reg_t reg);
+
+/**
+ * @brief Gets the CPU vendor string, which is a 12-character ASCII string that identifies the CPU manufacturer
+ * @return A pointer to a null-terminated string containing the CPU vendor.
+ */
+[[nodiscard]] const char* arch_cpuid_get_vendor_string();
+
+/**
+ * @brief Gets the CPU name string, which is a 48-character ASCII string that identifies the specific CPU model.
+ * @return A pointer to a null-terminated string containing the CPU name.
+ */
+[[nodiscard]] const char* arch_cpuid_get_name_string();

@@ -38,8 +38,10 @@ bootinfo_t* g_init_boot_info;
     g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
+    arch_16550uart_early_setup();
 
     LOG_STRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
+    LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
 
     LOG_STRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
     LOG_STRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
@@ -88,6 +90,14 @@ bootinfo_t* g_init_boot_info;
     LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
     pagedb_init();
+
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
+        LOG_INFO("xsave supported, fpu_size=%d\n", arch_cpuid(0x0d, 0, ARCH_CPUID_ECX));
+    } else {
+        LOG_INFO("xsave not supported\n");
+    }
+
+    LOG_INFO("x2apic: %d\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC));
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
 
