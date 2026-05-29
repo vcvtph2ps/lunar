@@ -43,12 +43,6 @@
 #define PAT6(PAT_FLAG) ((PAT_FLAG) | PAGE_BIT_DISABLECACHE)
 #define PAT7(PAT_FLAG) ((PAT_FLAG) | PAGE_BIT_DISABLECACHE | PAGE_BIT_WRITETHROUGH)
 
-#define PAT_UNCACHEABLE 0ULL
-#define PAT_WRITE_COMBINING 1ULL
-#define PAT_WRITE_THROUGH 4ULL
-#define PAT_WRITE_PROTECT 5ULL
-#define PAT_WRITE_BACK 6ULL
-#define PAT_UNCACHED 7ULL
 
 /**
  * @brief Converts the given vm_privilege_t to the corresponding x86 page table flags.
@@ -383,18 +377,6 @@ void ptm_load_address_space(vm_address_space_t* address_space) {
     arch_cr_write_cr3(address_space->ptm.top_level_page_table);
 }
 
-void setup_page_table_attributes() {
-    uint8_t pat0 = PAT_WRITE_BACK;
-    uint8_t pat1 = PAT_WRITE_THROUGH;
-    uint8_t pat2 = PAT_UNCACHED;
-    uint8_t pat3 = PAT_UNCACHEABLE;
-    uint8_t pat4 = PAT_WRITE_COMBINING;
-    uint8_t pat5 = PAT_UNCACHEABLE; // UNUSED
-    uint8_t pat6 = PAT_UNCACHEABLE; // UNUSED
-    uint8_t pat7 = PAT_UNCACHEABLE; // UNUSED
-    uint64_t pat = pat0 | ((uint64_t) pat1 << 8) | ((uint64_t) pat2 << 16) | ((uint64_t) pat3 << 24) | ((uint64_t) pat4 << 32) | ((uint64_t) pat5 << 40) | ((uint64_t) pat6 << 48) | ((uint64_t) pat7 << 56);
-    arch_msr_write(ARCH_MSR_PAT_MSR, pat);
-}
 
 void map_kernel() {
     for(size_t i = 0; i < g_init_boot_info->kernel_segment_count; i++) {
@@ -457,7 +439,6 @@ void map_kernel() {
 
 void ptm_init_kernel(uint32_t core_id) {
     if(!INIT_CORE_IS_BSP(core_id)) {
-        if(g_pat_supported) { setup_page_table_attributes(); }
         ptm_load_address_space(g_vm_global_address_space);
         return;
     }
@@ -473,8 +454,6 @@ void ptm_init_kernel(uint32_t core_id) {
     g_pat_supported = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PAT);
     g_huge_pages_support = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PDPE1GB_PAGES);
     g_la57_enabled = arch_cr_read_cr4() & (1 << 12); // cr4.LA57
-
-    if(g_pat_supported) { setup_page_table_attributes(); }
 
     uint64_t* pml4 = (uint64_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
     for(int i = 256; i < 512; i++) { pml4[i] = PAGE_BIT_PRESENT | PAGE_BIT_RW | (pmm_alloc_page(PMM_FLAG_ZERO) & SMALL_PAGE_ADDRESS_MASK); }

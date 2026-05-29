@@ -1,3 +1,5 @@
+#include <arch/hardware/16550uart.h>
+#include <arch/internal/cpuid.h>
 #include <arch/internal/cr.h>
 #include <arch/internal/msr.h>
 #include <common/arch.h>
