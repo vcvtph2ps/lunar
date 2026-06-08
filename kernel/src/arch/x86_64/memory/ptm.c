@@ -93,10 +93,6 @@ static inline uint64_t table_to_pfn(const uint64_t* table) {
     return (uintptr_t) PTM_FROM_HHDM(table) / ARCH_PAGE_SIZE_4K;
 }
 
-void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
-    for(; length > 0; length -= PAGE_SIZE_DEFAULT, vaddr += PAGE_SIZE_DEFAULT) asm volatile("invlpg (%0)" ::"r"(vaddr) : "memory");
-}
-
 /**
  * @brief Breaks a large page (2MB or 1GB) into smaller pages by allocating a new page table and populating it with entries that map the appropriate portions of the original large page. The original page table entry is then updated to point to the
  * new page table, and the HUGE_PAGE_BIT_PAGE_STOP bit is cleared to indicate that it is no longer a large page.
@@ -151,8 +147,7 @@ static uint64_t break_large_page(uint64_t* table, int index, int current_level) 
  * @param prot The protection flags for the mapping, which determine the read/write/execute permissions for the mapped page.
  * @param cache The cache flags for the mapping, which determine the caching behavior for the mapped page.
  * @param privilege The privilege level for the mapping, which determines whether the page is accessible from user mode or only from kernel mode.
- * @param global Whether the mapping should be marked as global, which means it will be shared across all address spaces and not flushed from the TLB on a context switch. This is typically used for kernel mappings that need to be accessible from all
- * processes.
+ * @param global Whether the mapping should be marked as global, and not flushed from the TLB on a context switch.
  * @return true if the mapping was successful, false if it failed due to out of memory
  */
 static bool map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
@@ -203,6 +198,9 @@ static bool map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t 
     return true;
 }
 
+void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
+    for(; length > 0; length -= PAGE_SIZE_DEFAULT, vaddr += PAGE_SIZE_DEFAULT) asm volatile("invlpg (%0)" ::"r"(vaddr) : "memory");
+}
 
 bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);

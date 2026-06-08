@@ -55,6 +55,7 @@ void pmm_free_page(uintptr_t addr) {
         LOG_OKAY("not freeing page 0x%016lx, ref count is not 0\n", addr);
         return;
     }
+
     spinlock_nodw_lock(&g_pmm_lock);
     new_entry->next = g_pmm_free_list;
     g_pmm_free_list = new_entry;
