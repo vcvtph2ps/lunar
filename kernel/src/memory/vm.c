@@ -88,7 +88,7 @@ static bool find_hole(vm_address_space_t* address_space, uintptr_t address, size
     return false;
 }
 
-static void region_map(vm_region_t* region, uintptr_t address, uintptr_t length) {
+static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length) {
     assert(address % PAGE_SIZE_DEFAULT == 0 && length % PAGE_SIZE_DEFAULT == 0);
     assert(address < region->base || address + length >= region->base);
 
@@ -98,15 +98,19 @@ static void region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
             for(size_t i = 0; i < length; i += PAGE_SIZE_DEFAULT) {
                 uintptr_t virtual_address = address + i;
                 uintptr_t physical_address = pmm_alloc_page(region->type_data.anon.back_zeroed ? PMM_FLAG_ZERO : PMM_FLAG_NONE);
+                if(physical_address == 0) return false;
 
-
-                ptm_map(region->address_space, virtual_address, physical_address, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global);
+                if(!ptm_map(region->address_space, virtual_address, physical_address, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global)) {
+                    pmm_free_page(physical_address);
+                    return false;
+                }
             }
             break;
         case VM_REGION_TYPE_DIRECT:
-            ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global);
+            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global)) return false;
             break;
     }
+    return true;
 }
 
 static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t length) {
@@ -152,13 +156,13 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
     if(g_region_cache.count == 0) {
         spinlock_nodw_unlock(&g_region_cache_lock);
 
-        phys_addr_t page = pmm_alloc_page(PMM_FLAG_ZERO);
+        phys_addr_t page = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
         if(!global_lock_acquired) { spinlock_nodw_lock(&g_vm_global_address_space->lock); }
 
         uintptr_t address;
         if(!find_hole(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, PAGE_SIZE_DEFAULT, &address)) { arch_panic("out of global address space"); }
 
-        ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true);
+        if(!ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true)) { arch_panic("failed to map region cache page"); }
 
         vm_region_t* region = (vm_region_t*) address;
         region[0].address_space = g_vm_global_address_space;
@@ -260,8 +264,7 @@ static vm_region_t* addr_to_region(vm_address_space_t* address_space, uintptr_t 
 static bool address_space_fix_page(vm_address_space_t* address_space, uintptr_t vaddr) {
     vm_region_t* region = addr_to_region(address_space, vaddr);
     if(region == nullptr || !region->dynamically_backed) return false;
-    region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT);
-    return true;
+    return region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT);
 }
 
 static bool memory_exists(vm_address_space_t* address_space, uintptr_t address, size_t length) {
@@ -442,7 +445,13 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
             break;
     }
 
-    if(!region->dynamically_backed) region_map(region, region->base, region->length);
+    if(!region->dynamically_backed) {
+        if(!region_map(region, region->base, region->length)) {
+            region_free(region);
+            spinlock_nodw_unlock(&address_space->lock);
+            return nullptr;
+        }
+    }
 
     region_insert(address_space, region);
     spinlock_nodw_unlock(&address_space->lock);
@@ -523,7 +532,7 @@ bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t addr, size_t 
     for(virt_addr_t i = addr; i < addr + size; i += PAGE_SIZE_DEFAULT) {
         phys_addr_t phys;
         if(!ptm_physical(target_as, i, &phys)) {
-            if(!address_space_fix_page(target_as, i)) return i;
+            if(!address_space_fix_page(target_as, i)) return false;
             bool success = ptm_physical(target_as, i, &phys);
             assert(success);
         }

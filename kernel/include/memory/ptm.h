@@ -15,8 +15,9 @@ void ptm_init_kernel(uint32_t core_id);
 /**
  * @brief Initializes the paging system for a user address space.
  * @param address_space The user address space to initialize.
+ * @return true if the initialization was successful, false if it failed (e.g. out of memory)
  */
-void ptm_init_user(vm_address_space_t* address_space);
+bool ptm_init_user(vm_address_space_t* address_space);
 
 /**
  * @brief Maps a range of virtual addresses to physical addresses in the specified address space.
@@ -28,8 +29,9 @@ void ptm_init_user(vm_address_space_t* address_space);
  * @param cache The caching behavior for the mapping
  * @param privilege The privilege level required to access the mapping
  * @param global Whether the mapping should flushed on context switch or not (false means it will be flushed, true means it will not be flushed)
+ * @return true if the mapping was successful, false if the mapping failed (e.g. out of memory)
  */
-void ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global);
+bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global);
 
 /**
  * @brief Changes the properties of an existing mapping in the specified address space.
@@ -40,8 +42,9 @@ void ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
  * @param cache The new caching behavior for the mapping
  * @param privilege The new privilege level required to access the mapping
  * @param global Whether the mapping should flushed on context switch or not (false means it will be flushed, true means it will not be flushed)
+ * @return true if the rewrite was successful, false if the rewrite failed (e.g. out of memory)
  */
-void ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global);
+bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global);
 
 /**
  * @brief Unmaps a range of virtual addresses in the specified address space.

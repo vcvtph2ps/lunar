@@ -123,7 +123,10 @@ static uint64_t break_large_page(uint64_t* table, int index, int current_level) 
         new_entry |= HUGE_PAGE_BIT_PAT;
     }
 
-    entry |= pmm_alloc_page(PMM_FLAG_ZERO);
+    uintptr_t page = pmm_alloc_page(PMM_FLAG_ZERO | ((entry & PAGE_BIT_USER) ? 0 : PMM_FLAG_PANIC));
+    if(page == 0) return 0;
+
+    entry |= page;
     if(pat) entry |= SMALL_PAGE_BIT_PAT;
 
     uint64_t* new_table = (void*) PTM_TO_HHDM(entry & SMALL_PAGE_ADDRESS_MASK);
@@ -150,8 +153,9 @@ static uint64_t break_large_page(uint64_t* table, int index, int current_level) 
  * @param privilege The privilege level for the mapping, which determines whether the page is accessible from user mode or only from kernel mode.
  * @param global Whether the mapping should be marked as global, which means it will be shared across all address spaces and not flushed from the TLB on a context switch. This is typically used for kernel mappings that need to be accessible from all
  * processes.
+ * @return true if the mapping was successful, false if it failed due to out of memory
  */
-static void map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
+static bool map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
     int lowest_index;
     switch(page_size) {
         case ARCH_PAGE_SIZE_4K: lowest_index = 1; break;
@@ -165,11 +169,16 @@ static void map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t 
 
         uint64_t entry = current_table[index];
         if((entry & PAGE_BIT_PRESENT) == 0) {
-            entry = PAGE_BIT_PRESENT | (pmm_alloc_page(PMM_FLAG_ZERO) & SMALL_PAGE_ADDRESS_MASK);
+            uintptr_t page = pmm_alloc_page(PMM_FLAG_ZERO | (privilege == VM_PRIVILEGE_KERNEL ? PMM_FLAG_PANIC : 0));
+            if(page == 0) return false;
+            entry = PAGE_BIT_PRESENT | (page & SMALL_PAGE_ADDRESS_MASK);
             if(!prot.execute) entry |= PAGE_BIT_NX;
             ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, (uint16_t) 1, __ATOMIC_SEQ_CST);
         } else {
-            if((entry & HUGE_PAGE_BIT_PAGE_STOP) != 0) entry = break_large_page(current_table, index, j);
+            if((entry & HUGE_PAGE_BIT_PAGE_STOP) != 0) {
+                entry = break_large_page(current_table, index, j);
+                if(entry == 0) return false;
+            }
             if(prot.execute) entry &= ~PAGE_BIT_NX;
         }
         if(prot.write) entry |= PAGE_BIT_RW;
@@ -190,10 +199,12 @@ static void map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t 
     __atomic_store(&current_table[leaf_index], &entry, __ATOMIC_SEQ_CST);
 
     if(!(prev_leaf & PAGE_BIT_PRESENT)) { ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, (uint16_t) 1, __ATOMIC_SEQ_CST); }
+
+    return true;
 }
 
 
-void ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
+bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(paddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
@@ -205,16 +216,20 @@ void ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
         page_size_t cursize = ARCH_PAGE_SIZE_4K;
         if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M) cursize = ARCH_PAGE_SIZE_2M;
         if(g_huge_pages_support && paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G) cursize = ARCH_PAGE_SIZE_1G;
-        map_page((uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table), vaddr + i, paddr + i, cursize, prot, cache, privilege, global);
+        if(!map_page((uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table), vaddr + i, paddr + i, cursize, prot, cache, privilege, global)) {
+            spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+            return false;
+        }
         i += cursize;
     }
 
     ptm_flush_tlb(vaddr, length);
     // @todo: ipi
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+    return true;
 }
 
-void ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
+bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
@@ -234,6 +249,10 @@ void ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
                 assert(j <= 3);
                 if(INDEX_TO_VADDR(index, j) < vaddr + i || LEVEL_TO_PAGESIZE(j) > length - i) {
                     entry = break_large_page(current_table, index, j);
+                    if(entry == 0) {
+                        spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+                        return false;
+                    }
                 } else {
                     break;
                 }
@@ -273,6 +292,7 @@ void ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     ptm_flush_tlb(vaddr, length);
     // @todo: ipi
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+    return true;
 }
 
 
@@ -299,6 +319,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
                 assert(j <= 3);
                 if(INDEX_TO_VADDR(index, j) < vaddr + i || LEVEL_TO_PAGESIZE(j) > length - i) {
                     entry = break_large_page(current_table, index, j);
+                    if(entry == 0) goto skip;
                 } else {
                     break;
                 }
@@ -443,8 +464,8 @@ void ptm_init_kernel(uint32_t core_id) {
         return;
     }
 
-    g_vm_global_address_space = (void*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_ZERO));
-    g_vm_global_address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
+    g_vm_global_address_space = (void*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC));
+    g_vm_global_address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
     g_vm_global_address_space->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
     g_vm_global_address_space->lock = SPINLOCK_NO_DW_INIT;
     g_vm_global_address_space->regions_tree = vm_create_regions();
@@ -456,7 +477,7 @@ void ptm_init_kernel(uint32_t core_id) {
     g_la57_enabled = arch_cr_read_cr4() & (1 << 12); // cr4.LA57
 
     uint64_t* pml4 = (uint64_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
-    for(int i = 256; i < 512; i++) { pml4[i] = PAGE_BIT_PRESENT | PAGE_BIT_RW | (pmm_alloc_page(PMM_FLAG_ZERO) & SMALL_PAGE_ADDRESS_MASK); }
+    for(int i = 256; i < 512; i++) { pml4[i] = PAGE_BIT_PRESENT | PAGE_BIT_RW | (pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC) & SMALL_PAGE_ADDRESS_MASK); }
     map_kernel();
 
     ptm_load_address_space(g_vm_global_address_space);
@@ -480,8 +501,10 @@ void ptm_init_kernel(uint32_t core_id) {
 
 void ptm_init_kernel_ap() {}
 
-void ptm_init_user(vm_address_space_t* address_space) {
+bool ptm_init_user(vm_address_space_t* address_space) {
     address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
+    if(address_space->ptm.top_level_page_table == 0) return false;
+
     address_space->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
     address_space->is_user = true;
     address_space->lock = SPINLOCK_NO_DW_INIT;
@@ -492,4 +515,6 @@ void ptm_init_user(vm_address_space_t* address_space) {
     uint64_t* user_pml4 = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     uint64_t* kernel_pml4 = (uint64_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
     for(int i = 256; i < 512; i++) user_pml4[i] = kernel_pml4[i];
+
+    return true;
 }
