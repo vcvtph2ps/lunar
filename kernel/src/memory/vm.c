@@ -1,6 +1,8 @@
 #include <arch/cpu_local.h>
 #include <common/arch.h>
 #include <common/assert.h>
+#include <common/interrupts/dw.h>
+#include <common/sched/sched.h>
 #include <common/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
@@ -150,8 +152,8 @@ static bool regions_mergeable(vm_region_t* left, vm_region_t* right) {
 
 /// Allocate a region from the internal vm region pool.
 static vm_region_t* region_alloc(bool global_lock_acquired) {
-    // sched_preempt_disable();
-    // dw_status_disable();
+    sched_preempt_disable();
+    dw_status_disable();
     spinlock_nodw_lock(&g_region_cache_lock);
     if(g_region_cache.count == 0) {
         spinlock_nodw_unlock(&g_region_cache_lock);
@@ -182,8 +184,8 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
 
     list_node_t* node = list_pop(&g_region_cache);
     spinlock_nodw_unlock(&g_region_cache_lock);
-    // dw_status_enable();
-    // sched_preempt_enable();
+    dw_status_enable();
+    sched_preempt_enable();
     return CONTAINER_OF(node, vm_region_t, region_cache_node);
 }
 
