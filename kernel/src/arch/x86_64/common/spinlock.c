@@ -21,7 +21,6 @@ static inline void spinlock_lock_raw(ATOMIC_PARAM uint32_t* lock) {
     }
 }
 
-// @TODO: disable preemption
 void spinlock_lock(spinlock_t* lock) {
     sched_preempt_disable();
     spinlock_lock_raw(&lock->lock);
@@ -32,7 +31,6 @@ void spinlock_unlock(spinlock_t* lock) {
     sched_preempt_enable();
 }
 
-// @TODO: disable dw and preemption
 void spinlock_nodw_lock(spinlock_no_dw_t* lock) {
     sched_preempt_disable();
     dw_status_disable();
