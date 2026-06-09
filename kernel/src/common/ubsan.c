@@ -75,7 +75,6 @@ struct tu_float_cast_overflow_data {
 
 struct tu_pointer_overflow_data {
     struct tu_source_location location;
-    struct tu_type_descriptor* type;
 };
 
 struct tu_function_type_mismatch_data {
@@ -113,8 +112,9 @@ void __ubsan_handle_divrem_overflow(struct tu_overflow_data* data) {
 void __ubsan_handle_negate_overflow(struct tu_overflow_data* data) {
     report("negation overflow", data->location, data->type);
 }
-void __ubsan_handle_pointer_overflow(struct tu_overflow_data* data) {
-    report("pointer overflow", data->location, data->type);
+void __ubsan_handle_pointer_overflow(struct tu_pointer_overflow_data* data) {
+    print_location("pointer overflow", data->location);
+    arch_panic("ubsan");
 }
 void __ubsan_handle_shift_out_of_bounds(struct tu_shift_out_of_bounds_data* data) {
     print_location("shift out of bounds", data->location);
@@ -179,9 +179,8 @@ void __ubsan_handle_negate_overflow_abort(struct tu_overflow_data* data) {
     __ubsan_handle_negate_overflow(data);
     arch_panic("ubsan");
 }
-void __ubsan_handle_pointer_overflow_abort(struct tu_overflow_data* data) {
+void __ubsan_handle_pointer_overflow_abort(struct tu_pointer_overflow_data* data) {
     __ubsan_handle_pointer_overflow(data);
-    arch_panic("ubsan");
 }
 void __ubsan_handle_shift_out_of_bounds_abort(struct tu_shift_out_of_bounds_data* data) {
     __ubsan_handle_shift_out_of_bounds(data);
