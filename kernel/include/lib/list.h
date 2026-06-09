@@ -19,6 +19,8 @@ struct list_node {
     list_node_t* prev;
 };
 
+#define LIST_FOR_EACH(LIST, VAR) for(list_node_t* VAR = (LIST)->head; VAR != nullptr; VAR = VAR->next)
+
 /// Push a node to the front of the list.
 void list_push_front(list_t* list, list_node_t* node);
 
