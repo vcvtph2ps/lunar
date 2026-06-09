@@ -9,6 +9,16 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
 
     uint32_t core_id;
     uint32_t lapic_id;
+
+    struct {
+        uint32_t counter;
+        bool yield_pending;
+    } preempt;
+
+    struct {
+        uint32_t counter;
+        bool yield_pending;
+    } defered_work;
 };
 
 uint32_t arch_cpu_local_get_core_lapic_id(uint32_t core_id);
