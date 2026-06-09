@@ -362,8 +362,8 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
 }
 
-bool internal_ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t* paddr) {
-    uint64_t* current_table = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
+bool internal_ptm_physical(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
+    uint64_t* current_table = top_level_page_table;
     int j = LEVEL_COUNT;
     for(; j > 1; j--) {
         int index = VADDR_TO_INDEX(vaddr, j);
@@ -387,36 +387,16 @@ bool internal_ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, u
 
 bool ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t* paddr) {
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
-    bool result = internal_ptm_physical(address_space, vaddr, paddr);
+
+    uint64_t* top_level_page_table = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
+    bool result = internal_ptm_physical(top_level_page_table, vaddr, paddr);
+
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
     return result;
 }
 
 void ptm_load_address_space(vm_address_space_t* address_space) {
     arch_cr_write_cr3(address_space->ptm.top_level_page_table);
-}
-
-// @todo: refactor but I'm lazy
-static bool translate_current(uintptr_t vaddr, uintptr_t* paddr) {
-    uint64_t* current_table = (uint64_t*) PTM_TO_HHDM(arch_cr_read_cr3() & SMALL_PAGE_ADDRESS_MASK);
-    int j = LEVEL_COUNT;
-    for(; j > 1; j--) {
-        int index = VADDR_TO_INDEX(vaddr, j);
-        if((current_table[index] & PAGE_BIT_PRESENT) == 0) { return false; }
-        if((current_table[index] & HUGE_PAGE_BIT_PAGE_STOP) != 0) break;
-        current_table = (uint64_t*) PTM_TO_HHDM(current_table[index] & SMALL_PAGE_ADDRESS_MASK);
-    }
-
-    uint64_t entry = current_table[VADDR_TO_INDEX(vaddr, j)];
-    if((entry & PAGE_BIT_PRESENT) == 0) return false;
-
-    switch(j) {
-        case 1:  *paddr = ((entry & SMALL_PAGE_ADDRESS_MASK) + (vaddr & (ARCH_PAGE_SIZE_4K - 1))); break;
-        case 2:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK) + (vaddr & (ARCH_PAGE_SIZE_2M - 1))); break;
-        case 3:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK) + (vaddr & (ARCH_PAGE_SIZE_1G - 1))); break;
-        default: __builtin_unreachable();
-    }
-    return true;
 }
 
 void map_kernel() {
@@ -450,9 +430,11 @@ void map_kernel() {
         ptm_map(g_vm_global_address_space, aligned_vaddr, aligned_paddr, aligned_length, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true);
     }
 
+    uint64_t* current_tlpt = (uint64_t*) PTM_TO_HHDM(arch_cr_read_cr3() & SMALL_PAGE_ADDRESS_MASK);
+
     for(uintptr_t vaddr = g_init_boot_info->pfndb_start; vaddr < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; vaddr += ARCH_PAGE_SIZE_4K) {
         uintptr_t paddr;
-        if(translate_current(vaddr, &paddr)) { ptm_map(g_vm_global_address_space, vaddr, paddr, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true); }
+        if(internal_ptm_physical(current_tlpt, vaddr, &paddr)) { ptm_map(g_vm_global_address_space, vaddr, paddr, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true); }
     }
 
     extern char kernel_start[];
