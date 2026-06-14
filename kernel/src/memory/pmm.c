@@ -1,4 +1,5 @@
 #include <arch/memory.h>
+#include <common/assert.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <common/spinlock.h>
@@ -23,6 +24,12 @@ void pmm_init() {
         uintptr_t start = entry->phys_base;
         uintptr_t end = entry->phys_base + entry->length;
         for(uintptr_t addr = start; addr < end; addr += ARCH_PAGE_SIZE_DEFAULT) {
+            pagedb_page_t* page = pagedb_get_page(addr >> 12);
+            assert(page != nullptr);
+            ATOMIC_STORE(&page->ref_count, 0, ATOMIC_RELAXED);
+            ATOMIC_STORE(&page->map_count, 0, ATOMIC_RELAXED);
+            ATOMIC_STORE(&page->page_level_mapping_count, 0, ATOMIC_RELAXED);
+
             pmm_entry_t* new_entry = (pmm_entry_t*) PTM_TO_HHDM(addr);
             new_entry->next = g_pmm_free_list;
             g_pmm_free_list = new_entry;

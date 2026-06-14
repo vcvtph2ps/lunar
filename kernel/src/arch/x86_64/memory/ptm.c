@@ -25,14 +25,16 @@
 #define PAGE_BIT_GLOBAL (1 << 8)
 #define PAGE_BIT_NX ((uint64_t) 1 << 63)
 #define PAGE_BIT_PAT(PAGE_SIZE) ((PAGE_SIZE) == ARCH_PAGE_SIZE_4K ? SMALL_PAGE_BIT_PAT : HUGE_PAGE_BIT_PAT)
-#define PAGE_ADDRESS_MASK(PAGE_SIZE) ((PAGE_SIZE) == ARCH_PAGE_SIZE_4K ? SMALL_PAGE_ADDRESS_MASK : HUGE_PAGE_ADDRESS_MASK)
+#define PAGE_ADDRESS_MASK(PAGE_SIZE) ((PAGE_SIZE) == ARCH_PAGE_SIZE_4K ? SMALL_PAGE_ADDRESS_MASK : (PAGE_SIZE) == ARCH_PAGE_SIZE_2M ? HUGE_PAGE_ADDRESS_MASK_2M : HUGE_PAGE_ADDRESS_MASK_1G)
 
 #define SMALL_PAGE_BIT_PAT (1 << 7)
 #define SMALL_PAGE_ADDRESS_MASK ((uint64_t) 0x000F'FFFF'FFFF'F000)
 
 #define HUGE_PAGE_BIT_PAGE_STOP (1 << 7)
 #define HUGE_PAGE_BIT_PAT (1 << 12)
-#define HUGE_PAGE_ADDRESS_MASK ((uint64_t) 0x000F'FFFF'FFFF'0000)
+#define HUGE_PAGE_ADDRESS_MASK_2M ((uint64_t) 0x000F'FFFF'FFE0'0000)
+#define HUGE_PAGE_ADDRESS_MASK_1G ((uint64_t) 0x000F'FFFF'C000'0000)
+#define HUGE_PAGE_ADDRESS_MASK HUGE_PAGE_ADDRESS_MASK_2M
 
 #define PAT0 (0)
 #define PAT1 (PAGE_BIT_WRITETHROUGH)
@@ -103,36 +105,37 @@ static inline uint64_t table_to_pfn(const uint64_t* table) {
  * @return The new page table entry that was created to replace the original large page entry. This entry will have the same physical address as the original entry, but will point to the new page table instead of being a large page itself.
  */
 static uint64_t break_large_page(uint64_t* table, int index, int current_level) {
-    assert(current_level > 0);
+    assert(current_level > 1);
 
     uint64_t entry = table[index];
 
-    uintptr_t address = entry & HUGE_PAGE_ADDRESS_MASK;
+    uintptr_t address = entry & (current_level == 2 ? HUGE_PAGE_ADDRESS_MASK_2M : HUGE_PAGE_ADDRESS_MASK_1G);
     bool pat = entry & HUGE_PAGE_BIT_PAT;
-    entry &= ~SMALL_PAGE_ADDRESS_MASK;
 
-    uint64_t new_entry = entry;
-    if(current_level - 1 == 0) {
-        new_entry &= ~SMALL_PAGE_BIT_PAT;
-        if(pat) new_entry |= SMALL_PAGE_BIT_PAT;
+    uint64_t common_flags = entry & (PAGE_BIT_PRESENT | PAGE_BIT_RW | PAGE_BIT_USER | PAGE_BIT_WRITETHROUGH | PAGE_BIT_DISABLECACHE | PAGE_BIT_ACCESSED | PAGE_BIT_GLOBAL | PAGE_BIT_NX);
+    uint64_t child_entry = common_flags;
+    size_t child_page_size;
+    if(current_level == 2) {
+        child_page_size = ARCH_PAGE_SIZE_4K;
+        if(pat) child_entry |= SMALL_PAGE_BIT_PAT;
     } else {
-        new_entry |= HUGE_PAGE_BIT_PAT;
+        child_page_size = ARCH_PAGE_SIZE_2M;
+        child_entry |= HUGE_PAGE_BIT_PAGE_STOP;
+        if(pat) child_entry |= HUGE_PAGE_BIT_PAT;
     }
 
     uintptr_t page = pmm_alloc_page(PMM_FLAG_ZERO | ((entry & PAGE_BIT_USER) ? 0 : PMM_FLAG_PANIC));
     if(page == 0) return 0;
 
-    entry |= page;
-    if(pat) entry |= SMALL_PAGE_BIT_PAT;
+    uint64_t* new_table = (uint64_t*) PTM_TO_HHDM(page);
+    for(int i = 0; i < 512; i++) new_table[i] = child_entry | (address + (uint64_t) i * child_page_size);
 
-    uint64_t* new_table = (void*) PTM_TO_HHDM(entry & SMALL_PAGE_ADDRESS_MASK);
-    for(int i = 0; i < 512; i++) new_table[i] = new_entry | (address + i * ARCH_PAGE_SIZE_4K);
+    ATOMIC_STORE(&pagedb_get_page(page / ARCH_PAGE_SIZE_4K)->page_level_mapping_count, 512, __ATOMIC_RELAXED);
 
-    ATOMIC_STORE(&pagedb_get_page(table_to_pfn(new_table))->page_level_mapping_count, (uint16_t) 512, __ATOMIC_RELAXED);
+    uint64_t parent_entry = (entry & (PAGE_BIT_PRESENT | PAGE_BIT_RW | PAGE_BIT_USER | PAGE_BIT_NX)) | (page & SMALL_PAGE_ADDRESS_MASK);
+    __atomic_store(&table[index], &parent_entry, __ATOMIC_SEQ_CST);
 
-    __atomic_store(&table[index], &entry, __ATOMIC_SEQ_CST);
-
-    return entry;
+    return parent_entry;
 }
 
 /**
@@ -168,7 +171,7 @@ static bool map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t 
             if(page == 0) return false;
             entry = PAGE_BIT_PRESENT | (page & SMALL_PAGE_ADDRESS_MASK);
             if(!prot.execute) entry |= PAGE_BIT_NX;
-            ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, (uint16_t) 1, __ATOMIC_SEQ_CST);
+            ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, 1, __ATOMIC_SEQ_CST);
         } else {
             if((entry & HUGE_PAGE_BIT_PAGE_STOP) != 0) {
                 entry = break_large_page(current_table, index, j);
@@ -193,7 +196,17 @@ static bool map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t 
     if(global) entry |= PAGE_BIT_GLOBAL;
     __atomic_store(&current_table[leaf_index], &entry, __ATOMIC_SEQ_CST);
 
-    if(!(prev_leaf & PAGE_BIT_PRESENT)) { ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, (uint16_t) 1, __ATOMIC_SEQ_CST); }
+    if(!(prev_leaf & PAGE_BIT_PRESENT)) {
+        ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, 1, __ATOMIC_SEQ_CST);
+
+        uint64_t num_pages = 1;
+        if(page_size == ARCH_PAGE_SIZE_2M)
+            num_pages = 512;
+        else if(page_size == ARCH_PAGE_SIZE_1G)
+            num_pages = 512 * 512;
+
+        for(uint64_t i = 0; i < num_pages; i++) pagedb_page_map(paddr / ARCH_PAGE_SIZE_4K + i);
+    }
 
     return true;
 }
@@ -337,9 +350,23 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
             if(prev & PAGE_BIT_PRESENT) {
                 __atomic_store_n(&current_table[leaf_index], 0, __ATOMIC_SEQ_CST);
 
+                uint64_t num_pages = 1;
+                uintptr_t paddr_unmap = 0;
+                if(j == 1) {
+                    paddr_unmap = prev & SMALL_PAGE_ADDRESS_MASK;
+                } else {
+                    paddr_unmap = prev & HUGE_PAGE_ADDRESS_MASK;
+                    if(j == 2)
+                        num_pages = 512;
+                    else if(j == 3)
+                        num_pages = 512 * 512;
+                }
+
+                for(uint64_t k = 0; k < num_pages; k++) pagedb_page_unmap(paddr_unmap / ARCH_PAGE_SIZE_4K + k);
+
                 uint64_t* child_table = current_table;
                 for(int d = path_depth - 1; d >= 0; d--) {
-                    uint16_t old_count = ATOMIC_LOAD_SUB(&pagedb_get_page(table_to_pfn(child_table))->page_level_mapping_count, (uint16_t) 1, __ATOMIC_SEQ_CST);
+                    uint32_t old_count = ATOMIC_LOAD_SUB(&pagedb_get_page(table_to_pfn(child_table))->page_level_mapping_count, 1, __ATOMIC_SEQ_CST);
 
                     if(old_count != 1) break;
 
@@ -377,9 +404,9 @@ bool internal_ptm_physical(uint64_t* top_level_page_table, uintptr_t vaddr, uint
     if((entry & PAGE_BIT_PRESENT) == 0) return false;
 
     switch(j) {
-        case 1:  *paddr = ((entry & SMALL_PAGE_ADDRESS_MASK) + (vaddr & (~0x000F'FFFF'FFFF'F000))); break;
-        case 2:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK) + (vaddr & (~0x000F'FFFF'FFE0'0000))); break;
-        case 3:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK) + (vaddr & (~0x000F'FFFF'C000'0000))); break;
+        case 1:  *paddr = ((entry & SMALL_PAGE_ADDRESS_MASK) + (vaddr & (ARCH_PAGE_SIZE_4K - 1))); break;
+        case 2:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK_2M) + (vaddr & (ARCH_PAGE_SIZE_2M - 1))); break;
+        case 3:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK_1G) + (vaddr & (ARCH_PAGE_SIZE_1G - 1))); break;
         default: __builtin_unreachable();
     }
     return true;
