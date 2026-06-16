@@ -74,7 +74,33 @@ bootinfo_t* g_init_boot_info;
     LOG_STRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);
     for(size_t i = 0; i < boot_info->framebuffer_count; i++) {
         bootinfo_framebuffer_t* framebuffer = &boot_info->framebuffers[i];
+
         LOG_STRC("framebuffer[%zu]: vaddr=0x%016lx, paddr=0x%016lx, width=%d, height=%d, pitch=%d, format=", i, (uintptr_t) framebuffer->vaddr, framebuffer->paddr, framebuffer->width, framebuffer->height, framebuffer->pitch);
+
+        struct fbpixel {
+            uint8_t pos;
+            uint8_t size;
+            char color;
+        };
+
+        struct fbpixel pixels[3] = {
+            { .pos = framebuffer->red_position,   .size = framebuffer->red_size,   .color = 'r' },
+            { .pos = framebuffer->green_position, .size = framebuffer->green_size, .color = 'g' },
+            { .pos = framebuffer->blue_position,  .size = framebuffer->blue_size,  .color = 'b' },
+        };
+
+        for(size_t i = 0; i < 3; i++) {
+            for(size_t j = i + 1; j < 3; j++) {
+                if(pixels[j].pos < pixels[i].pos) {
+                    struct fbpixel tmp = pixels[i];
+                    pixels[i] = pixels[j];
+                    pixels[j] = tmp;
+                }
+            }
+        }
+
+        for(size_t i = 0; i < 3; i++) { log_print(LOG_LEVEL_STRC, "%c%u", pixels[i].color, pixels[i].size); }
+        log_print(LOG_LEVEL_STRC, "\n");
     }
     LOG_STRC("module_count=%zu\n", boot_info->module_count);
 
