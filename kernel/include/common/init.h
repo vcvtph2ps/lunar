@@ -6,7 +6,8 @@
 #include <stdint.h>
 
 typedef enum {
-    INIT_STAGE_BASE_MEM
+    INIT_STAGE_BASE_MEM,
+    INIT_STAGE_ARCH_CPU
 } init_stage_t;
 
 typedef struct {
@@ -19,5 +20,7 @@ extern bootinfo_t* g_init_boot_info;
 const char* init_stage_to_str(init_stage_t stage);
 
 #define INIT_CORE_IS_BSP(CORE_ID) ((CORE_ID) == 0)
+#define INIT_CORE_IS_AP(CORE_ID) ((CORE_ID) != 0)
 
 void init_stage_base_mem(uint32_t core_id);
+void init_stage_arch_cpu(uint32_t core_id);

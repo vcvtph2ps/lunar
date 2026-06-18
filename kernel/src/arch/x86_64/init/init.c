@@ -8,6 +8,7 @@
 
 init_stage_handler_t g_init_stage_handlers[] = {
     INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
+    INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
 };
 
 #undef INIT_STAGE
@@ -27,6 +28,7 @@ ATOMIC uint32_t g_init_finished_core_count = 0;
 
 void arch_init_bsp() {
     run_stage(INIT_STAGE_BASE_MEM, 0);
+    run_stage(INIT_STAGE_ARCH_CPU, 0);
     arch_panic("mroaww");
 
     // let APs know they can start init, and wait for them

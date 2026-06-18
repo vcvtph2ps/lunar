@@ -45,4 +45,4 @@ typedef struct [[gnu::packed]] {
 
 extern const arch_gdt_t g_arch_gdt_static_data;
 
-void arch_gdt_load_gdt(arch_gdt_ptr_t* gdtr, uint16_t cs, uint16_t ds, uint16_t tr);
+void arch_gdt_init();

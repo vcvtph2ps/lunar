@@ -1,4 +1,6 @@
 #pragma once
+#include <arch/internal/gdt.h>
+#include <lib/list.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -18,7 +20,11 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     struct {
         uint32_t counter;
         bool yield_pending;
+        list_t queue;
     } defered_work;
+
+    arch_gdt_t gdt;
+    arch_gdt_tss_t tss;
 };
 
 uint32_t arch_cpu_local_get_core_lapic_id(uint32_t core_id);
