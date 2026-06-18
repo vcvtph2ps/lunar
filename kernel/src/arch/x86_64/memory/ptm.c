@@ -22,6 +22,7 @@
 #define PAGE_BIT_WRITETHROUGH (1 << 3)
 #define PAGE_BIT_DISABLECACHE (1 << 4)
 #define PAGE_BIT_ACCESSED (1 << 5)
+#define PAGE_BIT_DIRTY (1 << 6)
 #define PAGE_BIT_GLOBAL (1 << 8)
 #define PAGE_BIT_NX ((uint64_t) 1 << 63)
 #define PAGE_BIT_PAT(PAGE_SIZE) ((PAGE_SIZE) == ARCH_PAGE_SIZE_4K ? SMALL_PAGE_BIT_PAT : HUGE_PAGE_BIT_PAT)
@@ -81,6 +82,7 @@ static inline uint64_t cache_to_x86_flags(vm_cache_t cache, page_size_t page_siz
 extern vm_address_space_t* g_vm_global_address_space;
 static vm_region_t g_kernel_region;
 static vm_region_t g_hhdm_region;
+static vm_region_t g_pfndb_region;
 
 static bool g_pat_supported = false;
 static bool g_huge_pages_support = false;
@@ -277,24 +279,20 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
         }
 
         int index = VADDR_TO_INDEX(vaddr + i, j);
-        uint64_t entry = current_table[index] | privilege_to_x86_flags(privilege) | cache_to_x86_flags(cache, j == 0 ? ARCH_PAGE_SIZE_4K : (j == 1 ? ARCH_PAGE_SIZE_2M : ARCH_PAGE_SIZE_1G));
+        page_size_t ps = (j == 1 ? ARCH_PAGE_SIZE_4K : (j == 2 ? ARCH_PAGE_SIZE_2M : ARCH_PAGE_SIZE_1G));
+        uint64_t entry = current_table[index];
 
-        if(prot.write)
-            entry |= PAGE_BIT_RW;
-        else
-            entry &= ~PAGE_BIT_RW;
+        uint64_t new_entry = (entry & PAGE_ADDRESS_MASK(ps)) | PAGE_BIT_PRESENT | (entry & (PAGE_BIT_ACCESSED | PAGE_BIT_DIRTY));
+        if(j != 1) new_entry |= HUGE_PAGE_BIT_PAGE_STOP;
 
-        if(!prot.execute)
-            entry |= PAGE_BIT_NX;
-        else
-            entry &= ~PAGE_BIT_NX;
+        new_entry |= privilege_to_x86_flags(privilege);
+        new_entry |= cache_to_x86_flags(cache, ps);
 
-        if(global)
-            entry |= PAGE_BIT_GLOBAL;
-        else
-            entry &= ~PAGE_BIT_GLOBAL;
+        if(prot.write) new_entry |= PAGE_BIT_RW;
+        if(!prot.execute) new_entry |= PAGE_BIT_NX;
+        if(global) new_entry |= PAGE_BIT_GLOBAL;
 
-        __atomic_store_n(&current_table[index], entry, __ATOMIC_SEQ_CST);
+        __atomic_store_n(&current_table[index], new_entry, __ATOMIC_SEQ_CST);
 
     skip:
         i += LEVEL_TO_PAGESIZE(j);
@@ -488,8 +486,17 @@ void map_kernel() {
     g_hhdm_region.type = VM_REGION_TYPE_DIRECT;
     g_hhdm_region.type_data.direct.physical_address = 0;
 
+    g_pfndb_region.address_space = g_vm_global_address_space;
+    g_pfndb_region.base = g_init_boot_info->pfndb_start;
+    g_pfndb_region.length = g_init_boot_info->pfndb_size;
+    g_pfndb_region.protection = VM_PROT_RW;
+    g_pfndb_region.cache = VM_CACHE_NORMAL;
+    g_pfndb_region.dynamically_backed = false;
+    g_pfndb_region.type = VM_REGION_TYPE_ANON;
+
     rb_insert(&g_vm_global_address_space->regions_tree, &g_kernel_region.region_tree_node);
     rb_insert(&g_vm_global_address_space->regions_tree, &g_hhdm_region.region_tree_node);
+    rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_region.region_tree_node);
 }
 
 void ptm_init_kernel(uint32_t core_id) {
