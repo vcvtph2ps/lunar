@@ -24,14 +24,16 @@ slab_t* slab_cache_create_slab(slab_cache_t* cache) {
     assert(slab_size / cache->object_size > 0);
 
     // Initialize the free list for the slab.
-    // @todo: wah?
-    for(size_t i = 0; i < slab_size / cache->object_size; i++) {
-        void** obj = (void**) (((uintptr_t) block) + (i * cache->object_size));
+    size_t object_count = slab_size / cache->object_size;
+    for(size_t i = 0; i < object_count; i++) {
+        size_t object_offset = i * cache->object_size;
+        void** obj = (void**) (block + object_offset);
         *obj = slab->free_list;
         slab->free_list = obj;
         assert(slab->free_list != nullptr);
         slab->free_count++;
     }
+
     return slab;
 }
 
@@ -51,13 +53,11 @@ void slab_cache_free_to_slab(slab_cache_t* cache, void* ptr) {
         list_node_delete(&cache->slab_full_list, &slab->list_node);
         list_push(&cache->slab_partial_list, &slab->list_node);
     }
-    
+
     if(slab->free_count + 1 == (cache->slab_size - sizeof(slab_t)) / cache->object_size) {
         list_node_delete(&cache->slab_partial_list, &slab->list_node);
 
-        if(cache->slab_empty) {
-            slab_cache_destroy_slab(cache, cache->slab_empty);
-        }
+        if(cache->slab_empty) { slab_cache_destroy_slab(cache, cache->slab_empty); }
         cache->slab_empty = slab;
     }
 
