@@ -1,7 +1,3 @@
-#include <arch/hardware/16550uart.h>
-#include <arch/internal/cpuid.h>
-#include <arch/internal/cr.h>
-#include <arch/internal/msr.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/log.h>
@@ -10,10 +6,19 @@
 #include <protocol/bootinfo.h>
 #include <stddef.h>
 #include <stdint.h>
+#ifdef __ARCH_X86_64__
+#include <arch/internal/cpuid.h>
+#endif
 
+#ifdef __ARCH_RISCV64__
+extern char __global_pointer[] __asm__("__global_pointer$"); // NOLINT
+#endif
 [[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_prekernel_boot_info = {
     .pagedb_entry_size = sizeof(pagedb_page_t),
     .cpu_local_size = sizeof(arch_cpu_local_t),
+#ifdef __ARCH_RISCV64__
+    .global_pointer = (uintptr_t) __global_pointer,
+#endif
 };
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
@@ -23,12 +28,6 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
     cpu_local_init(core_id);
 
     LOG_STRC("kernel booted on core %ld :3\n", core_id);
-    LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
-    LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
-    LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
-    LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
-    LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
-
     arch_init_ap(core_id);
 }
 
@@ -40,10 +39,30 @@ bootinfo_t* g_init_boot_info;
     g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
-    arch_16550uart_early_setup();
 
     LOG_STRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
-    LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+
+#ifdef __ARCH_RISCV64__
+    LOG_INFO("Platform: riscv64\n");
+#else
+    arch_cpuid_vendor_t vendor = arch_cpuid_get_vendor();
+    if(vendor == ARCH_CPUID_VENDOR_INTEL) {
+        LOG_INFO("Platform: intel64 (EM64T)\n");
+    } else if(vendor == ARCH_CPUID_VENDOR_AMD) {
+        LOG_INFO("Platform: amd64\n");
+    } else {
+        LOG_INFO("Platform: generic x86_64\n");
+    }
+#endif
+
+    LOG_INFO("Has acpi: %s\n", g_init_boot_info->rdsp_physical ? "true" : "false");
+
+#ifdef __ARCH_RISCV64__
+    LOG_INFO("Has dtb: %s\n", g_init_boot_info->dtb_physical ? "true" : "false");
+    LOG_INFO("riscv isa string: %s\n", g_init_boot_info->riscv_base_isa_string);
+    LOG_INFO("riscv extension count: %zu\n", g_init_boot_info->riscv_extension_count);
+    for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) { LOG_INFO("riscv extension[%zu]: %s\n", i, (*g_init_boot_info->riscv_extentions)[i]); }
+#endif
 
     LOG_STRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
     LOG_STRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
@@ -68,7 +87,7 @@ bootinfo_t* g_init_boot_info;
     LOG_STRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
     for(size_t i = 0; i < boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &boot_info->mm_entries[i];
-        LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, size=0x%016lx, type=%ld\n", i, entry->phys_base, entry->length, entry->type);
+        LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%ld\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, entry->type);
     }
 
     LOG_STRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);
@@ -111,23 +130,8 @@ bootinfo_t* g_init_boot_info;
 
     LOG_STRC("cpu_count=%ld\n", boot_info->core_count);
 
-    LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
-    LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
-    LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
-    LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
-    LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
-
     pagedb_init();
 
-    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
-        LOG_INFO("xsave supported, fpu_size=%d\n", arch_cpuid(0x0d, 0, ARCH_CPUID_ECX));
-    } else {
-        LOG_INFO("xsave not supported\n");
-    }
-
-    LOG_INFO("x2apic: %d\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC));
-
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
-
     arch_init_bsp();
 }

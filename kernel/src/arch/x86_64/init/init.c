@@ -1,3 +1,6 @@
+#include <arch/internal/cpuid.h>
+#include <arch/internal/cr.h>
+#include <arch/internal/msr.h>
 #include <common/arch.h>
 #include <common/init.h>
 #include <common/log.h>
@@ -27,6 +30,22 @@ void run_stage(init_stage_t stage, uint32_t core_id) {
 ATOMIC uint32_t g_init_finished_core_count = 0;
 
 void arch_init_bsp() {
+    LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+
+    LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
+    LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
+    LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+    LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+    LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
+
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
+        LOG_INFO("xsave supported, fpu_size=%d\n", arch_cpuid(0x0d, 0, ARCH_CPUID_ECX));
+    } else {
+        LOG_INFO("xsave not supported\n");
+    }
+
+    LOG_STRC("x2apic: %d\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC));
+
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     arch_panic("mroaww");
@@ -42,6 +61,12 @@ void arch_init_bsp() {
 void arch_init_ap(uint32_t core_id) {
     // Wait for BSP to finish init
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) == 0) { arch_spin_hint(); }
+
+    LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
+    LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
+    LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+    LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+    LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
     run_stage(INIT_STAGE_BASE_MEM, core_id);
 
