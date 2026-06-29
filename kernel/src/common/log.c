@@ -2,7 +2,6 @@
 
 ///
 #include <arch/interrupt.h>
-#include <arch/io.h>
 #include <common/arch.h>
 #include <common/log.h>
 #include <common/spinlock.h>
@@ -14,25 +13,9 @@ static size_t g_sink_count = 0;
 
 static spinlock_no_int_t g_log_lock = SPINLOCK_NO_INT_INIT;
 
-void sink_debug(int c, void* ctx) {
-    (void) ctx;
-    arch_io_port_write_u8(0xe9, (uint8_t) c);
-}
-
 void log_init() {
-    log_sink_t debug_sink = {
-        .min_level = LOG_LEVEL_STRC,
-        .write = sink_debug,
-        .ctx = nullptr,
-    };
-    if(!log_add_sink(&debug_sink)) {
-        // we really can't do much about that can we?
-        while(1) {
-            (void) arch_interrupt_disable();
-            arch_wait_for_interrupt();
-        }
-    }
-    sink_debug('\n', nullptr);
+    arch_log_init();
+    log_print_lockless(LOG_LEVEL_FAIL, "\n");
 }
 
 bool log_add_sink(const log_sink_t* sink) {

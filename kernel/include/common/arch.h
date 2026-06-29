@@ -38,3 +38,8 @@ uint64_t arch_get_core_id();
  * @note This function does not return and will transfer control to the kernel main function
  */
 [[noreturn]] void arch_init_ap(uint32_t core_id);
+
+/**
+ * @brief Initializes architecture specific logging, such as serial output
+ */
+void arch_log_init();
