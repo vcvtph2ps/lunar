@@ -1,4 +1,4 @@
-local opt_arch = fab.option("arch", { "x86_64" }) or "x86_64"
+local opt_arch = fab.option("arch", { "x86_64", "riscv64" }) or "x86_64"
 local opt_build_type = fab.option("buildtype", { "debug", "release" }) or "debug"
 
 local c = require("lang_c")
@@ -17,7 +17,7 @@ assert(ld ~= nil, "No ld.lld found")
 local prekernel_protocol = fab.git(
     "prekernel-protocol",
     "https://github.com/vcvtph2ps/lunar-prekernel",
-    "80fe129cf70d053613aa1df76a78d8ac07cf2f56"
+    "e08a8f57cb5fe8a0e350534ecf8195508e869966"
 )
 
 local function get_kernel_objs(kernel_flags)
@@ -26,6 +26,8 @@ local function get_kernel_objs(kernel_flags)
 
     if opt_arch == "x86_64" then
         table.extend(kernel_sources, sources(fab.glob("kernel/src/arch/x86_64/**/*.asm")))
+    elseif opt_arch == "riscv64" then
+        table.extend(kernel_sources, sources(fab.glob("kernel/src/arch/riscv64/**/*.S")))
     end
 
     local kernel_include_dirs = {
@@ -43,6 +45,8 @@ local function get_kernel_objs(kernel_flags)
     if opt_arch == "x86_64" then
         local nasm_flags = { "-f", "elf64", "-Werror" }
         generators.asm = function(sources) return nasm:generate(sources, nasm_flags) end
+    elseif opt_arch == "riscv64" then
+        generators.S = function(sources) return clang:generate(sources, kernel_flags, kernel_include_dirs) end
     end
 
     return generate(kernel_sources, generators)
@@ -75,7 +79,6 @@ elseif opt_build_type == "debug" then
     })
 end
 
-
 if opt_arch == "x86_64" then
     table.extend(c_flags, {
         "--target=x86_64-none-elf",
@@ -84,6 +87,14 @@ if opt_arch == "x86_64" then
         "-mabi=sysv",
         "-mcmodel=kernel",
         "-D__ARCH_X86_64__"
+    })
+elseif opt_arch == "riscv64" then
+    table.extend(c_flags, {
+        "--target=riscv64-none-elf",
+        "-march=rv64gc",
+        "-mabi=lp64d",
+        "-mcmodel=medany",
+        "-D__ARCH_RISCV64__"
     })
 end
 
