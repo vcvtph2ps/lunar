@@ -80,9 +80,6 @@ static inline uint64_t cache_to_x86_flags(vm_cache_t cache, page_size_t page_siz
 
 
 extern vm_address_space_t* g_vm_global_address_space;
-static vm_region_t g_kernel_region;
-static vm_region_t g_hhdm_region;
-static vm_region_t g_pfndb_region;
 
 static bool g_pat_supported = false;
 static bool g_huge_pages_support = false;
@@ -461,42 +458,6 @@ void map_kernel() {
         uintptr_t paddr;
         if(internal_ptm_physical(current_tlpt, vaddr, &paddr)) { ptm_map(g_vm_global_address_space, vaddr, paddr, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true); }
     }
-
-    extern char kernel_start[];
-    extern char kernel_end[];
-
-    virt_addr_t kernel_virt = (virt_addr_t) kernel_start;
-    virt_addr_t kernel_size = ((virt_addr_t) kernel_end) - ((virt_addr_t) kernel_start);
-
-    g_kernel_region.address_space = g_vm_global_address_space;
-    g_kernel_region.base = kernel_virt;
-    g_kernel_region.length = kernel_size;
-    g_kernel_region.protection = VM_PROT_RX;
-    g_kernel_region.cache = VM_CACHE_NORMAL;
-    g_kernel_region.dynamically_backed = false;
-    g_kernel_region.type = VM_REGION_TYPE_DIRECT;
-    g_kernel_region.type_data.direct.physical_address = 0;
-
-    g_hhdm_region.address_space = g_vm_global_address_space;
-    g_hhdm_region.base = g_init_boot_info->hhdm_offset;
-    g_hhdm_region.length = g_init_boot_info->hhdm_size;
-    g_hhdm_region.protection = VM_PROT_RW;
-    g_hhdm_region.cache = VM_CACHE_NORMAL;
-    g_hhdm_region.dynamically_backed = false;
-    g_hhdm_region.type = VM_REGION_TYPE_DIRECT;
-    g_hhdm_region.type_data.direct.physical_address = 0;
-
-    g_pfndb_region.address_space = g_vm_global_address_space;
-    g_pfndb_region.base = g_init_boot_info->pfndb_start;
-    g_pfndb_region.length = g_init_boot_info->pfndb_size;
-    g_pfndb_region.protection = VM_PROT_RW;
-    g_pfndb_region.cache = VM_CACHE_NORMAL;
-    g_pfndb_region.dynamically_backed = false;
-    g_pfndb_region.type = VM_REGION_TYPE_ANON;
-
-    rb_insert(&g_vm_global_address_space->regions_tree, &g_kernel_region.region_tree_node);
-    rb_insert(&g_vm_global_address_space->regions_tree, &g_hhdm_region.region_tree_node);
-    rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_region.region_tree_node);
 }
 
 void ptm_init_kernel(uint32_t core_id) {

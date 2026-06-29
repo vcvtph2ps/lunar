@@ -219,3 +219,8 @@ rb_tree_t vm_create_regions();
  * @return true if a hole was found, false if address space is exhausted.
  */
 bool vm_find_hole(vm_address_space_t* address_space, size_t length, uintptr_t* out);
+
+/**
+ * @brief Initializes kernel vm regions
+ */
+void vm_init_kernel();
