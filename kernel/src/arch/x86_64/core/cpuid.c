@@ -54,3 +54,14 @@
     name[48] = '\0';
     return name;
 }
+
+[[nodiscard]] arch_cpuid_vendor_t arch_cpuid_get_vendor() {
+    const char* vendor_str = arch_cpuid_get_vendor_string();
+    if(strcmp(vendor_str, "GenuineIntel") == 0) {
+        return ARCH_CPUID_VENDOR_INTEL;
+    } else if(strcmp(vendor_str, "AuthenticAMD") == 0) {
+        return ARCH_CPUID_VENDOR_AMD;
+    } else {
+        return ARCH_CPUID_VENDOR_UNKNOWN;
+    }
+}

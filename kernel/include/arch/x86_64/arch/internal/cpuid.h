@@ -23,6 +23,12 @@ typedef enum : uint64_t {
     ARCH_CPUID_EXTENDED_PROCESSOR_INFO = 0x80000001
 } arch_cpuid_leaf_t;
 
+typedef enum : uint64_t {
+    ARCH_CPUID_VENDOR_INTEL = 0,
+    ARCH_CPUID_VENDOR_AMD = 1,
+    ARCH_CPUID_VENDOR_UNKNOWN = 2
+} arch_cpuid_vendor_t;
+
 // NOLINTBEGIN
 #define CPUID_FEATURE_DEFINE(name, __leaf, __subleaf, __reg, __bit) const static arch_cpuid_feature_t ARCH_CPUID_FEATURE_##name = { .leaf = __leaf, .subleaf = __subleaf, .reg = __reg, .mask = (1 << __bit) }
 CPUID_FEATURE_DEFINE(X2APIC, ARCH_CPUID_GET_FEATURES, 0, ARCH_CPUID_ECX, 21);
@@ -76,3 +82,9 @@ CPUID_FEATURE_DEFINE(LKGS, ARCH_CPUID_GET_EXTENDED_FEATURES, 1, ARCH_CPUID_EAX, 
  * @return A pointer to a null-terminated string containing the CPU name.
  */
 [[nodiscard]] const char* arch_cpuid_get_name_string();
+
+/**
+ * @brief Gets the CPU vendor as an enum value.
+ * @return The CPU vendor as an enum value.
+ */
+[[nodiscard]] arch_cpuid_vendor_t arch_cpuid_get_vendor();
