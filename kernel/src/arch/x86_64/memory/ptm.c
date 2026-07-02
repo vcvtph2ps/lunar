@@ -10,6 +10,7 @@
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
+#include <protocol/bootinfo.h>
 
 
 #define VADDR_TO_INDEX(VADDR, LEVEL) (((VADDR) >> ((LEVEL) * 9 + 3)) & 0x1FF)
@@ -384,7 +385,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
 }
 
-bool internal_ptm_physical(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
+static bool internal_ptm_physical(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
     uint64_t* current_table = top_level_page_table;
     int j = LEVEL_COUNT;
     for(; j > 1; j--) {
@@ -421,7 +422,7 @@ void ptm_load_address_space(vm_address_space_t* address_space) {
     arch_cr_write_cr3(address_space->ptm.top_level_page_table);
 }
 
-void map_kernel() {
+static void map_kernel() {
     for(size_t i = 0; i < g_init_boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* seg = &g_init_boot_info->kernel_segments[i];
 
@@ -485,23 +486,20 @@ void ptm_init_kernel(uint32_t core_id) {
     ptm_load_address_space(g_vm_global_address_space);
     LOG_OKAY("switched to kernel page tables :33\n");
 
-    // for(size_t i = 0; i < g_bootloader_info.framebuffer_count; i++) {
-    //     bootloader_framebuffer_info_t framebuffer;
-    //     bootloader_get_framebuffer(i, &framebuffer);
-    //     const phys_addr_t paddr = framebuffer.paddr;
+    for(size_t i = 0; i < g_init_boot_info->framebuffer_count; i++) {
+        bootinfo_framebuffer_t framebuffer = g_init_boot_info->framebuffers[i];
+        const phys_addr_t paddr = framebuffer.paddr;
 
-    //     const phys_addr_t aligned_paddr = ALIGN_DOWN(paddr, PAGE_SIZE_DEFAULT);
-    //     const virt_addr_t alignment_diff = paddr - aligned_paddr;
-    //     const size_t aligned_length = ALIGN_UP((framebuffer.framebuffer_length) + alignment_diff, PAGE_SIZE_DEFAULT);
+        const phys_addr_t aligned_paddr = ALIGN_DOWN(paddr, PAGE_SIZE_DEFAULT);
+        const virt_addr_t alignment_diff = paddr - aligned_paddr;
+        const size_t aligned_length = ALIGN_UP((framebuffer.size) + alignment_diff, PAGE_SIZE_DEFAULT);
 
-    //     const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_NONE);
-    //     bootloader_set_framebuffer_address(i, (void*) new_vaddr + alignment_diff);
-    // }
+        const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_NONE);
+        g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + alignment_diff);
+    }
 
     // interrupt_set_handler(0x0E, page_fault_handler);
 }
-
-void ptm_init_kernel_ap() {}
 
 bool ptm_init_user(vm_address_space_t* address_space) {
     address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);

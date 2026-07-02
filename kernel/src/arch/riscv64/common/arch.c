@@ -1,12 +1,12 @@
 #include <arch/cpu_local.h>
 #include <arch/hardware/sbi.h>
+#include <common/arch.h>
 #include <common/log.h>
 
-void serial_sink(int c, void* ctx) {
+static void serial_sink(int c, void* ctx) {
     (void) ctx;
     arch_sbi_console_putchar((char) c);
 }
-
 void arch_log_init() {
     log_sink_t sink = {
         .min_level = LOG_LEVEL_STRC,

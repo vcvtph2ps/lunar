@@ -12,7 +12,7 @@ static list_t g_slab_caches = LIST_INIT;
 static slab_cache_t g_alloc_cache;
 static slab_cache_t g_alloc_magazine;
 
-slab_t* slab_cache_create_slab(slab_cache_t* cache) {
+static slab_t* slab_cache_create_slab(slab_cache_t* cache) {
     virt_addr_t block = (virt_addr_t) vm_map_anon_aligned(g_vm_global_address_space, VM_NO_HINT, cache->slab_size, cache->slab_align, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_ZERO);
     slab_t* slab = (slab_t*) ((block + cache->slab_size) - sizeof(slab_t));
     slab->cache = cache;
@@ -37,14 +37,14 @@ slab_t* slab_cache_create_slab(slab_cache_t* cache) {
     return slab;
 }
 
-void slab_cache_destroy_slab(slab_cache_t* cache, slab_t* slab) {
+static void slab_cache_destroy_slab(slab_cache_t* cache, slab_t* slab) {
     assert(slab != nullptr);
     assert(cache != nullptr);
     assert(slab->cache == cache);
     vm_unmap(g_vm_global_address_space, (void*) slab->buffer, cache->slab_size);
 }
 
-void slab_cache_free_to_slab(slab_cache_t* cache, void* ptr) {
+static void slab_cache_free_to_slab(slab_cache_t* cache, void* ptr) {
     slab_t* slab = (slab_t*) (ALIGN_DOWN((uintptr_t) ptr, cache->slab_align) + cache->slab_size - sizeof(slab_t));
 
     spinlock_nodw_lock(&cache->slab_lock);
@@ -124,7 +124,7 @@ void slab_cache_destroy(slab_cache_t* cache) {
     slab_cache_free(&g_alloc_cache, cache);
 }
 
-void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
+static void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
     spinlock_nodw_lock(&cache->slab_lock);
 
     if(cache->slab_partial_list.count == 0) {

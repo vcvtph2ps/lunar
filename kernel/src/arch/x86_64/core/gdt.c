@@ -16,7 +16,7 @@ const arch_gdt_t g_arch_gdt_static_data = {
     {} // tss @ 0x30
 };
 
-void gdt_set_tss(arch_gdt_t* gdt, arch_gdt_tss_t* tss) {
+static void gdt_set_tss(arch_gdt_t* gdt, arch_gdt_tss_t* tss) {
     uint32_t tss_limit = sizeof(arch_gdt_tss_t) - 1;
 
     gdt->tss.entry.limit_low = tss_limit & 0xFFFF;

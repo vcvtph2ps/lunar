@@ -21,30 +21,26 @@ typedef enum {
     REWRITE_TYPE_CACHE
 } rewrite_type_t;
 
-size_t vm_value_of_node(rb_node_t* node) {
+static size_t vm_value_of_node(rb_node_t* node) {
     return CONTAINER_OF(node, vm_region_t, region_tree_node)->base;
 }
 
 static spinlock_no_dw_t g_region_cache_lock = SPINLOCK_NO_DW_INIT;
 static list_t g_region_cache = LIST_INIT;
 
-[[clang::always_inline]] bool address_in_bounds(virt_addr_t address, virt_addr_t start, virt_addr_t end) {
+[[clang::always_inline]] static bool address_in_bounds(virt_addr_t address, virt_addr_t start, virt_addr_t end) {
     return (address >= start) && (address < end);
 }
 
-[[clang::always_inline]] bool segment_in_bounds(virt_addr_t base, size_t length, virt_addr_t start, virt_addr_t end) {
+[[clang::always_inline]] static bool segment_in_bounds(virt_addr_t base, size_t length, virt_addr_t start, virt_addr_t end) {
     return (address_in_bounds(base, start, end) && (end - base) >= length);
 }
 
-[[clang::always_inline]] bool address_in_segment(virt_addr_t address, virt_addr_t base, size_t length) {
+[[clang::always_inline]] static bool address_in_segment(virt_addr_t address, virt_addr_t base, size_t length) {
     return (address >= base && address < (base + length));
 }
 
-[[clang::always_inline]] bool segment_intersects(virt_addr_t base1, size_t length1, virt_addr_t base2, size_t length2) {
-    return (base1 < (base2 + length2) && base2 < (base1 + length1));
-}
-
-[[clang::always_inline]] bool prot_equals(const vm_protection_t p1, const vm_protection_t p2) {
+[[clang::always_inline]] static bool prot_equals(const vm_protection_t p1, const vm_protection_t p2) {
     return p1.read == p2.read && p1.write == p2.write && p1.execute == p2.execute;
 }
 
@@ -545,13 +541,6 @@ bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t addr, size_t 
 
 rb_tree_t vm_create_regions() {
     return ((rb_tree_t) { .value_of_node = vm_value_of_node, .root = nullptr });
-}
-
-bool vm_find_hole(vm_address_space_t* address_space, size_t length, uintptr_t* out) {
-    spinlock_nodw_lock(&address_space->lock);
-    bool ok = find_hole(address_space, VM_NO_HINT, length, PAGE_SIZE_DEFAULT, out);
-    spinlock_nodw_unlock(&address_space->lock);
-    return ok;
 }
 
 static vm_region_t g_kernel_region;

@@ -16,7 +16,7 @@ uint64_t arch_get_core_id() {
     return CPU_LOCAL_READ(core_id);
 }
 
-void sink_debug(int c, void* ctx) {
+static void sink_debug(int c, void* ctx) {
     (void) ctx;
     arch_io_port_write_u8(0xe9, (uint8_t) c);
 }

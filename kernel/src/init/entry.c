@@ -23,7 +23,10 @@ extern char __global_pointer[] __asm__("__global_pointer$"); // NOLINT
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
-[[noreturn]] void kernel_entry_ap(uint64_t core_id) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+[[noreturn]] static void kernel_entry_ap(uint64_t core_id) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
     cpu_local_init(core_id);
 
@@ -33,7 +36,7 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 
 bootinfo_t* g_init_boot_info;
 
-[[noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
+[[gnu::used, noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
     if(core_id != 0) { kernel_entry_ap(core_id); }
 
     g_init_boot_info = boot_info;
@@ -43,7 +46,7 @@ bootinfo_t* g_init_boot_info;
     LOG_STRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
 
 #ifdef __ARCH_RISCV64__
-    LOG_INFO("Platform: riscv64\n");
+    LOG_INFO("Platform: %s (riscv64)\n", boot_info->riscv_base_isa_string);
 #else
     arch_cpuid_vendor_t vendor = arch_cpuid_get_vendor();
     if(vendor == ARCH_CPUID_VENDOR_INTEL) {
@@ -59,9 +62,15 @@ bootinfo_t* g_init_boot_info;
 
 #ifdef __ARCH_RISCV64__
     LOG_INFO("Has dtb: %s\n", g_init_boot_info->dtb_physical ? "true" : "false");
-    LOG_INFO("riscv isa string: %s\n", g_init_boot_info->riscv_base_isa_string);
-    LOG_INFO("riscv extension count: %zu\n", g_init_boot_info->riscv_extension_count);
-    for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) { LOG_INFO("riscv extension[%zu]: %s\n", i, (*g_init_boot_info->riscv_extentions)[i]); }
+    LOG_INFO("%zu extensions: ", g_init_boot_info->riscv_extension_count);
+    for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) {
+        if(i == 0)
+            log_print(LOG_LEVEL_INFO, "%s", (*g_init_boot_info->riscv_extentions)[i]);
+        else
+            log_print(LOG_LEVEL_INFO, ", %s", (*g_init_boot_info->riscv_extentions)[i]);
+    }
+    log_print(LOG_LEVEL_INFO, "\n");
+
 #endif
 
     LOG_STRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
@@ -135,3 +144,5 @@ bootinfo_t* g_init_boot_info;
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
     arch_init_bsp();
 }
+
+#pragma clang diagnostic pop

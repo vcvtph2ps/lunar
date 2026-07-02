@@ -162,7 +162,7 @@ void vm_rewrite_prot(vm_address_space_t* address_space, void* address, size_t le
  * @param address_space The address space to change the mapping in
  * @param address The starting virtual address of the region to change. Must be page-aligned
  * @param length The length of the region to change, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space.
- * @param cahace The new cache flags for the mapping
+ * @param cache The new cache flags for the mapping
  */
 void vm_rewrite_cache(vm_address_space_t* address_space, void* address, size_t length, vm_cache_t cache);
 
@@ -205,20 +205,6 @@ bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t buf, size_t c
  * @return A new rb_tree_t instance that is ready to be used for managing vm_region_t structures in an address space.
  */
 rb_tree_t vm_create_regions();
-
-/**
- * @brief Finds a free contiguous hole of at least @p length bytes in @p address_space.
- *
- * This is intended for early boot use (e.g. pagedb bootstrap) where the caller
- * needs a VA range but cannot yet go through the normal vm_map path.
- * The lock on @p address_space must NOT be held by the caller.
- *
- * @param address_space  The address space to search.
- * @param length         Required size in bytes (must be page-aligned).
- * @param out            Receives the found virtual base address on success.
- * @return true if a hole was found, false if address space is exhausted.
- */
-bool vm_find_hole(vm_address_space_t* address_space, size_t length, uintptr_t* out);
 
 /**
  * @brief Initializes kernel vm regions

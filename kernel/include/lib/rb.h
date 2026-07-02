@@ -35,7 +35,7 @@ typedef enum {
 /**
  * @brief Initializes a red-black tree with the specified value and length functions.
  * @param tree The red-black tree to initialize.
- * @param value_of_node A function that returns the value of a node, used for comparisons during tree operations.
+ * @param node The node to insert into the tree.
  */
 void rb_insert(rb_tree_t* tree, rb_node_t* node);
 

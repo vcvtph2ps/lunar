@@ -10,7 +10,7 @@
 #include <memory/vm.h>
 
 
-void ptm_init_kernel(uint32_t core_id) {
+[[noreturn]] void ptm_init_kernel(uint32_t core_id) {
     (void) core_id;
     assert(false && "Not yet implemented");
 }
@@ -45,7 +45,7 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     return false;
 }
 
-void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length) {
+[[noreturn]] void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length) {
     (void) address_space;
     (void) vaddr;
     (void) length;
@@ -61,13 +61,13 @@ bool ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t*
 }
 
 
-void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
+[[noreturn]] void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
     (void) vaddr;
     (void) length;
     assert(false && "Not yet implemented");
 }
 
-void ptm_load_address_space(vm_address_space_t* address_space) {
+[[noreturn]] void ptm_load_address_space(vm_address_space_t* address_space) {
     (void) address_space;
     assert(false && "Not yet implemented");
 }

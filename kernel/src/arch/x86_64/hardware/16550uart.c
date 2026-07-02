@@ -129,7 +129,7 @@ static inline void serial_set_fifo(uint16_t port, uint8_t fifo) {
 
 /// @warning: clobbers serial port config
 /// @returns: 2 on success; 1 on partial failure; 0 on total failure
-int serial_test(uint16_t port) {
+static int serial_test(uint16_t port) {
     serial_set_divisor(port, SERIAL_115200_BAUD);
     serial_set_lcr(port, SERIAL_LCR_8BIT | SERIAL_LCR_1STOP | SERIAL_LCR_PARITY_NONE);
     serial_set_fifo(port, SERIAL_FIFO_TX_FLUSH | SERIAL_FIFO_RX_FLUSH);
@@ -181,7 +181,7 @@ int arch_16550uart_read() {
     return data;
 }
 
-void serial_sink(int c, void* ctx) {
+static void serial_sink(int c, void* ctx) {
     (void) ctx;
     arch_16550uart_send((char) c);
 }

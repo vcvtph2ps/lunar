@@ -12,7 +12,7 @@ init_stage_handler_t g_init_stage_handlers[] = {
 
 #undef INIT_STAGE
 
-void run_stage(init_stage_t stage, uint32_t core_id) {
+static void run_stage(init_stage_t stage, uint32_t core_id) {
     for(size_t i = 0; i < sizeof(g_init_stage_handlers) / sizeof(init_stage_handler_t); i++) {
         if(g_init_stage_handlers[i].stage == stage) {
             g_init_stage_handlers[i].handler(core_id);

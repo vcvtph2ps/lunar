@@ -7,9 +7,9 @@
     __asm__ volatile("mfence" ::: "memory");
     __asm__ volatile("lfence" ::: "memory");
 
-    int apic_id = arch_get_core_id();
+    uint64_t apic_id = arch_get_core_id();
 
-    log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %d\nMessage: ", apic_id);
+    log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %ld\nMessage: ", apic_id);
     va_list args;
     va_start(args, fmt);
     log_vprint_lockless(LOG_LEVEL_FAIL, fmt, args);
@@ -24,9 +24,6 @@
     log_print_lockless(LOG_LEVEL_FAIL, "     ((____|    )_-\\ \\_-\\`\n");
     log_print_lockless(LOG_LEVEL_FAIL, "     `-----'`-----` `--`\n");
 
-    while(1) {
-        __builtin_ia32_pause();
-        asm volatile("hlt");
-    }
+    while(1) { asm volatile("pause;hlt"); }
     __builtin_unreachable();
 }

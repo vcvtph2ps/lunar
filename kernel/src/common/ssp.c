@@ -4,6 +4,11 @@
 
 uint64_t __stack_chk_guard = 0xdeadbeefcafebabe; // NOLINT
 
-[[noreturn]] void __stack_chk_fail(void) { // NOLINT
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+[[gnu::used, noreturn]] void __stack_chk_fail(void) { // NOLINT
     arch_panic("stack smashing detected\n");
 }
+
+#pragma clang diagnostic pop
