@@ -25,11 +25,29 @@
 
 [[nodiscard]] const char* arch_cpuid_get_vendor_string() {
     static char vendor[13] = { 0 };
-    *(uint32_t*) &vendor[0] = arch_cpuid(ARCH_CPUID_VENDOR_ID, 0, ARCH_CPUID_EBX);
-    *(uint32_t*) &vendor[4] = arch_cpuid(ARCH_CPUID_VENDOR_ID, 0, ARCH_CPUID_EDX);
-    *(uint32_t*) &vendor[8] = arch_cpuid(ARCH_CPUID_VENDOR_ID, 0, ARCH_CPUID_ECX);
+    uint64_t ebx = arch_cpuid(ARCH_CPUID_VENDOR_ID, 0, ARCH_CPUID_EBX);
+    uint64_t ecx = arch_cpuid(ARCH_CPUID_VENDOR_ID, 0, ARCH_CPUID_ECX);
+    uint64_t edx = arch_cpuid(ARCH_CPUID_VENDOR_ID, 0, ARCH_CPUID_EDX);
+    memcpy(&vendor[0], &ebx, 4);
+    memcpy(&vendor[4], &edx, 4);
+    memcpy(&vendor[8], &ecx, 4);
+    vendor[12] = '\0';
     return vendor;
 }
+
+
+[[nodiscard]] const char* arch_cpuid_get_hypervisor_string() {
+    static char vendor[13] = { 0 };
+    uint64_t ebx = arch_cpuid(ARCH_CPUID_HYPERVISOR_ID, 0, ARCH_CPUID_EBX);
+    uint64_t ecx = arch_cpuid(ARCH_CPUID_HYPERVISOR_ID, 0, ARCH_CPUID_ECX);
+    uint64_t edx = arch_cpuid(ARCH_CPUID_HYPERVISOR_ID, 0, ARCH_CPUID_EDX);
+    memcpy(&vendor[0], &ebx, 4);
+    memcpy(&vendor[4], &ecx, 4);
+    memcpy(&vendor[8], &edx, 4);
+    vendor[12] = '\0';
+    return vendor;
+}
+
 
 [[nodiscard]] const char* arch_cpuid_get_name_string() {
     uint32_t max_ext_leaf = arch_cpuid(0x80000000, 0, ARCH_CPUID_EAX);
@@ -55,13 +73,57 @@
     return name;
 }
 
-[[nodiscard]] arch_cpuid_vendor_t arch_cpuid_get_vendor() {
-    const char* vendor_str = arch_cpuid_get_vendor_string();
-    if(strcmp(vendor_str, "GenuineIntel") == 0) {
-        return ARCH_CPUID_VENDOR_INTEL;
-    } else if(strcmp(vendor_str, "AuthenticAMD") == 0) {
-        return ARCH_CPUID_VENDOR_AMD;
-    } else {
-        return ARCH_CPUID_VENDOR_UNKNOWN;
+[[nodiscard]] arch_cpuid_hypervisor_t arch_cpuid_get_hypervisor() {
+    static bool init = false;
+    static bool is_hypervisor = false;
+    static arch_cpuid_hypervisor_t hypervisor_type = ARCH_CPUID_HYPERVISOR_NONE;
+
+    if(!init) {
+        init = true;
+        is_hypervisor = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_IS_HYPERVISOR);
+
+        if(!is_hypervisor) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_NONE;
+            return ARCH_CPUID_HYPERVISOR_NONE;
+        }
+
+        const char* hypervisor_string = arch_cpuid_get_hypervisor_string();
+        if(strcmp(hypervisor_string, "KVMKVMKVM") == 0) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_KVM;
+        } else if(strcmp(hypervisor_string, "XenVMMXenVMM") == 0) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_XEN;
+        } else if(strcmp(hypervisor_string, "TCGTCGTCGTCG") == 0) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_TCG;
+        } else if(strcmp(hypervisor_string, "bhyve bhyve ") == 0) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_BHYVE;
+        } else if(strcmp(hypervisor_string, "VBoxVBoxVBox") == 0) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_VBOX;
+        } else if(strcmp(hypervisor_string, "VMwareVMware") == 0) {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_VMWARE;
+        } else {
+            hypervisor_type = ARCH_CPUID_HYPERVISOR_OTHER;
+        }
     }
+
+    return hypervisor_type;
+}
+
+[[nodiscard]] arch_cpuid_vendor_t arch_cpuid_get_vendor() {
+    static bool init = false;
+    static arch_cpuid_vendor_t vendor = ARCH_CPUID_VENDOR_UNKNOWN;
+
+    if(!init) {
+        init = true;
+
+        const char* vendor_str = arch_cpuid_get_vendor_string();
+        if(strcmp(vendor_str, "GenuineIntel") == 0) {
+            vendor = ARCH_CPUID_VENDOR_INTEL;
+        } else if(strcmp(vendor_str, "AuthenticAMD") == 0) {
+            vendor = ARCH_CPUID_VENDOR_AMD;
+        } else {
+            vendor = ARCH_CPUID_VENDOR_UNKNOWN;
+        }
+    }
+
+    return vendor;
 }

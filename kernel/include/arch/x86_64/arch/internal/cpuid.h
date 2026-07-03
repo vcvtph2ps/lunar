@@ -20,6 +20,7 @@ typedef enum : uint64_t {
     ARCH_CPUID_VENDOR_ID = 0x0,
     ARCH_CPUID_GET_FEATURES = 0x1,
     ARCH_CPUID_GET_EXTENDED_FEATURES = 0x7,
+    ARCH_CPUID_HYPERVISOR_ID = 0x40000000,
     ARCH_CPUID_EXTENDED_PROCESSOR_INFO = 0x80000001
 } arch_cpuid_leaf_t;
 
@@ -29,8 +30,20 @@ typedef enum : uint64_t {
     ARCH_CPUID_VENDOR_UNKNOWN = 2
 } arch_cpuid_vendor_t;
 
+typedef enum : uint64_t {
+    ARCH_CPUID_HYPERVISOR_NONE = 0,
+    ARCH_CPUID_HYPERVISOR_KVM,
+    ARCH_CPUID_HYPERVISOR_XEN,
+    ARCH_CPUID_HYPERVISOR_BHYVE,
+    ARCH_CPUID_HYPERVISOR_TCG,
+    ARCH_CPUID_HYPERVISOR_VBOX,
+    ARCH_CPUID_HYPERVISOR_VMWARE,
+    ARCH_CPUID_HYPERVISOR_OTHER,
+} arch_cpuid_hypervisor_t;
+
 // NOLINTBEGIN
 #define CPUID_FEATURE_DEFINE(name, __leaf, __subleaf, __reg, __bit) const static arch_cpuid_feature_t ARCH_CPUID_FEATURE_##name = { .leaf = __leaf, .subleaf = __subleaf, .reg = __reg, .mask = (1 << __bit) }
+CPUID_FEATURE_DEFINE(IS_HYPERVISOR, ARCH_CPUID_GET_FEATURES, 0, ARCH_CPUID_ECX, 31);
 CPUID_FEATURE_DEFINE(X2APIC, ARCH_CPUID_GET_FEATURES, 0, ARCH_CPUID_ECX, 21);
 CPUID_FEATURE_DEFINE(LA57, ARCH_CPUID_GET_EXTENDED_FEATURES, 0, ARCH_CPUID_ECX, 16);
 CPUID_FEATURE_DEFINE(PDPE1GB_PAGES, ARCH_CPUID_EXTENDED_PROCESSOR_INFO, 0, ARCH_CPUID_EDX, 26);
@@ -78,10 +91,22 @@ CPUID_FEATURE_DEFINE(LKGS, ARCH_CPUID_GET_EXTENDED_FEATURES, 1, ARCH_CPUID_EAX, 
 [[nodiscard]] const char* arch_cpuid_get_vendor_string();
 
 /**
+ * @brief Gets the hypervisor string, which is a 12-character ASCII string that identifies the hypervisor manufacturer
+ * @return A pointer to a null-terminated string containing the Hypervisor or nullptr if no hypervisor is detected.
+ */
+[[nodiscard]] const char* arch_cpuid_get_hypervisor_string();
+
+/**
  * @brief Gets the CPU name string, which is a 48-character ASCII string that identifies the specific CPU model.
  * @return A pointer to a null-terminated string containing the CPU name.
  */
 [[nodiscard]] const char* arch_cpuid_get_name_string();
+
+/**
+ * @brief Gets the CPU vendor as an enum value.
+ * @return The CPU vendor as an enum value.
+ */
+[[nodiscard]] arch_cpuid_hypervisor_t arch_cpuid_get_hypervisor();
 
 /**
  * @brief Gets the CPU vendor as an enum value.

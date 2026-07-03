@@ -30,7 +30,11 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
 ATOMIC uint32_t g_init_finished_core_count = 0;
 
 void arch_init_bsp() {
-    LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+    if(arch_cpuid_get_vendor_string() != nullptr) {
+        LOG_STRC("Processor: %s, \"%s\" running under \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string(), arch_cpuid_get_hypervisor_string());
+    } else {
+        LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+    }
 
     LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
     LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
