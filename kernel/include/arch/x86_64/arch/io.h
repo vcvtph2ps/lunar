@@ -9,9 +9,29 @@ static inline void arch_io_port_write_u8(uint16_t port, uint8_t value) {
     asm volatile("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
+static inline void arch_io_port_write_u16(uint16_t port, uint16_t value) {
+    __asm__ volatile("outw %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline void arch_io_port_write_u32(uint16_t port, uint32_t value) {
+    __asm__ volatile("outl %0, %1" : : "a"(value), "Nd"(port));
+}
+
 static inline uint8_t arch_io_port_read_u8(uint16_t port) {
     uint8_t ret;
     __asm__ volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
+
+static inline uint16_t arch_io_port_read_u16(uint16_t port) {
+    uint16_t ret;
+    __asm__ volatile("inw %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
+
+static inline uint32_t arch_io_port_read_u32(uint16_t port) {
+    uint32_t ret;
+    __asm__ volatile("inl %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
 }
 
