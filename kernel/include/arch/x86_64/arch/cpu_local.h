@@ -1,5 +1,6 @@
 #pragma once
 #include <arch/internal/gdt.h>
+#include <common/sched/sched.h>
 #include <lib/list.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -15,14 +16,10 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     struct {
         uint32_t counter;
         bool yield_pending;
-    } preempt;
-
-    struct {
-        uint32_t counter;
-        bool yield_pending;
         list_t queue;
     } defered_work;
 
+    scheduler_t scheduler;
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;
 };

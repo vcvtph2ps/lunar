@@ -43,12 +43,12 @@ void arch_init_bsp() {
     LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
-        LOG_INFO("xsave supported, fpu_size=%d\n", arch_cpuid(0x0d, 0, ARCH_CPUID_ECX));
+        LOG_INFO("fpu save method: xsave, fpu_size=%d\n", arch_cpuid(0x0d, 0, ARCH_CPUID_ECX));
     } else {
-        LOG_INFO("xsave not supported\n");
+        LOG_INFO("fpu save method: fxsave, fpu_size=512\n");
     }
 
-    LOG_STRC("x2apic: %d\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC));
+    LOG_INFO("x2apic: %s\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC) ? "supported" : "not supported");
 
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);

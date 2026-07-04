@@ -1,4 +1,4 @@
-#include <arch/interrupt.h>
+#include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/interrupts/dw.h>
 #include <common/sched/sched.h>

@@ -1,7 +1,6 @@
 #include <nanoprintf/nanoprintf.h>
 
 ///
-#include <arch/interrupt.h>
 #include <common/arch.h>
 #include <common/log.h>
 #include <common/spinlock.h>

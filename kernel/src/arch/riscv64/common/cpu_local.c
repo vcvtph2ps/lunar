@@ -11,7 +11,7 @@ void cpu_local_init_bsp(uintptr_t cpu_local_ptr) {
 
     // Set to 1 to prevent preemption and deferred work until the scheduler is initialized
     cpu_local->defered_work.counter = 1;
-    cpu_local->preempt.counter = 1;
+    ATOMIC_STORE(&cpu_local->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
 }
 
 void cpu_local_init(uint32_t core_id) {
@@ -21,7 +21,7 @@ void cpu_local_init(uint32_t core_id) {
 
     // Set to 1 to prevent preemption and deferred work until the scheduler is initialized
     cpu_local->defered_work.counter = 1;
-    cpu_local->preempt.counter = 1;
+    ATOMIC_STORE(&cpu_local->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
 }
 
 uint32_t arch_cpu_local_get_core_hart_id(uint32_t core_id) {

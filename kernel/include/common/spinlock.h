@@ -1,5 +1,5 @@
 #pragma once
-#include <arch/interrupt.h>
+#include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <lib/helpers.h>
 #include <stdint.h>

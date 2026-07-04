@@ -1,5 +1,5 @@
 #include <arch/hardware/16550uart.h>
-#include <arch/interrupt.h>
+#include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/log.h>

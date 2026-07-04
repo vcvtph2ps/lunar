@@ -1,4 +1,5 @@
 #pragma once
+#include <common/sched/sched.h>
 #include <lib/list.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -14,13 +15,10 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     struct {
         uint32_t counter;
         bool yield_pending;
-    } preempt;
-
-    struct {
-        uint32_t counter;
-        bool yield_pending;
         list_t queue;
     } defered_work;
+
+    scheduler_t scheduler;
 };
 
 uint32_t arch_cpu_local_get_core_hart_id(uint32_t core_id);

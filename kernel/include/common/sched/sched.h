@@ -1,4 +1,13 @@
 #pragma once
+#include <common/spinlock.h>
+
+typedef struct scheduler scheduler_t; // NOLINT
+
+struct scheduler {
+    ATOMIC bool yield_pending;
+    ATOMIC uint32_t preempt_counter;
+    bool threaded;
+};
 
 /**
  * @brief Increments the preemption counter
