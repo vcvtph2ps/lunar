@@ -36,6 +36,19 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 
 bootinfo_t* g_init_boot_info;
 
+const char* memmap_type_to_string(uint64_t type) {
+    switch(type) {
+        case BOOTINFO_MM_TYPE_USABLE:           return "usable";
+        case BOOTINFO_MM_TYPE_USED:             return "used";
+        case BOOTINFO_MM_TYPE_RECLAIMABLE:      return "reclaimable";
+        case BOOTINFO_MM_TYPE_ACPI_RECLAIMABLE: return "acpi_reclaimable";
+        case BOOTINFO_MM_TYPE_ACPI_NVS:         return "acpi_nvs";
+        case BOOTINFO_MM_TYPE_RESERVED:         return "reserved";
+        case BOOTINFO_MM_TYPE_BAD:              return "bad";
+        default:                                return "unknown";
+    }
+}
+
 [[gnu::used, noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
     if(core_id != 0) { kernel_entry_ap(core_id); }
 
@@ -96,7 +109,7 @@ bootinfo_t* g_init_boot_info;
     LOG_STRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
     for(size_t i = 0; i < boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &boot_info->mm_entries[i];
-        LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%ld\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, entry->type);
+        LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%s (%ld)\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, memmap_type_to_string(entry->type), entry->type);
     }
 
     LOG_STRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);

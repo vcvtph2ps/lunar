@@ -1,5 +1,7 @@
+#include <arch/memory.h>
 #include <common/assert.h>
 #include <common/init.h>
+#include <common/log.h>
 #include <memory/pagedb.h>
 
 pagedb_page_t* g_pagedb_start;
@@ -9,7 +11,11 @@ void pagedb_init() {
 }
 
 pagedb_page_t* pagedb_get_page(uint64_t pfn) {
-    if(pfn >= g_init_boot_info->pfndb_size / sizeof(pagedb_page_t)) return nullptr;
+    uint64_t count = g_init_boot_info->pfndb_size / sizeof(pagedb_page_t);
+    if(pfn >= count) {
+        LOG_STRC("pagedb_get_page: pfn=0x%lx out of range (count=0x%lx)\n", pfn, count);
+        return nullptr;
+    }
     return &g_pagedb_start[pfn];
 }
 

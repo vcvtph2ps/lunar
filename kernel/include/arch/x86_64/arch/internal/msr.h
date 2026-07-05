@@ -4,6 +4,9 @@
 #define ARCH_MSR_EFER 0xC0000080
 #define ARCH_MSR_ACTIVE_GS_BASE 0xC0000101
 
+#define ARCH_MSR_APIC_BASE_MSR 0x1B
+#define ARCH_MSR_X2APIC_BASE_MSR 0x800
+
 [[nodiscard]] static inline uint64_t arch_msr_read(uint64_t msr) {
     uint32_t low;
     uint32_t high;

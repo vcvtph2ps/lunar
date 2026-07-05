@@ -2,6 +2,22 @@
 #include <stdint.h>
 
 typedef struct {
+    uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
+    uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
+} arch_interrupt_regs_t;
+
+typedef struct {
+    uint64_t rip, cs, rflags, rsp, ss;
+} arch_interrupt_sregs_t;
+
+typedef struct {
+    uint64_t vector, error, interrupt_data;
+    arch_interrupt_regs_t* regs;
+    arch_interrupt_sregs_t* state;
+    bool is_user;
+} arch_interrupt_frame_t;
+
+typedef struct {
     bool enabled;
 } arch_interrupt_state_t;
 

@@ -2,6 +2,11 @@
 #include <stdint.h>
 
 typedef struct {
+    // @todo:
+    void* unused;
+} arch_interrupt_frame_t;
+
+typedef struct {
     bool enabled;
 } arch_interrupt_state_t;
 

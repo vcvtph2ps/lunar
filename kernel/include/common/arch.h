@@ -1,4 +1,5 @@
 #pragma once
+#include <arch/interrupts/interrupt.h>
 #include <arch/memory.h>
 #include <stdint.h>
 
@@ -24,6 +25,12 @@ uint64_t arch_get_core_id();
  * @note This function does not return and will halt the system after printing the message
  */
 [[noreturn, gnu::format(printf, 1, 2)]] void arch_panic(const char* format, ...);
+
+/**
+ * @brief Panics the system with an interrupt frame
+ * @note This function does not return and will halt the system after dumping the context
+ */
+void arch_panic_int(arch_interrupt_frame_t* frame);
 
 /**
  * @brief Initializes the bootstrap processor and starts the kernel
