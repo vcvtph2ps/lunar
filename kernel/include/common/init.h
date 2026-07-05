@@ -7,7 +7,8 @@
 
 typedef enum {
     INIT_STAGE_BASE_MEM,
-    INIT_STAGE_ARCH_CPU
+    INIT_STAGE_ARCH_CPU,
+    INIT_STAGE_TIME
 } init_stage_t;
 
 typedef struct {
@@ -24,3 +25,4 @@ const char* init_stage_to_str(init_stage_t stage);
 
 void init_stage_base_mem(uint32_t core_id);
 void init_stage_arch_cpu(uint32_t core_id);
+void init_stage_time(uint32_t core_id);

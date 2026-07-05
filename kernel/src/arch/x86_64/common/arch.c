@@ -37,3 +37,8 @@ void arch_log_init() {
 
     arch_16550uart_early_setup();
 }
+
+
+uint64_t arch_read_timestamp_count() {
+    return __rdtsc();
+}

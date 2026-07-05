@@ -19,6 +19,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
         list_t queue;
     } defered_work;
 
+    uint32_t tsc_ticks_per_us;
     scheduler_t scheduler;
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;

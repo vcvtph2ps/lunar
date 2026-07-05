@@ -12,6 +12,7 @@
 init_stage_handler_t g_init_stage_handlers[] = {
     INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
     INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
+    INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
 };
 
 #undef INIT_STAGE
@@ -52,6 +53,7 @@ void arch_init_bsp() {
 
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);
+    run_stage(INIT_STAGE_TIME, 0);
     arch_panic("mroaww");
 
     // let APs know they can start init, and wait for them
@@ -73,6 +75,8 @@ void arch_init_ap(uint32_t core_id) {
     LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
     run_stage(INIT_STAGE_BASE_MEM, core_id);
+    run_stage(INIT_STAGE_ARCH_CPU, core_id);
+    run_stage(INIT_STAGE_TIME, core_id);
 
     // signal that this core has finished init
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
