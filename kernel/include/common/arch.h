@@ -9,6 +9,11 @@
 void arch_spin_hint();
 
 /**
+ * @brief Memory fence to ensure that all memory operations before this point are completed
+ */
+void arch_memory_fence();
+
+/**
  * @brief Waits for the next interrupt
  */
 void arch_wait_for_interrupt();
@@ -50,8 +55,3 @@ void arch_panic_int(arch_interrupt_frame_t* frame);
  * @brief Initializes architecture specific logging, such as serial output
  */
 void arch_log_init();
-
-/**
- * @brief Returns architecture specific timestamp counter
- */
-uint64_t arch_read_timestamp_count();

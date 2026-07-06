@@ -1,6 +1,8 @@
-#include <arch/hardware/pit.h>
+#include <arch/hardware/time/pit.h>
 #include <arch/io.h>
 #include <stdint.h>
+
+#include "memory/heap.h"
 
 #define PIT_CHANNEL0 0x40
 #define PIT_COMMAND 0x43
@@ -17,9 +19,10 @@ static inline void pit_set_reload(uint16_t reload_value) {
     arch_io_port_write_u8(PIT_CHANNEL0, (reload_value >> 8) & 0xFF);
 }
 
-void arch_pit_sleep_us(uint64_t microseconds) {
-    if(microseconds == 0) return;
+static time_timer_t* g_pit_timer = nullptr;
 
+static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
+    (void) self;
     uint64_t total_ticks = (PIT_FREQUENCY * microseconds) / 1000000ULL;
     if(total_ticks == 0) total_ticks = 1;
 
@@ -39,4 +42,17 @@ void arch_pit_sleep_us(uint64_t microseconds) {
             last = current;
         }
     }
+}
+
+time_timer_t* arch_pit_timer_get(void) {
+    if(g_pit_timer == nullptr) {
+        g_pit_timer = (time_timer_t*) heap_alloc(sizeof(time_timer_t));
+        g_pit_timer->name = "pit";
+        g_pit_timer->score = 0;
+        g_pit_timer->sleep = pit_sleep;
+        g_pit_timer->read_raw = nullptr;
+        g_pit_timer->read_microseconds = nullptr;
+        g_pit_timer->private = nullptr;
+    }
+    return g_pit_timer;
 }

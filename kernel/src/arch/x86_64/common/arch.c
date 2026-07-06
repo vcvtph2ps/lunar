@@ -8,6 +8,10 @@ void arch_spin_hint() {
     __asm__ volatile("pause" ::: "memory");
 }
 
+void arch_memory_fence() {
+    __asm__ volatile("mfence" ::: "memory");
+}
+
 void arch_wait_for_interrupt() {
     __asm__ volatile("hlt" ::: "memory");
 }
@@ -36,9 +40,4 @@ void arch_log_init() {
     }
 
     arch_16550uart_early_setup();
-}
-
-
-uint64_t arch_read_timestamp_count() {
-    return __rdtsc();
 }

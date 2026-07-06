@@ -1,11 +1,13 @@
 #pragma once
 #include <arch/internal/gdt.h>
 #include <common/sched/sched.h>
+#include <common/time/time.h>
 #include <lib/list.h>
 #include <stddef.h>
 #include <stdint.h>
 
 typedef struct arch_cpu_local arch_cpu_local_t;
+typedef struct arch_kvm_pvclock arch_kvm_pvclock_t; // NOLINT
 
 struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_cpu_local_t* self;
@@ -23,6 +25,8 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     scheduler_t scheduler;
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;
+
+    time_timer_t* kvm_pvclock;
 };
 
 uint32_t arch_cpu_local_get_core_lapic_id(uint32_t core_id);

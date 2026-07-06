@@ -7,6 +7,8 @@
 #define ARCH_MSR_APIC_BASE_MSR 0x1B
 #define ARCH_MSR_X2APIC_BASE_MSR 0x800
 
+#define ARCH_MSR_KVM_PVCLOCK 0x4B564D01
+
 [[nodiscard]] static inline uint64_t arch_msr_read(uint64_t msr) {
     uint32_t low;
     uint32_t high;

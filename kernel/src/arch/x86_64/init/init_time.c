@@ -1,21 +1,40 @@
+#include <arch/cpu_local.h>
 #include <arch/hardware/fpu.h>
 #include <arch/hardware/lapic.h>
-#include <arch/hardware/pit.h>
+#include <arch/hardware/time/kvm_pvclock.h>
+#include <arch/hardware/time/pit.h>
+#include <arch/hardware/time/tsc.h>
 #include <arch/internal/cpuid.h>
 #include <arch/internal/gdt.h>
-#include <arch/internal/tsc.h>
 #include <common/arch.h>
+#include <common/assert.h>
 #include <common/init.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/time/time.h>
 
-void init_stage_time(uint32_t core_id) {
-    time_calibrate_fn_t best_calibrator = arch_pit_sleep_us;
-    // @todo: use the hpet if available
-    arch_tsc_calibrate(best_calibrator);
-    best_calibrator = arch_tsc_sleep;
+typedef struct {
+    time_timer_t* timers[16];
+    time_timer_t* best_timer;
+    size_t count;
+} timer_registry_t;
 
-    if(INIT_CORE_IS_BSP(core_id)) { time_init(); }
+static void register_timer(timer_registry_t* registry, time_timer_t* timer) {
+    if(timer) {
+        registry->timers[registry->count++] = timer;
+        bool is_best = registry->best_timer == nullptr || timer->score > registry->best_timer->score;
+        if(is_best) { registry->best_timer = timer; }
+        LOG_OKAY("found timer: %s%s\n", timer->name, is_best ? " (best)" : "");
+    }
+}
+
+void init_stage_time(uint32_t core_id) {
+    timer_registry_t registry = {};
+
+    register_timer(&registry, arch_pit_timer_get());
+    register_timer(&registry, arch_kvm_pvclock_init());
+    register_timer(&registry, arch_tsc_init_timer(registry.best_timer));
+
+    if(INIT_CORE_IS_BSP(core_id)) { time_init(registry.best_timer); }
 }
