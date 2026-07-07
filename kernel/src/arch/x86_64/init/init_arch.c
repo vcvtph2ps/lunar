@@ -6,6 +6,7 @@
 #include <common/init.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
+#include <common/interrupts/ipi.h>
 #include <common/log.h>
 
 void init_stage_arch_cpu(uint32_t core_id) {
@@ -15,4 +16,5 @@ void init_stage_arch_cpu(uint32_t core_id) {
     interrupt_init(core_id);
     arch_lapic_init(core_id);
     arch_fpu_init(core_id);
+    ipi_init(core_id);
 }

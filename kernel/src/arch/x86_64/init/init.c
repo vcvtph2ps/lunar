@@ -7,6 +7,10 @@
 #include <lib/helpers.h>
 #include <stddef.h>
 
+#include "arch/interrupts/interrupt.h"
+#include "common/interrupts/dw.h"
+#include "common/sched/sched.h"
+
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
 init_stage_handler_t g_init_stage_handlers[] = {
@@ -34,7 +38,7 @@ void arch_init_bsp() {
     if(arch_cpuid_get_vendor_string() != nullptr) {
         LOG_STRC("Processor: %s, \"%s\" running under \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string(), arch_cpuid_get_hypervisor_string());
     } else {
-        LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+        LOG_STRC("Processor: %s, \"s%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
     }
 
     LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
@@ -54,13 +58,16 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     run_stage(INIT_STAGE_TIME, 0);
-    arch_panic("mroaww");
 
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
 
-    LOG_OKAY("APs finished booting\n");
+    (void) arch_interrupt_enable();
+    dw_status_enable();
+    sched_preempt_enable();
+
+    arch_panic("mroaww");
     while(1);
 }
 
@@ -81,6 +88,10 @@ void arch_init_ap(uint32_t core_id) {
     // signal that this core has finished init
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
+
+    (void) arch_interrupt_enable();
+    dw_status_enable();
+    sched_preempt_enable();
 
     while(1);
 }

@@ -5,6 +5,7 @@
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/init.h>
+#include <common/interrupts/ipi.h>
 #include <common/log.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
@@ -235,7 +236,7 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     }
 
     ptm_flush_tlb(vaddr, length);
-    // @todo: ipi
+    // @note: we shouldn't need to send an ipi here since the tlb shouldn't contain unmapped entries
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
     return true;
 }
@@ -297,7 +298,10 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     }
 
     ptm_flush_tlb(vaddr, length);
-    // @todo: ipi
+    ipi_broadcast((ipi_message_t) {
+        .type = IPI_TLB_FLUSH,
+        .tlb_flush = { .vaddr = vaddr, .length = length }
+    });
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
     return true;
 }
@@ -381,7 +385,10 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
     }
 
     ptm_flush_tlb(vaddr, length);
-    // @todo: ipi
+    ipi_broadcast((ipi_message_t) {
+        .type = IPI_TLB_FLUSH,
+        .tlb_flush = { .vaddr = vaddr, .length = length }
+    });
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
 }
 

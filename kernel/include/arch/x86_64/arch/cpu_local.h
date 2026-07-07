@@ -1,5 +1,6 @@
 #pragma once
 #include <arch/internal/gdt.h>
+#include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <common/time/time.h>
 #include <lib/list.h>
@@ -26,6 +27,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;
 
+    ipi_request_t* ipi_queue;
     time_timer_t* kvm_pvclock;
 };
 

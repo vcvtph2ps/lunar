@@ -4,6 +4,8 @@
 #include <common/cpu_local.h>
 #include <common/log.h>
 
+#include "arch/hardware/lapic.h"
+
 void arch_spin_hint() {
     __asm__ volatile("pause" ::: "memory");
 }

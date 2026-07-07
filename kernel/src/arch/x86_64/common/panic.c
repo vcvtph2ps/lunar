@@ -6,6 +6,8 @@
 #include <memory/vm.h>
 #include <stdarg.h>
 
+#include "common/interrupts/ipi.h"
+
 static const char* g_name_table[22] = { "Divide Error",
                                         "Debug Exception",
                                         "NMI Interrupt",
@@ -29,19 +31,15 @@ static const char* g_name_table[22] = { "Divide Error",
                                         "Virtualization Exception",
                                         "Control Protection Exception" };
 
-[[noreturn]] void arch_panic(const char* fmt, ...) {
-    __asm__ volatile("cli" ::: "memory");
-    __asm__ volatile("mfence" ::: "memory");
-    __asm__ volatile("lfence" ::: "memory");
+[[clang::always_inline]] static void panic_begin() {
+    __asm__ volatile("cli;mfence;lfence" ::: "memory");
+    ipi_broadcast((ipi_message_t) { .type = IPI_HALT });
 
     uint64_t apic_id = arch_get_core_id();
+    log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %ld\n", apic_id);
+}
 
-    log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %ld\nMessage: ", apic_id);
-    va_list args;
-    va_start(args, fmt);
-    log_vprint_lockless(LOG_LEVEL_FAIL, fmt, args);
-    va_end(args);
-
+[[clang::always_inline, noreturn]] static void panic_end() {
     log_print_lockless(LOG_LEVEL_FAIL, "\n\nmrrp mrrp meow meow mrrp. oops\n\n");
     log_print_lockless(LOG_LEVEL_FAIL, "                   _ |\\_\n");
     log_print_lockless(LOG_LEVEL_FAIL, "                   \\` ..\\\n");
@@ -55,10 +53,20 @@ static const char* g_name_table[22] = { "Divide Error",
     __builtin_unreachable();
 }
 
+[[noreturn]] void arch_panic(const char* fmt, ...) {
+    panic_begin();
+
+    log_print_lockless(LOG_LEVEL_FAIL, "Message: ");
+    va_list args;
+    va_start(args, fmt);
+    log_vprint_lockless(LOG_LEVEL_FAIL, fmt, args);
+    va_end(args);
+
+    panic_end();
+}
+
 [[noreturn]] void arch_panic_int(arch_interrupt_frame_t* frame) {
-    (void) arch_interrupt_disable();
-    // ipi_broadcast_die();
-    int apic_id = arch_get_core_id();
+    panic_begin();
 
     if(frame->vector == 0x0E) {
         uint8_t page_protection_violation = ((frame->error & (1 << 0)) > 0);
@@ -117,7 +125,7 @@ static const char* g_name_table[22] = { "Divide Error",
     } else {
         log_print_lockless(LOG_LEVEL_FAIL, "unknown (0x%lx | %ld)\n", frame->vector, frame->error);
     }
-    log_print_lockless(LOG_LEVEL_FAIL, "On core %d while in %s mode\n", apic_id, frame->is_user ? "user" : "kernel");
+    log_print_lockless(LOG_LEVEL_FAIL, "while in %s mode\n", frame->is_user ? "user" : "kernel");
 
     log_print_lockless(LOG_LEVEL_FAIL, "\n");
     arch_interrupt_regs_t* regs = frame->regs;
@@ -157,18 +165,5 @@ static const char* g_name_table[22] = { "Divide Error",
     log_print_lockless(LOG_LEVEL_FAIL, "cr4 = 0x%016lx [todo]\n", cr4);
     log_print_lockless(LOG_LEVEL_FAIL, "cr8 = 0x%016lx [tpl=%ld]\n", cr8, cr8);
 
-    log_print_lockless(LOG_LEVEL_FAIL, "mrrp mrrp meow meow mrrp. oops\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "                   _ |\\_\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "                   \\` ..\\\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "              __,.-\" =__Y=\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "            .\"        )\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "      _    /   ,    \\/\\_\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "     ((____|    )_-\\ \\_-\\`\n");
-    log_print_lockless(LOG_LEVEL_FAIL, "     `-----'`-----` `--`\n");
-
-    while(1) {
-        __builtin_ia32_pause();
-        asm volatile("hlt");
-    }
-    __builtin_unreachable();
+    panic_end();
 }

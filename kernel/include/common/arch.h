@@ -55,3 +55,9 @@ void arch_panic_int(arch_interrupt_frame_t* frame);
  * @brief Initializes architecture specific logging, such as serial output
  */
 void arch_log_init();
+
+/**
+ * @brief Sends an inter-processor interrupt (IPI) to a specific core
+ * @param core_id The ID of the core to send the IPI to
+ */
+void arch_send_ipi(uint32_t core_id);
