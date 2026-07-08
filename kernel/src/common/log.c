@@ -61,7 +61,7 @@ void log_vprint_lockless(log_level_t level, const char* fmt, va_list val) {
 void log_print_lockless(log_level_t level, const char* fmt, ...) {
     va_list val;
     va_start(val, fmt);
-    log_vprint(level, fmt, val);
+    log_vprint_lockless(level, fmt, val);
     va_end(val);
 }
 
