@@ -16,12 +16,10 @@
 
 
 void arch_lapic_timer_init(uint32_t core_id, time_timer_t* calibration_timer) {
-    LOG_INFO("calibrating lapic timer using %s\n", calibration_timer->name);
+    LOG_INFO("calibrating lapic timer on core %d using %s\n", core_id, calibration_timer->name);
 
     arch_lapic_write(LAPIC_TIMER_DIV, 0x3);
     arch_lapic_write(LAPIC_LVT_TIMER, 0x20);
-
-    if(!INIT_CORE_IS_BSP(core_id)) { return; }
 
     arch_lapic_write(LAPIC_TIMER_INIT_COUNT, 0xFFFFFFFF);
     calibration_timer->sleep(calibration_timer, 10000);

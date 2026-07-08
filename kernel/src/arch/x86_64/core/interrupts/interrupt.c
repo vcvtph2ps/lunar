@@ -60,16 +60,16 @@ void interrupt_set_usermode_stack(uint64_t stack_pointer) {
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
-    // bool is_threaded = CPU_LOCAL_READ(scheduler.threaded);
-    // bool is_outmost_handler = false;
+    bool is_threaded = CPU_LOCAL_READ(scheduler.threaded);
+    bool is_outmost_handler = false;
 
-    // if(is_threaded) {
-    //     is_outmost_handler = !CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler;
-    //     if(is_outmost_handler) { CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = true; }
+    if(is_threaded) {
+        is_outmost_handler = !CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler;
+        if(is_outmost_handler) { CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = true; }
 
-    //     sched_preempt_disable();
-    //     dw_status_disable();
-    // }
+        sched_preempt_disable();
+        dw_status_disable();
+    }
 
     if(g_handlers[frame->vector] == nullptr && frame->vector < 0x20) { arch_panic_int(frame); }
     if(g_handlers[frame->vector] != nullptr) {
@@ -79,15 +79,15 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
     }
     if(frame->vector >= 32) arch_lapic_eoi();
 
-    // if(is_threaded) {
-    //     (void) arch_interrupt_enable();
-    //     dw_status_enable();
-    //     (void) arch_interrupt_disable();
+    if(is_threaded) {
+        (void) arch_interrupt_enable();
+        dw_status_enable();
+        (void) arch_interrupt_disable();
 
-    //     sched_preempt_enable();
+        sched_preempt_enable();
 
-    //     if(is_outmost_handler) { CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = false; }
-    // }
+        if(is_outmost_handler) { CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = false; }
+    }
 }
 
 #pragma clang diagnostic pop

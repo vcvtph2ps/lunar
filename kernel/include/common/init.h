@@ -8,7 +8,8 @@
 typedef enum {
     INIT_STAGE_BASE_MEM,
     INIT_STAGE_ARCH_CPU,
-    INIT_STAGE_TIME
+    INIT_STAGE_TIME,
+    INIT_STAGE_SCHED
 } init_stage_t;
 
 typedef struct {

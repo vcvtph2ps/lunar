@@ -2,11 +2,11 @@
 #include <arch/internal/cr.h>
 #include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
+#include <common/interrupts/ipi.h>
 #include <common/log.h>
+#include <lib/helpers.h>
 #include <memory/vm.h>
 #include <stdarg.h>
-
-#include "common/interrupts/ipi.h"
 
 static const char* g_name_table[22] = { "Divide Error",
                                         "Debug Exception",
@@ -31,8 +31,13 @@ static const char* g_name_table[22] = { "Divide Error",
                                         "Virtualization Exception",
                                         "Control Protection Exception" };
 
+ATOMIC uint32_t g_panicked = false;
+
 [[clang::always_inline]] static void panic_begin() {
     __asm__ volatile("cli;mfence;lfence" ::: "memory");
+    if(ATOMIC_XCHG(&g_panicked, true, ATOMIC_SEQ_CST)) {
+        while(1) { arch_wait_for_interrupt(); }
+    }
     ipi_broadcast((ipi_message_t) { .type = IPI_HALT });
 
     uint64_t apic_id = arch_get_core_id();

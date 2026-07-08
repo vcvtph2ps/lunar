@@ -1,5 +1,6 @@
 #pragma once
 #include <arch/internal/gdt.h>
+#include <arch/sched/thread.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <common/time/time.h>
@@ -12,6 +13,9 @@ typedef struct arch_kvm_pvclock arch_kvm_pvclock_t; // NOLINT
 
 struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_cpu_local_t* self;
+    x86_64_thread_t* current_thread;
+
+    uint64_t syscall_scratch;
 
     uint32_t core_id;
     uint32_t lapic_id;

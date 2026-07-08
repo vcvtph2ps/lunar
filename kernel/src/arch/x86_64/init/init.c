@@ -10,12 +10,15 @@
 #include <lib/helpers.h>
 #include <stddef.h>
 
+#include "arch/cpu_local.h"
+
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
 init_stage_handler_t g_init_stage_handlers[] = {
     INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
     INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
     INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
+    INIT_STAGE(INIT_STAGE_SCHED, sched_init),
 };
 
 #undef INIT_STAGE
@@ -32,6 +35,27 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
 }
 
 ATOMIC uint32_t g_init_finished_core_count = 0;
+
+[[noreturn]] static void thread_a() {
+    while(1) {
+        LOG_INFO("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
+        sched_yield(THREAD_STATE_READY);
+    }
+}
+
+[[noreturn]] static void thread_b() {
+    while(1) {
+        LOG_INFO("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
+        sched_yield(THREAD_STATE_READY);
+    }
+}
+
+[[noreturn]] static void thread_c() {
+    while(1) {
+        LOG_INFO("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
+        sched_yield(THREAD_STATE_READY);
+    }
+}
 
 void arch_init_bsp() {
     if(arch_cpuid_get_vendor_string() != nullptr) {
@@ -57,17 +81,17 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     run_stage(INIT_STAGE_TIME, 0);
+    run_stage(INIT_STAGE_SCHED, 0);
+
+    sched_thread_schedule(sched_arch_create_kernel_thread((virt_addr_t) thread_a));
+    sched_thread_schedule(sched_arch_create_kernel_thread((virt_addr_t) thread_b));
+    sched_thread_schedule(sched_arch_create_kernel_thread((virt_addr_t) thread_c));
 
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
 
-    (void) arch_interrupt_enable();
-    dw_status_enable();
-    sched_preempt_enable();
-
-    arch_panic("mroaww");
-    while(1);
+    sched_arch_handoff();
 }
 
 void arch_init_ap(uint32_t core_id) {
@@ -83,14 +107,11 @@ void arch_init_ap(uint32_t core_id) {
     run_stage(INIT_STAGE_BASE_MEM, core_id);
     run_stage(INIT_STAGE_ARCH_CPU, core_id);
     run_stage(INIT_STAGE_TIME, core_id);
+    run_stage(INIT_STAGE_SCHED, core_id);
 
     // signal that this core has finished init
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
 
-    (void) arch_interrupt_enable();
-    dw_status_enable();
-    sched_preempt_enable();
-
-    while(1);
+    sched_arch_handoff();
 }
