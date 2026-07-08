@@ -125,7 +125,7 @@ static void apic_enable_mode(uint32_t core_id) {
     }
 }
 
-static uint32_t lapic_read(uint32_t reg) {
+uint32_t arch_lapic_read(uint32_t reg) {
     if(g_x2apic_mode) {
         return (uint32_t) arch_msr_read(ARCH_MSR_X2APIC_BASE_MSR + (reg >> 4));
     } else {
@@ -133,7 +133,7 @@ static uint32_t lapic_read(uint32_t reg) {
     }
 }
 
-static void lapic_write(uint32_t reg, uint32_t value) {
+void arch_lapic_write(uint32_t reg, uint32_t value) {
     if(g_x2apic_mode) {
         arch_msr_write(ARCH_MSR_X2APIC_BASE_MSR + (reg >> 4), value);
     } else {
@@ -152,9 +152,9 @@ static void lapic_write64(uint32_t reg, uint64_t value) {
 
 uint32_t arch_lapic_get_id() {
     if(g_x2apic_mode) {
-        return lapic_read(LAPIC_ID);
+        return arch_lapic_read(LAPIC_ID);
     } else {
-        return (lapic_read(LAPIC_ID) >> 24) & 0xFF;
+        return (arch_lapic_read(LAPIC_ID) >> 24) & 0xFF;
     }
 }
 
@@ -165,27 +165,27 @@ bool arch_lapic_is_bsp() {
 
 
 void arch_lapic_eoi() {
-    lapic_write(LAPIC_EOI, 0);
+    arch_lapic_write(LAPIC_EOI, 0);
 }
 
 static void lapic_configure() {
-    lapic_write(LAPIC_TPR, 0);
+    arch_lapic_write(LAPIC_TPR, 0);
     if(!g_x2apic_mode) {
-        lapic_write(LAPIC_DFR, 0xF0000000);
-        lapic_write(LAPIC_LDR, 0x01000000);
+        arch_lapic_write(LAPIC_DFR, 0xF0000000);
+        arch_lapic_write(LAPIC_LDR, 0x01000000);
     }
 
-    lapic_write(LAPIC_LVT_TIMER, LAPIC_MASK_MASKED);
-    lapic_write(LAPIC_LVT_THERMAL, LAPIC_MASK_MASKED);
-    lapic_write(LAPIC_LVT_PERF, LAPIC_MASK_MASKED);
-    lapic_write(LAPIC_LVT_LINT0, LAPIC_MASK_MASKED);
-    lapic_write(LAPIC_LVT_LINT1, LAPIC_MASK_MASKED);
-    lapic_write(LAPIC_LVT_ERROR, LAPIC_MASK_MASKED);
+    arch_lapic_write(LAPIC_LVT_TIMER, LAPIC_MASK_MASKED);
+    arch_lapic_write(LAPIC_LVT_THERMAL, LAPIC_MASK_MASKED);
+    arch_lapic_write(LAPIC_LVT_PERF, LAPIC_MASK_MASKED);
+    arch_lapic_write(LAPIC_LVT_LINT0, LAPIC_MASK_MASKED);
+    arch_lapic_write(LAPIC_LVT_LINT1, LAPIC_MASK_MASKED);
+    arch_lapic_write(LAPIC_LVT_ERROR, LAPIC_MASK_MASKED);
 
-    uint32_t spurious = lapic_read(LAPIC_SPURIOUS);
+    uint32_t spurious = arch_lapic_read(LAPIC_SPURIOUS);
     spurious |= (1 << 8); // bit 8: apic enable bit
     spurious |= 0xFF; // vector: 0xFF
-    lapic_write(LAPIC_SPURIOUS, spurious);
+    arch_lapic_write(LAPIC_SPURIOUS, spurious);
 }
 
 void arch_lapic_init(uint32_t core_id) {
@@ -213,7 +213,7 @@ static void lapic_send_icr(uint32_t apic_id, uint64_t icr) {
         arch_io_mem_write_u32(g_lapic_virt_base + LAPIC_ICR_HIGH, (icr >> 32));
         arch_io_mem_write_u32(g_lapic_virt_base + LAPIC_ICR_LOW, (icr & 0xFFFFFFFF));
         arch_interrupt_restore(irq_state);
-        while(lapic_read(LAPIC_ICR_LOW) & (1 << 12)) { __builtin_ia32_pause(); }
+        while(arch_lapic_read(LAPIC_ICR_LOW) & (1 << 12)) { __builtin_ia32_pause(); }
     }
 }
 

@@ -1,6 +1,7 @@
 #include <arch/cpu_local.h>
 #include <arch/hardware/fpu.h>
 #include <arch/hardware/lapic.h>
+#include <arch/hardware/lapic_timer.h>
 #include <arch/hardware/time/kvm_pvclock.h>
 #include <arch/hardware/time/pit.h>
 #include <arch/hardware/time/tsc.h>
@@ -35,6 +36,7 @@ void init_stage_time(uint32_t core_id) {
     register_timer(&registry, arch_pit_timer_get());
     register_timer(&registry, arch_kvm_pvclock_init());
     register_timer(&registry, arch_tsc_init_timer(registry.best_timer));
+    arch_lapic_timer_init(core_id, registry.best_timer);
 
     if(INIT_CORE_IS_BSP(core_id)) { time_init(registry.best_timer); }
 }

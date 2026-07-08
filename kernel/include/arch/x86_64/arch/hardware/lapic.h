@@ -36,3 +36,17 @@ void arch_lapic_send_ipi(uint32_t apic_id, uint8_t vector);
  * @param vector The interrupt vector to send in the IPI.
  */
 void arch_lapic_broadcast_ipi(uint8_t vector);
+
+/**
+ * @brief Reads a value from the specified LAPIC register.
+ * @param reg The LAPIC register to read from.
+ * @return The value read from the specified LAPIC register.
+ */
+uint32_t arch_lapic_read(uint32_t reg);
+
+/**
+ * @brief Writes a value to the specified LAPIC register.
+ * @param reg The LAPIC register to write to.
+ * @param value The value to write to the specified LAPIC register.
+ */
+void arch_lapic_write(uint32_t reg, uint32_t value);

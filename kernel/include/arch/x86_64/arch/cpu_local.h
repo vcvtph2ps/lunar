@@ -22,12 +22,14 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
         list_t queue;
     } defered_work;
 
-    uint32_t tsc_ticks_per_us;
     scheduler_t scheduler;
+    ipi_request_t* ipi_queue;
+
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;
 
-    ipi_request_t* ipi_queue;
+    uint32_t lapic_timer_ticks_per_us;
+    uint32_t tsc_ticks_per_us;
     time_timer_t* kvm_pvclock;
 };
 

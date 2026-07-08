@@ -72,7 +72,11 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
     // }
 
     if(g_handlers[frame->vector] == nullptr && frame->vector < 0x20) { arch_panic_int(frame); }
-    if(g_handlers[frame->vector] != nullptr) g_handlers[frame->vector](frame);
+    if(g_handlers[frame->vector] != nullptr) {
+        g_handlers[frame->vector](frame);
+    } else {
+        LOG_WARN("No handler registered for interrupt vector 0x%02lx\n", frame->vector);
+    }
     if(frame->vector >= 32) arch_lapic_eoi();
 
     // if(is_threaded) {
