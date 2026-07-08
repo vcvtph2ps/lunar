@@ -7,6 +7,7 @@
 #include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
+#include <common/sched/thread.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <lib/types.h>
@@ -48,8 +49,12 @@ static void internal_sched_thread_drop(thread_t* thread) {
     switch(thread->state) {
         case THREAD_STATE_READY:   sched_thread_schedule(thread); break;
         case THREAD_STATE_DEAD:    break;
-        case THREAD_STATE_BLOCKED: break;
-        default:                   assertf(false, "invalid state on drop %d", thread->state);
+        case THREAD_STATE_BLOCKED: {
+            wait_queue_t* queue = ATOMIC_XCHG(&sched_arch_thread_current()->target_wait_queue, nullptr, __ATOMIC_SEQ_CST);
+            if(queue) { wait_queue_add_thread(queue, thread); }
+            break;
+        }
+        default: assertf(false, "invalid state on drop %d", thread->state);
     }
 }
 
@@ -99,14 +104,15 @@ thread_t* sched_arch_thread_current() {
     return &thread->common;
 }
 
-void sched_arch_context_switch(thread_t* t_current, thread_t* t_next) {
-    LOG_STRC("current=%u, next=%u\n", t_current->tid, t_next->tid);
+void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_state_t yield_state) {
+    LOG_STRC("core %d, current=%u, next=%u, state=%u\n", CPU_LOCAL_READ(core_id), t_current->tid, t_next->tid, yield_state);
     x86_64_thread_t* current = CONTAINER_OF(t_current, x86_64_thread_t, common);
     x86_64_thread_t* next = CONTAINER_OF(t_next, x86_64_thread_t, common);
 
     CPU_LOCAL_WRITE(current_thread, next);
 
     x86_64_thread_t* prev = x86_64_context_switch(current, next);
+    prev->common.state = yield_state;
     internal_sched_thread_drop(&prev->common);
 }
 

@@ -11,6 +11,7 @@
 #include <stddef.h>
 
 #include "arch/cpu_local.h"
+#include "common/sync/mutex.h"
 
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
@@ -36,24 +37,29 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
 
 ATOMIC uint32_t g_init_finished_core_count = 0;
 
+mutex_t g_mutex = MUTEX_INIT;
+
 [[noreturn]] static void thread_a() {
     while(1) {
-        LOG_INFO("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
-        sched_yield(THREAD_STATE_READY);
+        mutex_acquire(&g_mutex);
+        LOG_OKAY("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
+        mutex_release(&g_mutex);
     }
 }
 
 [[noreturn]] static void thread_b() {
     while(1) {
-        LOG_INFO("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
-        sched_yield(THREAD_STATE_READY);
+        mutex_acquire(&g_mutex);
+        LOG_OKAY("thread_b running on core %d\n", CPU_LOCAL_READ(core_id));
+        mutex_release(&g_mutex);
     }
 }
 
 [[noreturn]] static void thread_c() {
     while(1) {
-        LOG_INFO("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
-        sched_yield(THREAD_STATE_READY);
+        mutex_acquire(&g_mutex);
+        LOG_OKAY("thread_c running on core %d\n", CPU_LOCAL_READ(core_id));
+        mutex_release(&g_mutex);
     }
 }
 

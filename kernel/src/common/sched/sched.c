@@ -1,11 +1,13 @@
 #include <arch/cpu_local.h>
+#include <arch/interrupts/interrupt.h>
 #include <common/assert.h>
+#include <common/cpu_local.h>
+#include <common/init.h>
+#include <common/interrupts/dw.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <common/sched/thread.h>
 #include <lib/helpers.h>
-
-#include "arch/interrupts/interrupt.h"
-#include "common/interrupts/dw.h"
 
 void sched_preempt_disable() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) < UINT32_MAX);
@@ -62,8 +64,7 @@ void sched_yield(thread_state_t yield_state) {
     if(next == nullptr && current != current->sched->idle_thread) next = current->sched->idle_thread;
     if(next != nullptr) {
         assert(current != next);
-        current->state = yield_state;
-        sched_arch_context_switch(current, next);
+        sched_arch_context_switch(current, next, yield_state);
     } else {
         assert(current->state == yield_state);
     }
@@ -88,6 +89,6 @@ void sched_yield(thread_state_t yield_state) {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
     assert(CPU_LOCAL_READ(defered_work.counter) == 0);
 
-    sched_arch_context_switch(bsp_thread, idle_thread);
+    sched_arch_context_switch(bsp_thread, idle_thread, THREAD_STATE_DEAD);
     while(1);
 }

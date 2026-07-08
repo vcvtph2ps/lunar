@@ -1,6 +1,7 @@
 #pragma once
 #include <common/sched/thread.h>
 #include <common/spinlock.h>
+#include <common/sync/wait_queue.h>
 #include <lib/list.h>
 
 typedef struct scheduler scheduler_t; // NOLINT
@@ -61,8 +62,9 @@ thread_t* sched_arch_thread_current();
  * @brief Switches execution context from the current thread to the next thread
  * @param t_current The currently running thread
  * @param t_next The thread to switch to
+ * @param yield_state The state to set for the previous thread after switching
  */
-void sched_arch_context_switch(thread_t* t_current, thread_t* t_next);
+void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_state_t yield_state);
 
 /**
  * @brief Resets the preemption timer for the current CPU
