@@ -10,9 +10,6 @@
 #include <lib/helpers.h>
 #include <stddef.h>
 
-#include "arch/cpu_local.h"
-#include "common/sync/mutex.h"
-
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
 init_stage_handler_t g_init_stage_handlers[] = {
@@ -36,32 +33,6 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
 }
 
 ATOMIC uint32_t g_init_finished_core_count = 0;
-
-mutex_t g_mutex = MUTEX_INIT;
-
-[[noreturn]] static void thread_a() {
-    while(1) {
-        mutex_acquire(&g_mutex);
-        LOG_OKAY("thread_a running on core %d\n", CPU_LOCAL_READ(core_id));
-        mutex_release(&g_mutex);
-    }
-}
-
-[[noreturn]] static void thread_b() {
-    while(1) {
-        mutex_acquire(&g_mutex);
-        LOG_OKAY("thread_b running on core %d\n", CPU_LOCAL_READ(core_id));
-        mutex_release(&g_mutex);
-    }
-}
-
-[[noreturn]] static void thread_c() {
-    while(1) {
-        mutex_acquire(&g_mutex);
-        LOG_OKAY("thread_c running on core %d\n", CPU_LOCAL_READ(core_id));
-        mutex_release(&g_mutex);
-    }
-}
 
 void arch_init_bsp() {
     if(arch_cpuid_get_vendor_string() != nullptr) {
@@ -88,10 +59,6 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     run_stage(INIT_STAGE_TIME, 0);
     run_stage(INIT_STAGE_SCHED, 0);
-
-    sched_thread_schedule(sched_arch_create_kernel_thread((virt_addr_t) thread_a));
-    sched_thread_schedule(sched_arch_create_kernel_thread((virt_addr_t) thread_b));
-    sched_thread_schedule(sched_arch_create_kernel_thread((virt_addr_t) thread_c));
 
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
