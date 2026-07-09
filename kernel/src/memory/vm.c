@@ -3,7 +3,7 @@
 #include <common/assert.h>
 #include <common/interrupts/dw.h>
 #include <common/sched/sched.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/math.h>

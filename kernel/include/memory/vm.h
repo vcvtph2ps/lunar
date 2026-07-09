@@ -1,5 +1,5 @@
 #pragma once
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <lib/list.h>
 #include <lib/rb.h>
 #include <lib/types.h>

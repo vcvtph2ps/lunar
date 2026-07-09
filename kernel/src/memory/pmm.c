@@ -2,7 +2,7 @@
 #include <common/assert.h>
 #include <common/init.h>
 #include <common/log.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <lib/string.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>

@@ -1,6 +1,6 @@
 #pragma once
 #include <common/sched/thread.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <lib/list.h>
 
 #define WAIT_QUEUE_INIT ((wait_queue_t) { .lock = SPINLOCK_NO_DW_INIT, .list = LIST_INIT })

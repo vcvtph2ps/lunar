@@ -3,7 +3,7 @@
 ///
 #include <common/arch.h>
 #include <common/log.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 
 // @todo: refactor this
 #define MAX_LOG_SINKS 8

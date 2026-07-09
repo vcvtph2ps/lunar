@@ -1,5 +1,5 @@
 #include <arch/interrupts/interrupt_alloc.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <stdint.h>
 
 static uint8_t g_vector_map[256] = { 0 };

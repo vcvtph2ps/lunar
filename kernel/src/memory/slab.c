@@ -1,7 +1,7 @@
 #include <common/assert.h>
 #include <common/interrupts/dw.h>
 #include <common/sched/sched.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <lib/list.h>
 #include <memory/slab.h>
 #include <memory/vm.h>

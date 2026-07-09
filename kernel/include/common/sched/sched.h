@@ -1,6 +1,6 @@
 #pragma once
 #include <common/sched/thread.h>
-#include <common/spinlock.h>
+#include <common/sync/spinlock.h>
 #include <common/sync/wait_queue.h>
 #include <lib/list.h>
 

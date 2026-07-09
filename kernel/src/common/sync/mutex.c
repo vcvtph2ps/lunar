@@ -3,8 +3,8 @@
 #include <common/assert.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
-#include <common/spinlock.h>
 #include <common/sync/mutex.h>
+#include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 
 static bool try_lock(mutex_t* mutex, bool weak) {
