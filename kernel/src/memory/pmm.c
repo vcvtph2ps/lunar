@@ -1,7 +1,7 @@
-#include <arch/memory.h>
 #include <common/assert.h>
 #include <common/init.h>
 #include <common/log.h>
+#include <common/memory.h>
 #include <common/sync/spinlock.h>
 #include <lib/string.h>
 #include <memory/pagedb.h>

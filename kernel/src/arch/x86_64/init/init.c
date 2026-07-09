@@ -1,7 +1,7 @@
-#include <arch/internal/cpuid.h>
-#include <arch/internal/cr.h>
-#include <arch/internal/msr.h>
-#include <arch/interrupts/interrupt.h>
+#include <arch/x86_64/internal/cpuid.h>
+#include <arch/x86_64/internal/cr.h>
+#include <arch/x86_64/internal/msr.h>
+#include <arch/x86_64/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/init.h>
 #include <common/interrupts/dw.h>

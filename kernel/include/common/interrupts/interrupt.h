@@ -1,5 +1,10 @@
 #pragma once
-#include <arch/interrupts/interrupt.h>
+#if defined(__ARCH_X86_64__)
+#include <arch/x86_64/interrupts/interrupt.h>
+#elif defined(__ARCH_RISCV64__)
+#include <arch/riscv64/interrupts/interrupt.h>
+#endif
+
 #include <stdint.h>
 
 typedef void (*interrupt_handler_fn_t)(arch_interrupt_frame_t* frame);

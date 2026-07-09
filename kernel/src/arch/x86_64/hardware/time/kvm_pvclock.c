@@ -1,8 +1,8 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/time/kvm_pvclock.h>
-#include <arch/hardware/time/tsc.h>
-#include <arch/internal/cpuid.h>
-#include <arch/internal/msr.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/time/kvm_pvclock.h>
+#include <arch/x86_64/hardware/time/tsc.h>
+#include <arch/x86_64/internal/cpuid.h>
+#include <arch/x86_64/internal/msr.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/log.h>

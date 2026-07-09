@@ -1,9 +1,9 @@
-#include <arch/internal/csr.h>
-#include <arch/memory.h>
+#include <arch/riscv64/internal/csr.h>
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/init.h>
 #include <common/log.h>
+#include <common/memory.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>

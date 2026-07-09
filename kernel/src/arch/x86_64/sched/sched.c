@@ -1,7 +1,7 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/lapic_timer.h>
-#include <arch/interrupts/interrupt.h>
-#include <arch/sched/thread.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/lapic_timer.h>
+#include <arch/x86_64/interrupts/interrupt.h>
+#include <arch/x86_64/sched/thread.h>
 #include <common/assert.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>

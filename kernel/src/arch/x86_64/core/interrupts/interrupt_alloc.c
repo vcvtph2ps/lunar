@@ -1,4 +1,4 @@
-#include <arch/interrupts/interrupt_alloc.h>
+#include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <common/sync/spinlock.h>
 #include <stdint.h>
 

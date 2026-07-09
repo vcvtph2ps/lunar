@@ -1,7 +1,7 @@
-#include <arch/internal/cpuid.h>
-#include <arch/internal/cr.h>
-#include <arch/internal/msr.h>
-#include <arch/memory.h>
+#include <arch/x86_64/internal/cpuid.h>
+#include <arch/x86_64/internal/cr.h>
+#include <arch/x86_64/internal/msr.h>
+#include <arch/x86_64/memory.h>
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/init.h>

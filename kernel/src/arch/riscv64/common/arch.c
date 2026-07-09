@@ -1,7 +1,7 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/sbi.h>
+#include <arch/riscv64/hardware/sbi.h>
 #include <common/arch.h>
 #include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/log.h>
 
 void arch_memory_fence() {

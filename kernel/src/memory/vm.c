@@ -1,6 +1,6 @@
-#include <arch/cpu_local.h>
 #include <common/arch.h>
 #include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/interrupts/dw.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>

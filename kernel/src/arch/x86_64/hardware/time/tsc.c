@@ -1,5 +1,5 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/time/tsc.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/time/tsc.h>
 #include <common/log.h>
 #include <common/time/time.h>
 #include <memory/heap.h>

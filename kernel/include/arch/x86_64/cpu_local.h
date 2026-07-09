@@ -1,6 +1,6 @@
 #pragma once
-#include <arch/internal/gdt.h>
-#include <arch/sched/thread.h>
+#include <arch/x86_64/internal/gdt.h>
+#include <arch/x86_64/sched/thread.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <common/time/time.h>

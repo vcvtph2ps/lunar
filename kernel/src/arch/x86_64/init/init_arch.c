@@ -1,7 +1,7 @@
-#include <arch/hardware/fpu.h>
-#include <arch/hardware/lapic.h>
-#include <arch/internal/cpuid.h>
-#include <arch/internal/gdt.h>
+#include <arch/x86_64/hardware/fpu.h>
+#include <arch/x86_64/hardware/lapic.h>
+#include <arch/x86_64/internal/cpuid.h>
+#include <arch/x86_64/internal/gdt.h>
 #include <common/arch.h>
 #include <common/init.h>
 #include <common/interrupts/dw.h>

@@ -1,7 +1,7 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/lapic.h>
-#include <arch/hardware/lapic_timer.h>
-#include <arch/internal/cpuid.h>
+#include <arch/x86_64/hardware/lapic.h>
+#include <arch/x86_64/hardware/lapic_timer.h>
+#include <arch/x86_64/internal/cpuid.h>
+#include <common/cpu_local.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <common/time/time.h>

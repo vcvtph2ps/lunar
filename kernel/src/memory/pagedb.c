@@ -1,7 +1,7 @@
-#include <arch/memory.h>
 #include <common/assert.h>
 #include <common/init.h>
 #include <common/log.h>
+#include <common/memory.h>
 #include <memory/pagedb.h>
 
 pagedb_page_t* g_pagedb_start;

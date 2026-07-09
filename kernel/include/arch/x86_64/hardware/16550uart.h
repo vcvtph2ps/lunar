@@ -3,7 +3,7 @@
 // Heavily inspired and refactored from
 // https://git.evalyngoemer.com/evalynOS/evalynOS/src/commit/ee92dac22b5567f597cce3c36dba44af0b87222b/kernel/src/arch/x86_64/drivers/16550uart.h
 
-#include <arch/io.h>
+#include <arch/x86_64/io.h>
 #include <common/arch.h>
 #include <stdbool.h>
 #include <stdint.h>

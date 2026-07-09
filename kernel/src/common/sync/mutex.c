@@ -1,6 +1,6 @@
-#include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/assert.h>
+#include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sync/mutex.h>

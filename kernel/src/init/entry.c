@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #ifdef __ARCH_X86_64__
-#include <arch/internal/cpuid.h>
+#include <arch/x86_64/internal/cpuid.h>
 #endif
 
 #ifdef __ARCH_RISCV64__

@@ -1,5 +1,5 @@
-#include <arch/internal/csr.h>
-#include <arch/interrupts/interrupt.h>
+#include <arch/riscv64/internal/csr.h>
+#include <common/interrupts/interrupt.h>
 #include <stdint.h>
 
 [[nodiscard]] arch_interrupt_state_t arch_interrupt_get_state() {

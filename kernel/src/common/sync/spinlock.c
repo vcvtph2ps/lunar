@@ -1,6 +1,6 @@
-#include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/interrupts/dw.h>
+#include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>

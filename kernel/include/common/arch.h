@@ -1,6 +1,6 @@
 #pragma once
-#include <arch/interrupts/interrupt.h>
-#include <arch/memory.h>
+#include <common/interrupts/interrupt.h>
+#include <common/memory.h>
 #include <stdint.h>
 
 /**

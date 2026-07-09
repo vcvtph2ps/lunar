@@ -1,8 +1,8 @@
-#include <arch/cpu_local.h>
-#include <arch/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/interrupts/dw.h>
+#include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
 #include <lib/list.h>
 #include <memory/slab.h>

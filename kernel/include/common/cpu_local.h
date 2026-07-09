@@ -1,5 +1,9 @@
 #pragma once
-#include <arch/cpu_local.h>
+#if defined(__ARCH_X86_64__)
+#include <arch/x86_64/cpu_local.h>
+#elif defined(__ARCH_RISCV64__)
+#include <arch/riscv64/cpu_local.h>
+#endif
 
 /**
  * @brief Initializes the CPU local storage for the BSP. This should only be called once by the BSP

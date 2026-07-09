@@ -1,4 +1,4 @@
-#include <arch/cpu_local.h>
+#include <common/cpu_local.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <common/time/time.h>

@@ -1,4 +1,4 @@
-#include <arch/cpu_local.h>
+#include <arch/riscv64/cpu_local.h>
 #include <common/cpu_local.h>
 
 arch_cpu_local_t* g_cpu_local_storage;

@@ -1,5 +1,5 @@
-#include <arch/cpu_local.h>
-#include <arch/internal/gdt.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/internal/gdt.h>
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/vm.h>

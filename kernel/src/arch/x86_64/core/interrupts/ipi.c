@@ -1,7 +1,7 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/lapic.h>
-#include <arch/interrupts/interrupt.h>
-#include <arch/interrupts/interrupt_alloc.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/lapic.h>
+#include <arch/x86_64/interrupts/interrupt.h>
+#include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <common/arch.h>
 #include <common/init.h>
 #include <common/interrupts/interrupt.h>

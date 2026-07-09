@@ -1,9 +1,9 @@
-#include <arch/cpu_local.h>
-#include <arch/hardware/lapic.h>
-#include <arch/internal/cpuid.h>
-#include <arch/internal/msr.h>
-#include <arch/interrupts/interrupt.h>
-#include <arch/io.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/lapic.h>
+#include <arch/x86_64/internal/cpuid.h>
+#include <arch/x86_64/internal/msr.h>
+#include <arch/x86_64/interrupts/interrupt.h>
+#include <arch/x86_64/io.h>
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/init.h>

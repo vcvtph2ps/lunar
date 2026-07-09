@@ -1,6 +1,6 @@
-#include <arch/cpu_local.h>
-#include <arch/internal/cr.h>
-#include <arch/interrupts/interrupt.h>
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/internal/cr.h>
+#include <arch/x86_64/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>

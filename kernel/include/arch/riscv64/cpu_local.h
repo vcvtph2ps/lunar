@@ -1,4 +1,5 @@
 #pragma once
+#include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <lib/list.h>
 #include <stddef.h>
@@ -19,6 +20,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     } defered_work;
 
     scheduler_t scheduler;
+    ipi_request_t* ipi_queue;
 };
 
 uint32_t arch_cpu_local_get_core_hart_id(uint32_t core_id);

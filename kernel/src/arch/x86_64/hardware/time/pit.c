@@ -1,8 +1,7 @@
-#include <arch/hardware/time/pit.h>
-#include <arch/io.h>
+#include <arch/x86_64/hardware/time/pit.h>
+#include <arch/x86_64/io.h>
+#include <memory/heap.h>
 #include <stdint.h>
-
-#include "memory/heap.h"
 
 #define PIT_CHANNEL0 0x40
 #define PIT_COMMAND 0x43

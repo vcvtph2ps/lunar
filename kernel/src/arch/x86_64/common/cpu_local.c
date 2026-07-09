@@ -1,4 +1,4 @@
-#include <arch/cpu_local.h>
+#include <arch/x86_64/cpu_local.h>
 #include <common/cpu_local.h>
 #include <lib/helpers.h>
 

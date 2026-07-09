@@ -1,4 +1,3 @@
-#include <arch/cpu_local.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/init.h>

@@ -1,10 +1,9 @@
-#include <arch/hardware/16550uart.h>
-#include <arch/interrupts/interrupt.h>
+#include <arch/x86_64/hardware/16550uart.h>
+#include <arch/x86_64/hardware/lapic.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
+#include <common/interrupts/interrupt.h>
 #include <common/log.h>
-
-#include "arch/hardware/lapic.h"
 
 void arch_spin_hint() {
     __asm__ volatile("pause" ::: "memory");
