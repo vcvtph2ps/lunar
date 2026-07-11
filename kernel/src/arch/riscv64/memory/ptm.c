@@ -12,6 +12,7 @@
 
 [[noreturn]] void ptm_init_kernel(uint32_t core_id) {
     (void) core_id;
+    vm_init_kernel();
     assert(false && "Not yet implemented");
 }
 

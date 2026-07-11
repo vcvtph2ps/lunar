@@ -55,6 +55,7 @@ const char* memmap_type_to_string(uint64_t type) {
     g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
+    log_framebuffer_init();
 
     LOG_STRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
 
