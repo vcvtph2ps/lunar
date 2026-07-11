@@ -15,6 +15,9 @@
 #define ATOMIC_LOAD_ADD(OBJ, VAL, ORDER) __atomic_fetch_add((OBJ), (VAL), ORDER)
 #define ATOMIC_LOAD_SUB(OBJ, VAL, ORDER) __atomic_fetch_sub((OBJ), (VAL), ORDER)
 
+#define ATOMIC_COMPARE_EXCHANGE_WEAK(OBJ, EXPECTED, DESIRED, SUCCESS_ORDER, FAILURE_ORDER) __atomic_compare_exchange_n((OBJ), (EXPECTED), (DESIRED), true, (SUCCESS_ORDER), (FAILURE_ORDER))
+#define ATOMIC_COMPARE_EXCHANGE_STRONG(OBJ, EXPECTED, DESIRED, SUCCESS_ORDER, FAILURE_ORDER) __atomic_compare_exchange_n((OBJ), (EXPECTED), (DESIRED), false, (SUCCESS_ORDER), (FAILURE_ORDER))
+
 /**
  * @brief Get the container of a child struct.
  * @param PTR Pointer to the child struct
