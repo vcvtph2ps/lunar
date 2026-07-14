@@ -3,6 +3,8 @@
 #include <arch/x86_64/interrupts/interrupt.h>
 #elif defined(__ARCH_RISCV64__)
 #include <arch/riscv64/interrupts/interrupt.h>
+#else
+#error "Unknown architecture"
 #endif
 
 #include <stdint.h>

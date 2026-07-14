@@ -3,4 +3,6 @@
 #include <arch/x86_64/memory.h>
 #elif defined(__ARCH_RISCV64__)
 #include <arch/riscv64/memory.h>
+#else
+#error "Unknown architecture"
 #endif

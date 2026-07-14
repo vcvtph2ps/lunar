@@ -3,6 +3,8 @@
 #include <arch/x86_64/cpu_local.h>
 #elif defined(__ARCH_RISCV64__)
 #include <arch/riscv64/cpu_local.h>
+#else
+#error "Unknown architecture"
 #endif
 
 /**
