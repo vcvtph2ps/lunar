@@ -90,7 +90,8 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, void* proces
 }
 
 thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
-    virt_addr_t kernel_stack_top = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
 
     init_stack_kernel_t* init_stack = (init_stack_kernel_t*) (kernel_stack_top - sizeof(init_stack_kernel_t));
     memset(init_stack, 0, sizeof(init_stack_kernel_t));
