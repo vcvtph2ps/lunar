@@ -46,7 +46,7 @@ void arch_init_bsp() {
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
 
     sched_arch_handoff();
-    while(1);
+    while(1) { arch_spin_hint(); }
 }
 
 void arch_init_ap(uint32_t core_id) {
@@ -64,5 +64,5 @@ void arch_init_ap(uint32_t core_id) {
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
 
     sched_arch_handoff();
-    while(1);
+    while(1) { arch_spin_hint(); }
 }

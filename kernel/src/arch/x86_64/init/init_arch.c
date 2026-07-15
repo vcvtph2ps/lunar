@@ -16,7 +16,7 @@ void init_stage_arch_cpu(uint32_t core_id) {
         if(arch_cpuid_get_vendor_string() != nullptr) {
             LOG_STRC("Processor: %s, \"%s\" running under \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string(), arch_cpuid_get_hypervisor_string());
         } else {
-            LOG_STRC("Processor: %s, \"s%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+            LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
         }
 
         LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());

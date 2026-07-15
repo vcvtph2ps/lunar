@@ -16,8 +16,8 @@
 #include <protocol/bootinfo.h>
 
 bool g_arch_pte_la57_enabled = false;
-bool g_pat_supported = false;
-bool g_huge_pages_support = false;
+static bool g_pat_supported = false;
+static bool g_huge_pages_support = false;
 
 extern vm_address_space_t* g_vm_global_address_space;
 
@@ -203,7 +203,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
         continue;
 
     skip:
-        i += ARCH_PAGE_SIZE_4K;
+        i += pte_level_page_size(level);
     }
 
     ptm_flush_tlb(vaddr, length);
@@ -298,11 +298,11 @@ void ptm_init_kernel(uint32_t core_id) {
         bootinfo_framebuffer_t framebuffer = g_init_boot_info->framebuffers[i];
         const phys_addr_t paddr = framebuffer.paddr;
         const phys_addr_t aligned_paddr = ALIGN_DOWN(paddr, ARCH_PAGE_SIZE_4K);
-        const virt_addr_t align_diff = paddr - aligned_paddr;
+        const phys_addr_t align_diff = paddr - aligned_paddr;
         const size_t aligned_length = ALIGN_UP(framebuffer.size + align_diff, ARCH_PAGE_SIZE_4K);
 
         const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_MMIO);
-        LOG_INFO("mapping framebuffer %zu, 0x%lx, 0x%lx, 0x%lx, 0x%lx, %018lx\n", i, paddr, aligned_paddr, align_diff, aligned_length, (uintptr_t) new_vaddr);
+        LOG_INFO("mapping framebuffer %zu, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx\n", i, paddr, aligned_paddr, align_diff, aligned_length, (uintptr_t) new_vaddr);
         g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + align_diff);
     }
     log_framebuffer_reinit();

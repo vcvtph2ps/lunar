@@ -89,5 +89,5 @@ void sched_yield(thread_state_t yield_state) {
     assert(CPU_LOCAL_READ(defered_work.counter) == 0);
 
     sched_arch_context_switch(bsp_thread, idle_thread, THREAD_STATE_DEAD);
-    while(1);
+    while(1) { arch_spin_hint(); }
 }

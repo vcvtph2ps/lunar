@@ -78,7 +78,7 @@ void log_framebuffer_init() {
             if(log_add_sink(&sink)) {
                 LOG_OKAY("Framebuffer logging initialized for framebuffer %zu\n", i);
             } else {
-                LOG_FAIL("Failed to add framebuffer loggin for framebuffer %zu\n", i);
+                LOG_FAIL("Failed to add framebuffer logging for framebuffer %zu\n", i);
             }
         }
     }
