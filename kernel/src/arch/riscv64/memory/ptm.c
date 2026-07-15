@@ -6,6 +6,7 @@
 #include <common/memory.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
+#include <memory/pt_radix.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
 
@@ -22,7 +23,7 @@ bool ptm_init_user(vm_address_space_t* address_space) {
     return false;
 }
 
-bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
+bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
     (void) address_space;
     (void) vaddr;
     (void) paddr;
@@ -31,9 +32,11 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     (void) cache;
     (void) privilege;
     (void) global;
+    (void) mmio;
     assert(false && "Not yet implemented");
     return false;
 }
+
 bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
     (void) address_space;
     (void) vaddr;
@@ -46,10 +49,11 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     return false;
 }
 
-[[noreturn]] void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length) {
+[[noreturn]] void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, bool mmio) {
     (void) address_space;
     (void) vaddr;
     (void) length;
+    (void) mmio;
     assert(false && "Not yet implemented");
 }
 
@@ -60,7 +64,6 @@ bool ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t*
     assert(false && "Not yet implemented");
     return false;
 }
-
 
 [[noreturn]] void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
     (void) vaddr;

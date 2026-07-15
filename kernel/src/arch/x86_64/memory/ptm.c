@@ -7,216 +7,68 @@
 #include <common/init.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
+#include <lib/helpers.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
+#include <memory/pt_radix.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
 #include <protocol/bootinfo.h>
 
-
-#define VADDR_TO_INDEX(VADDR, LEVEL) (((VADDR) >> ((LEVEL) * 9 + 3)) & 0x1FF)
-#define INDEX_TO_VADDR(INDEX, LEVEL) ((uint64_t) (INDEX) << ((LEVEL) * 9 + 3))
-#define LEVEL_TO_PAGESIZE(LEVEL) (1UL << (12 + 9 * ((LEVEL) - 1)))
-
-#define PAGE_BIT_PRESENT (1 << 0)
-#define PAGE_BIT_RW (1 << 1)
-#define PAGE_BIT_USER (1 << 2)
-#define PAGE_BIT_WRITETHROUGH (1 << 3)
-#define PAGE_BIT_DISABLECACHE (1 << 4)
-#define PAGE_BIT_ACCESSED (1 << 5)
-#define PAGE_BIT_DIRTY (1 << 6)
-#define PAGE_BIT_GLOBAL (1 << 8)
-#define PAGE_BIT_NX ((uint64_t) 1 << 63)
-#define PAGE_BIT_PAT(PAGE_SIZE) ((PAGE_SIZE) == ARCH_PAGE_SIZE_4K ? SMALL_PAGE_BIT_PAT : HUGE_PAGE_BIT_PAT)
-#define PAGE_ADDRESS_MASK(PAGE_SIZE) ((PAGE_SIZE) == ARCH_PAGE_SIZE_4K ? SMALL_PAGE_ADDRESS_MASK : (PAGE_SIZE) == ARCH_PAGE_SIZE_2M ? HUGE_PAGE_ADDRESS_MASK_2M : HUGE_PAGE_ADDRESS_MASK_1G)
-
-#define SMALL_PAGE_BIT_PAT (1 << 7)
-#define SMALL_PAGE_ADDRESS_MASK ((uint64_t) 0x000F'FFFF'FFFF'F000)
-
-#define HUGE_PAGE_BIT_PAGE_STOP (1 << 7)
-#define HUGE_PAGE_BIT_PAT (1 << 12)
-#define HUGE_PAGE_ADDRESS_MASK_2M ((uint64_t) 0x000F'FFFF'FFE0'0000)
-#define HUGE_PAGE_ADDRESS_MASK_1G ((uint64_t) 0x000F'FFFF'C000'0000)
-#define HUGE_PAGE_ADDRESS_MASK HUGE_PAGE_ADDRESS_MASK_2M
-
-#define PAT0 (0)
-#define PAT1 (PAGE_BIT_WRITETHROUGH)
-#define PAT2 (PAGE_BIT_DISABLECACHE)
-#define PAT3 (PAGE_BIT_DISABLECACHE | PAGE_BIT_WRITETHROUGH)
-#define PAT4(PAT_FLAG) (PAT_FLAG)
-#define PAT5(PAT_FLAG) ((PAT_FLAG) | PAGE_BIT_WRITETHROUGH)
-#define PAT6(PAT_FLAG) ((PAT_FLAG) | PAGE_BIT_DISABLECACHE)
-#define PAT7(PAT_FLAG) ((PAT_FLAG) | PAGE_BIT_DISABLECACHE | PAGE_BIT_WRITETHROUGH)
-
-
-/**
- * @brief Converts the given vm_privilege_t to the corresponding x86 page table flags.
- * @note This function assumes that the caller will only pass valid vm_privilege_t values, and does not perform any validation on the input. Passing an invalid value will result in undefined behavior.
- * @param privilege The vm_privilege_t value to convert
- * @return The corresponding x86 page table flags for the given privilege level
- */
-static inline uint64_t privilege_to_x86_flags(vm_privilege_t privilege) {
-    switch(privilege) {
-        case VM_PRIVILEGE_KERNEL: return 0;
-        case VM_PRIVILEGE_USER:   return PAGE_BIT_USER;
-    }
-    __builtin_unreachable();
-}
-
-/**
- * @brief Converts the given vm_cache_t to the corresponding x86 page table flags.
- * @note This function assumes that the caller will only pass valid vm_cache_t values, and does not perform any validation on the input. Passing an invalid value will result in undefined behavior.
- * @param cache The vm_cache_t value to convert
- * @param page_size The page size for which the cache flags are being converted
- * @return The corresponding x86 page table flags for the given cache type
- */
-static inline uint64_t cache_to_x86_flags(vm_cache_t cache, page_size_t page_size) {
-    switch(cache) {
-        case VM_CACHE_NORMAL:        return PAT0;
-        case VM_CACHE_WRITE_COMBINE: return PAT4(PAGE_BIT_PAT(page_size));
-        case VM_CACHE_DISABLE:       return PAT3;
-        case VM_CACHE_WRITE_THROUGH: return 0;
-    }
-    __builtin_unreachable();
-}
-
+bool g_arch_pte_la57_enabled = false;
+bool g_pat_supported = false;
+bool g_huge_pages_support = false;
 
 extern vm_address_space_t* g_vm_global_address_space;
 
-static bool g_pat_supported = false;
-static bool g_huge_pages_support = false;
-static bool g_la57_enabled = false;
+static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
+    uint32_t target_level = pte_page_size_to_level(page_size);
 
-#define LEVEL_COUNT (g_la57_enabled ? 5 : 4)
+    pt_radix_walk_path_t path;
+    pt_radix_walk_result_t res = pt_radix_walk(top_level_page_table, vaddr, target_level, true, true, prot, privilege, &path);
+    if(res != PT_RADIX_WALK_OK) return false;
 
-/**
- * @brief Returns the physical frame number for a page table given its HHDM-mapped pointer.
- */
-static inline uint64_t table_to_pfn(const uint64_t* table) {
-    return (uintptr_t) PTM_FROM_HHDM(table) / ARCH_PAGE_SIZE_4K;
-}
+    pt_radix_walk_step_t* leaf = &path.steps[path.step_count - 1];
+    arch_pte_entry_t* table = leaf->table;
+    uint32_t index = leaf->index;
+    uint32_t level = leaf->level;
 
-/**
- * @brief Breaks a large page (2MB or 1GB) into smaller pages by allocating a new page table and populating it with entries that map the appropriate portions of the original large page. The original page table entry is then updated to point to the
- * new page table, and the HUGE_PAGE_BIT_PAGE_STOP bit is cleared to indicate that it is no longer a large page.
- * @note This function assumes that the caller has already verified that the entry at the given index is present and is a large page. Calling this function on an entry that is not a large page will result in undefined behavior.
- * @param table The page table containing the entry to break
- * @param index The index of the entry to break within the table
- * @param current_level The current level of the page table hierarchy. This is used to determine the size of the pages being created and the appropriate flags to set in the new entries.
- * @return The new page table entry that was created to replace the original large page entry. This entry will have the same physical address as the original entry, but will point to the new page table instead of being a large page itself.
- */
-static uint64_t break_large_page(uint64_t* table, int index, int current_level) {
-    assert(current_level > 1);
+    arch_pte_entry_t prev = table[index];
+    arch_pte_entry_t entry = pte_make_leaf_entry(paddr, prot, cache, privilege, level, global);
+    __atomic_store_n(&table[index], entry, __ATOMIC_SEQ_CST);
 
-    uint64_t entry = table[index];
+    if(!pte_is_present(prev)) {
+        ATOMIC_LOAD_ADD(&pagedb_get_page(pt_radix_table_pfn(table))->page_level_mapping_count, 1, ATOMIC_SEQ_CST);
 
-    uintptr_t address = entry & (current_level == 2 ? HUGE_PAGE_ADDRESS_MASK_2M : HUGE_PAGE_ADDRESS_MASK_1G);
-    bool pat = entry & HUGE_PAGE_BIT_PAT;
-
-    uint64_t common_flags = entry & (PAGE_BIT_PRESENT | PAGE_BIT_RW | PAGE_BIT_USER | PAGE_BIT_WRITETHROUGH | PAGE_BIT_DISABLECACHE | PAGE_BIT_ACCESSED | PAGE_BIT_GLOBAL | PAGE_BIT_NX);
-    uint64_t child_entry = common_flags;
-    size_t child_page_size;
-    if(current_level == 2) {
-        child_page_size = ARCH_PAGE_SIZE_4K;
-        if(pat) child_entry |= SMALL_PAGE_BIT_PAT;
-    } else {
-        child_page_size = ARCH_PAGE_SIZE_2M;
-        child_entry |= HUGE_PAGE_BIT_PAGE_STOP;
-        if(pat) child_entry |= HUGE_PAGE_BIT_PAT;
-    }
-
-    uintptr_t page = pmm_alloc_page(PMM_FLAG_ZERO | ((entry & PAGE_BIT_USER) ? 0 : PMM_FLAG_PANIC));
-    if(page == 0) return 0;
-
-    uint64_t* new_table = (uint64_t*) PTM_TO_HHDM(page);
-    for(int i = 0; i < 512; i++) new_table[i] = child_entry | (address + (uint64_t) i * child_page_size);
-
-    ATOMIC_STORE(&pagedb_get_page(page / ARCH_PAGE_SIZE_4K)->page_level_mapping_count, 512, __ATOMIC_RELAXED);
-
-    uint64_t parent_entry = (entry & (PAGE_BIT_PRESENT | PAGE_BIT_RW | PAGE_BIT_USER | PAGE_BIT_NX)) | (page & SMALL_PAGE_ADDRESS_MASK);
-    __atomic_store(&table[index], &parent_entry, __ATOMIC_SEQ_CST);
-
-    return parent_entry;
-}
-
-/**
- * @brief Maps a single page (of the specified size) at the given virtual address to the given physical address with the specified protection, cache, and privilege flags. This function will walk the page table hierarchy as needed to create any
- * necessary intermediate page tables, and will break large pages if necessary to ensure that the final mapping is created with the correct page size.
- * @note This function assumes that the caller has already verified that the virtual and physical addresses are properly aligned for the specified page size, and that the page size is valid. Calling this function with invalid parameters will result
- * in undefined behavior.
- * @param top_level_page_table The top-level page table to start the mapping from. This should be the page table for the address space being mapped into.
- * @param vaddr The virtual address to map. Must be aligned to the specified page size.
- * @param paddr The physical address to map to. Must be aligned to the specified page size.
- * @param page_size The size of the page to map. This determines how many levels of the page table hierarchy will be used for the mapping, and what flags will be set in the page table entries.
- * @param prot The protection flags for the mapping, which determine the read/write/execute permissions for the mapped page.
- * @param cache The cache flags for the mapping, which determine the caching behavior for the mapped page.
- * @param privilege The privilege level for the mapping, which determines whether the page is accessible from user mode or only from kernel mode.
- * @param global Whether the mapping should be marked as global, and not flushed from the TLB on a context switch.
- * @return true if the mapping was successful, false if it failed due to out of memory
- */
-static bool map_page(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
-    int lowest_index;
-    switch(page_size) {
-        case ARCH_PAGE_SIZE_4K: lowest_index = 1; break;
-        case ARCH_PAGE_SIZE_2M: lowest_index = 2; break;
-        case ARCH_PAGE_SIZE_1G: lowest_index = 3; break;
-    }
-
-    uint64_t* current_table = top_level_page_table;
-    for(int j = LEVEL_COUNT; j > lowest_index; j--) {
-        int index = VADDR_TO_INDEX(vaddr, j);
-
-        uint64_t entry = current_table[index];
-        if((entry & PAGE_BIT_PRESENT) == 0) {
-            uintptr_t page = pmm_alloc_page(PMM_FLAG_ZERO | (privilege == VM_PRIVILEGE_KERNEL ? PMM_FLAG_PANIC : 0));
-            if(page == 0) return false;
-            entry = PAGE_BIT_PRESENT | (page & SMALL_PAGE_ADDRESS_MASK);
-            if(!prot.execute) entry |= PAGE_BIT_NX;
-            ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, 1, __ATOMIC_SEQ_CST);
-        } else {
-            if((entry & HUGE_PAGE_BIT_PAGE_STOP) != 0) {
-                entry = break_large_page(current_table, index, j);
-                if(entry == 0) return false;
-            }
-            if(prot.execute) entry &= ~PAGE_BIT_NX;
+        if(!mmio) {
+            uint64_t num_4k_pages = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
+            for(uint64_t i = 0; i < num_4k_pages; i++) pagedb_page_map(paddr / ARCH_PAGE_SIZE_4K + i);
         }
-        if(prot.write) entry |= PAGE_BIT_RW;
-        entry |= privilege_to_x86_flags(privilege);
-        __atomic_store(&current_table[index], &entry, __ATOMIC_SEQ_CST);
-
-        current_table = (uint64_t*) PTM_TO_HHDM(entry & SMALL_PAGE_ADDRESS_MASK);
-    }
-
-    int leaf_index = VADDR_TO_INDEX(vaddr, lowest_index);
-    uint64_t prev_leaf = current_table[leaf_index];
-
-    uint64_t entry = PAGE_BIT_PRESENT | (paddr & PAGE_ADDRESS_MASK(page_size)) | privilege_to_x86_flags(privilege) | cache_to_x86_flags(cache, page_size);
-    if(page_size != ARCH_PAGE_SIZE_4K) entry |= HUGE_PAGE_BIT_PAGE_STOP;
-    if(prot.write) entry |= PAGE_BIT_RW;
-    if(!prot.execute) entry |= PAGE_BIT_NX;
-    if(global) entry |= PAGE_BIT_GLOBAL;
-    __atomic_store(&current_table[leaf_index], &entry, __ATOMIC_SEQ_CST);
-
-    if(!(prev_leaf & PAGE_BIT_PRESENT)) {
-        ATOMIC_LOAD_ADD(&pagedb_get_page(table_to_pfn(current_table))->page_level_mapping_count, 1, __ATOMIC_SEQ_CST);
-
-        uint64_t num_pages = 1;
-        if(page_size == ARCH_PAGE_SIZE_2M)
-            num_pages = 512;
-        else if(page_size == ARCH_PAGE_SIZE_1G)
-            num_pages = 512 * 512;
-
-        for(uint64_t i = 0; i < num_pages; i++) pagedb_page_map(paddr / ARCH_PAGE_SIZE_4K + i);
     }
 
     return true;
 }
 
-void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
-    for(; length > 0; length -= PAGE_SIZE_DEFAULT, vaddr += PAGE_SIZE_DEFAULT) asm volatile("invlpg (%0)" ::"r"(vaddr) : "memory");
+static bool internal_ptm_physical(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
+    pt_radix_walk_path_t path;
+    pt_radix_walk_result_t res = pt_radix_walk(top_level_page_table, vaddr, 1, false, false, VM_PROT_RO, VM_PRIVILEGE_KERNEL, &path);
+    if(res == PT_RADIX_WALK_NOMEM) return false;
+
+    pt_radix_walk_step_t* last = &path.steps[path.step_count - 1];
+    arch_pte_entry_t entry = last->table[last->index];
+    uint32_t level = last->level;
+
+    if(!pte_is_present(entry)) return false;
+
+    *paddr = pte_get_leaf_phys(entry, level) | (vaddr & (pte_level_page_size(level) - 1u));
+    return true;
 }
 
-bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global) {
+void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
+    for(; length > 0; length -= ARCH_PAGE_SIZE_4K, vaddr += ARCH_PAGE_SIZE_4K) asm volatile("invlpg (%0)" ::"r"(vaddr) : "memory");
+}
+
+bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(paddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
@@ -224,11 +76,13 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     if(!prot.read) LOG_WARN("Mapping with no read permission is not supported, ignoring");
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
+    arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     for(size_t i = 0; i < length;) {
         page_size_t cursize = ARCH_PAGE_SIZE_4K;
         if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M) cursize = ARCH_PAGE_SIZE_2M;
         if(g_huge_pages_support && paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G) cursize = ARCH_PAGE_SIZE_1G;
-        if(!map_page((uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table), vaddr + i, paddr + i, cursize, prot, cache, privilege, global)) {
+
+        if(!map_page(top, vaddr + i, paddr + i, cursize, prot, cache, privilege, global, mmio)) {
             spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
             return false;
         }
@@ -236,7 +90,6 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     }
 
     ptm_flush_tlb(vaddr, length);
-    // @note: we shouldn't need to send an ipi here since the tlb shouldn't contain unmapped entries
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
     return true;
 }
@@ -249,177 +102,123 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
     for(size_t i = 0; i < length;) {
-        uint64_t* current_table = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
+        arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
 
-        int j = LEVEL_COUNT;
-        for(; j > 1; j--) {
-            int index = VADDR_TO_INDEX(vaddr + i, j);
-            uint64_t entry = current_table[index];
-
-            if((entry & PAGE_BIT_PRESENT) == 0) goto skip;
-            if((entry & HUGE_PAGE_BIT_PAGE_STOP) != 0) {
-                assert(j <= 3);
-                if(INDEX_TO_VADDR(index, j) < vaddr + i || LEVEL_TO_PAGESIZE(j) > length - i) {
-                    entry = break_large_page(current_table, index, j);
-                    if(entry == 0) {
-                        spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
-                        return false;
-                    }
-                } else {
-                    break;
-                }
-            }
-
-            if(prot.write) entry |= PAGE_BIT_RW;
-            if(prot.execute) entry &= ~PAGE_BIT_NX;
-            __atomic_store_n(&current_table[index], entry, __ATOMIC_SEQ_CST);
-
-            current_table = (uint64_t*) PTM_TO_HHDM(current_table[index] & SMALL_PAGE_ADDRESS_MASK);
+        pt_radix_walk_path_t path;
+        pt_radix_walk_result_t res = pt_radix_walk(top, vaddr + i, 1, false, false, prot, privilege, &path);
+        if(res == PT_RADIX_WALK_NOT_FOUND) {
+            i += ARCH_PAGE_SIZE_4K;
+            continue;
         }
 
-        int index = VADDR_TO_INDEX(vaddr + i, j);
-        page_size_t ps = (j == 1 ? ARCH_PAGE_SIZE_4K : (j == 2 ? ARCH_PAGE_SIZE_2M : ARCH_PAGE_SIZE_1G));
-        uint64_t entry = current_table[index];
+        pt_radix_walk_step_t* last = &path.steps[path.step_count - 1];
+        arch_pte_entry_t* table = last->table;
+        uint32_t index = last->index;
+        uint32_t level = last->level;
+        arch_pte_entry_t entry = table[index];
 
-        uint64_t new_entry = (entry & PAGE_ADDRESS_MASK(ps)) | PAGE_BIT_PRESENT | (entry & (PAGE_BIT_ACCESSED | PAGE_BIT_DIRTY));
-        if(j != 1) new_entry |= HUGE_PAGE_BIT_PAGE_STOP;
+        if(pte_is_large(entry, level)) {
+            size_t ps = pte_level_page_size(level);
+            if((vaddr + i) % ps != 0 || length - i < ps) {
+                entry = pt_radix_break_large(table, index, level);
+                if(entry == 0) {
+                    spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+                    return false;
+                }
+                continue;
+            }
+        }
 
-        new_entry |= privilege_to_x86_flags(privilege);
-        new_entry |= cache_to_x86_flags(cache, ps);
+        arch_pte_entry_t new_entry = pte_rewrite_leaf_entry(entry, prot, cache, privilege, level, global);
+        __atomic_store_n(&table[index], new_entry, __ATOMIC_SEQ_CST);
 
-        if(prot.write) new_entry |= PAGE_BIT_RW;
-        if(!prot.execute) new_entry |= PAGE_BIT_NX;
-        if(global) new_entry |= PAGE_BIT_GLOBAL;
-
-        __atomic_store_n(&current_table[index], new_entry, __ATOMIC_SEQ_CST);
-
-    skip:
-        i += LEVEL_TO_PAGESIZE(j);
+        i += pte_level_page_size(level);
     }
 
     ptm_flush_tlb(vaddr, length);
     ipi_broadcast((ipi_message_t) {
         .type = IPI_TLB_FLUSH,
-        .tlb_flush = { .vaddr = vaddr, .length = length }
+        .tlb_flush = { .vaddr = vaddr, .length = length },
     });
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
     return true;
 }
 
-
-void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length) {
+void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, bool mmio) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
     for(size_t i = 0; i < length;) {
-        uint64_t* path_tables[5];
-        int path_indices[5];
-        int path_depth = 0;
+        arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
+        pt_radix_walk_path_t path;
 
-        uint64_t* current_table = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
-
-        int j = LEVEL_COUNT;
-        for(; j > 1; j--) {
-            int index = VADDR_TO_INDEX(vaddr + i, j);
-            uint64_t entry = current_table[index];
-
-            if((entry & PAGE_BIT_PRESENT) == 0) goto skip;
-            if((entry & HUGE_PAGE_BIT_PAGE_STOP) != 0) {
-                assert(j <= 3);
-                if(INDEX_TO_VADDR(index, j) < vaddr + i || LEVEL_TO_PAGESIZE(j) > length - i) {
-                    entry = break_large_page(current_table, index, j);
-                    if(entry == 0) goto skip;
-                } else {
-                    break;
-                }
-            }
-
-            path_tables[path_depth] = current_table;
-            path_indices[path_depth] = index;
-            path_depth++;
-
-            current_table = (uint64_t*) PTM_TO_HHDM(entry & SMALL_PAGE_ADDRESS_MASK);
+        pt_radix_walk_result_t res = pt_radix_walk(top, vaddr + i, 1, false, false, VM_PROT_RW, VM_PRIVILEGE_KERNEL, &path);
+        if(res == PT_RADIX_WALK_NOT_FOUND) {
+            i += ARCH_PAGE_SIZE_4K;
+            continue;
         }
 
-        {
-            int leaf_index = VADDR_TO_INDEX(vaddr + i, j);
-            uint64_t prev = current_table[leaf_index];
+        pt_radix_walk_step_t* last = &path.steps[path.step_count - 1];
+        arch_pte_entry_t* table = last->table;
+        uint32_t index = last->index;
+        uint32_t level = last->level;
+        arch_pte_entry_t entry = table[index];
 
-            if(prev & PAGE_BIT_PRESENT) {
-                __atomic_store_n(&current_table[leaf_index], 0, __ATOMIC_SEQ_CST);
+        if(!pte_is_present(entry)) {
+            i += pte_level_page_size(level);
+            continue;
+        }
 
-                uint64_t num_pages = 1;
-                uintptr_t paddr_unmap = 0;
-                if(j == 1) {
-                    paddr_unmap = prev & SMALL_PAGE_ADDRESS_MASK;
-                } else {
-                    paddr_unmap = prev & HUGE_PAGE_ADDRESS_MASK;
-                    if(j == 2)
-                        num_pages = 512;
-                    else if(j == 3)
-                        num_pages = 512 * 512;
-                }
-
-                for(uint64_t k = 0; k < num_pages; k++) pagedb_page_unmap(paddr_unmap / ARCH_PAGE_SIZE_4K + k);
-
-                uint64_t* child_table = current_table;
-                for(int d = path_depth - 1; d >= 0; d--) {
-                    uint32_t old_count = ATOMIC_LOAD_SUB(&pagedb_get_page(table_to_pfn(child_table))->page_level_mapping_count, 1, __ATOMIC_SEQ_CST);
-
-                    if(old_count != 1) break;
-
-                    uint64_t* parent_table = path_tables[d];
-                    int parent_index = path_indices[d];
-                    __atomic_store_n(&parent_table[parent_index], 0, __ATOMIC_SEQ_CST);
-                    pmm_free_page((uintptr_t) PTM_FROM_HHDM(child_table));
-
-                    child_table = parent_table;
-                }
+        if(pte_is_large(entry, level)) {
+            size_t ps = pte_level_page_size(level);
+            if((vaddr + i) % ps != 0 || length - i < ps) {
+                entry = pt_radix_break_large(table, index, level);
+                if(entry == 0) goto skip;
+                continue;
             }
         }
+
+        __atomic_store_n(&table[index], 0, __ATOMIC_SEQ_CST);
+
+        if(!mmio) {
+            uint64_t num_4k_pages = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
+            uintptr_t paddr_unmap = pte_get_leaf_phys(entry, level);
+            for(uint64_t k = 0; k < num_4k_pages; k++) pagedb_page_unmap(paddr_unmap / ARCH_PAGE_SIZE_4K + k);
+        }
+
+        for(int d = (int) path.step_count - 2; d >= 0; d--) {
+            pt_radix_walk_step_t* step = &path.steps[d];
+            pt_radix_walk_step_t* child = &path.steps[d + 1];
+            uint32_t old_count = ATOMIC_LOAD_SUB(&pagedb_get_page(pt_radix_table_pfn(child->table))->page_level_mapping_count, 1, ATOMIC_SEQ_CST);
+
+            if(old_count != 1) break;
+
+            __atomic_store_n(&step->table[step->index], 0, __ATOMIC_SEQ_CST);
+            pmm_free_page((uintptr_t) PTM_FROM_HHDM(child->table));
+        }
+
+        i += pte_level_page_size(level);
+        continue;
 
     skip:
-        i += LEVEL_TO_PAGESIZE(j);
+        i += ARCH_PAGE_SIZE_4K;
     }
 
     ptm_flush_tlb(vaddr, length);
     ipi_broadcast((ipi_message_t) {
         .type = IPI_TLB_FLUSH,
-        .tlb_flush = { .vaddr = vaddr, .length = length }
+        .tlb_flush = { .vaddr = vaddr, .length = length },
     });
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
-}
-
-static bool internal_ptm_physical(uint64_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
-    uint64_t* current_table = top_level_page_table;
-    int j = LEVEL_COUNT;
-    for(; j > 1; j--) {
-        int index = VADDR_TO_INDEX(vaddr, j);
-        if((current_table[index] & PAGE_BIT_PRESENT) == 0) { return false; }
-        if((current_table[index] & HUGE_PAGE_BIT_PAGE_STOP) != 0) break;
-        current_table = (uint64_t*) PTM_TO_HHDM(current_table[index] & SMALL_PAGE_ADDRESS_MASK);
-    }
-
-    uint64_t entry = current_table[VADDR_TO_INDEX(vaddr, j)];
-
-    if((entry & PAGE_BIT_PRESENT) == 0) return false;
-
-    switch(j) {
-        case 1:  *paddr = ((entry & SMALL_PAGE_ADDRESS_MASK) + (vaddr & (ARCH_PAGE_SIZE_4K - 1))); break;
-        case 2:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK_2M) + (vaddr & (ARCH_PAGE_SIZE_2M - 1))); break;
-        case 3:  *paddr = ((entry & HUGE_PAGE_ADDRESS_MASK_1G) + (vaddr & (ARCH_PAGE_SIZE_1G - 1))); break;
-        default: __builtin_unreachable();
-    }
-    return true;
 }
 
 bool ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t* paddr) {
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
-    uint64_t* top_level_page_table = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
-    bool result = internal_ptm_physical(top_level_page_table, vaddr, paddr);
+    arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
+    bool result = internal_ptm_physical(top, vaddr, paddr);
 
     spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
     return result;
@@ -441,30 +240,29 @@ static void map_kernel() {
 
         const phys_addr_t aligned_paddr = ALIGN_DOWN(seg->paddr, ARCH_PAGE_SIZE_4K);
         const virt_addr_t aligned_vaddr = ALIGN_DOWN(seg->vaddr, ARCH_PAGE_SIZE_4K);
-        const size_t alignment_diff = seg->paddr - aligned_paddr;
-        const size_t aligned_length = ALIGN_UP(seg->size + alignment_diff, ARCH_PAGE_SIZE_4K);
+        const size_t align_diff = seg->paddr - aligned_paddr;
+        const size_t aligned_length = ALIGN_UP(seg->size + align_diff, ARCH_PAGE_SIZE_4K);
 
-        ptm_map(g_vm_global_address_space, aligned_vaddr, aligned_paddr, aligned_length, prot, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true);
+        ptm_map(g_vm_global_address_space, aligned_vaddr, aligned_paddr, aligned_length, prot, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
     }
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-
         if(entry->type == BOOTINFO_MM_TYPE_BAD) continue;
 
         const phys_addr_t aligned_paddr = ALIGN_DOWN(entry->phys_base, ARCH_PAGE_SIZE_4K);
         const virt_addr_t aligned_vaddr = (virt_addr_t) PTM_TO_HHDM(aligned_paddr);
-        const size_t alignment_diff = entry->phys_base - aligned_paddr;
-        const size_t aligned_length = ALIGN_UP(entry->length + alignment_diff, ARCH_PAGE_SIZE_4K);
+        const size_t align_diff = entry->phys_base - aligned_paddr;
+        const size_t aligned_length = ALIGN_UP(entry->length + align_diff, ARCH_PAGE_SIZE_4K);
 
-        ptm_map(g_vm_global_address_space, aligned_vaddr, aligned_paddr, aligned_length, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true);
+        ptm_map(g_vm_global_address_space, aligned_vaddr, aligned_paddr, aligned_length, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
     }
 
-    uint64_t* current_tlpt = (uint64_t*) PTM_TO_HHDM(arch_cr_read_cr3() & SMALL_PAGE_ADDRESS_MASK);
+    arch_pte_entry_t* boot_top = (arch_pte_entry_t*) PTM_TO_HHDM(arch_cr_read_cr3() & ARCH_PTE_ADDR_MASK);
 
-    for(uintptr_t vaddr = g_init_boot_info->pfndb_start; vaddr < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; vaddr += ARCH_PAGE_SIZE_4K) {
-        uintptr_t paddr;
-        if(internal_ptm_physical(current_tlpt, vaddr, &paddr)) { ptm_map(g_vm_global_address_space, vaddr, paddr, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true); }
+    for(uintptr_t va = g_init_boot_info->pfndb_start; va < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; va += ARCH_PAGE_SIZE_4K) {
+        uintptr_t pa;
+        if(internal_ptm_physical(boot_top, va, &pa)) ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
     }
 }
 
@@ -484,28 +282,31 @@ void ptm_init_kernel(uint32_t core_id) {
 
     g_pat_supported = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PAT);
     g_huge_pages_support = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PDPE1GB_PAGES);
-    g_la57_enabled = arch_cr_read_cr4() & (1 << 12); // cr4.LA57
+    g_arch_pte_la57_enabled = (arch_cr_read_cr4() & (1u << 12)) != 0; /* CR4.LA57 */
 
-    uint64_t* pml4 = (uint64_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
-    for(int i = 256; i < 512; i++) { pml4[i] = PAGE_BIT_PRESENT | PAGE_BIT_RW | (pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC) & SMALL_PAGE_ADDRESS_MASK); }
+    arch_pte_entry_t* pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
+    for(int i = 256; i < 512; i++) { pml4[i] = ARCH_PTE_PRESENT | ARCH_PTE_RW | (pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC) & ARCH_PTE_ADDR_MASK); }
+
     map_kernel();
 
+    log_framebuffer_enable(false);
     ptm_load_address_space(g_vm_global_address_space);
     LOG_OKAY("switched to kernel page tables :33\n");
+    vm_init_kernel();
 
     for(size_t i = 0; i < g_init_boot_info->framebuffer_count; i++) {
         bootinfo_framebuffer_t framebuffer = g_init_boot_info->framebuffers[i];
         const phys_addr_t paddr = framebuffer.paddr;
+        const phys_addr_t aligned_paddr = ALIGN_DOWN(paddr, ARCH_PAGE_SIZE_4K);
+        const virt_addr_t align_diff = paddr - aligned_paddr;
+        const size_t aligned_length = ALIGN_UP(framebuffer.size + align_diff, ARCH_PAGE_SIZE_4K);
 
-        const phys_addr_t aligned_paddr = ALIGN_DOWN(paddr, PAGE_SIZE_DEFAULT);
-        const virt_addr_t alignment_diff = paddr - aligned_paddr;
-        const size_t aligned_length = ALIGN_UP((framebuffer.size) + alignment_diff, PAGE_SIZE_DEFAULT);
-
-        const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_NONE);
-        g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + alignment_diff);
+        const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_MMIO);
+        LOG_INFO("mapping framebuffer %zu, 0x%lx, 0x%lx, 0x%lx, 0x%lx, %018lx\n", i, paddr, aligned_paddr, align_diff, aligned_length, (uintptr_t) new_vaddr);
+        g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + align_diff);
     }
-
-    // interrupt_set_handler(0x0E, page_fault_handler);
+    log_framebuffer_reinit();
+    log_framebuffer_enable(true);
 }
 
 bool ptm_init_user(vm_address_space_t* address_space) {
@@ -519,8 +320,8 @@ bool ptm_init_user(vm_address_space_t* address_space) {
     address_space->start = MEMORY_USERSPACE_START;
     address_space->end = MEMORY_USERSPACE_END;
 
-    uint64_t* user_pml4 = (uint64_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
-    uint64_t* kernel_pml4 = (uint64_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
+    arch_pte_entry_t* user_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
+    arch_pte_entry_t* kernel_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
     for(int i = 256; i < 512; i++) user_pml4[i] = kernel_pml4[i];
 
     return true;

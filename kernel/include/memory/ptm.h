@@ -29,9 +29,10 @@ bool ptm_init_user(vm_address_space_t* address_space);
  * @param cache The caching behavior for the mapping
  * @param privilege The privilege level required to access the mapping
  * @param global Whether the mapping should flushed on context switch or not (false means it will be flushed, true means it will not be flushed)
+ * @param mmio True if the physical address is device memory. When set, pagedb map_count tracking is skipped for all covered frames.
  * @return true if the mapping was successful, false if the mapping failed (e.g. out of memory)
  */
-bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global);
+bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio);
 
 /**
  * @brief Changes the properties of an existing mapping in the specified address space.
@@ -51,8 +52,9 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
  * @param address_space The address space to modify.
  * @param vaddr The starting virtual address to unmap. Must be page-aligned.
  * @param length The length of the mapping to unmap in bytes. Must be a multiple of the page size.
+ * @param mmio True if the region was originally mapped with VM_FLAG_MMIO. When set, pagedb unmap tracking is skipped.
  */
-void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length);
+void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, bool mmio);
 
 /**
  * @brief Translates a virtual address to a physical address in the specified address space.

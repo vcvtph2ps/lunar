@@ -115,7 +115,7 @@ static void apic_enable_mode(uint32_t core_id) {
         size_t offset = address % PAGE_SIZE_DEFAULT;
         if(offset != 0) { address -= offset; }
 
-        g_lapic_virt_base = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_DISABLE, g_lapic_phys_base, VM_FLAG_NONE) + offset;
+        g_lapic_virt_base = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_DISABLE, g_lapic_phys_base, VM_FLAG_MMIO) + offset;
         LOG_INFO("apic base address: 0x%lx -> 0x%lx\n", g_lapic_phys_base, g_lapic_virt_base);
     } else {
         msr = arch_msr_read(ARCH_MSR_APIC_BASE_MSR);

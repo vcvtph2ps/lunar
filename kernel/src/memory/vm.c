@@ -98,14 +98,14 @@ static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
                 uintptr_t physical_address = pmm_alloc_page(region->type_data.anon.back_zeroed ? PMM_FLAG_ZERO : PMM_FLAG_NONE);
                 if(physical_address == 0) return false;
 
-                if(!ptm_map(region->address_space, virtual_address, physical_address, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global)) {
+                if(!ptm_map(region->address_space, virtual_address, physical_address, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false)) {
                     pmm_free_page(physical_address);
                     return false;
                 }
             }
             break;
         case VM_REGION_TYPE_DIRECT:
-            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global)) return false;
+            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, region->mmio)) return false;
             break;
     }
     return true;
@@ -121,7 +121,7 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
             break;
         case VM_REGION_TYPE_DIRECT: break;
     }
-    ptm_unmap(region->address_space, address, length);
+    ptm_unmap(region->address_space, address, length, region->mmio);
 }
 
 
@@ -132,6 +132,7 @@ static bool regions_mergeable(vm_region_t* left, vm_region_t* right) {
     if(!prot_equals(left->protection, right->protection)) return false;
     if(left->cache != right->cache) return false;
     if(left->dynamically_backed != right->dynamically_backed) return false;
+    if(left->mmio != right->mmio) return false;
 
     switch(left->type) {
         case VM_REGION_TYPE_ANON:
@@ -160,7 +161,7 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
         uintptr_t address;
         if(!find_hole(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, PAGE_SIZE_DEFAULT, &address)) { arch_panic("out of global address space"); }
 
-        if(!ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true)) { arch_panic("failed to map region cache page"); }
+        if(!ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false)) { arch_panic("failed to map region cache page"); }
 
         vm_region_t* region = (vm_region_t*) address;
         region[0].address_space = g_vm_global_address_space;
@@ -200,6 +201,7 @@ static vm_region_t* clone_to(bool global_lock_acquired, uintptr_t base, size_t l
     region->cache = from->cache;
     region->protection = from->protection;
     region->dynamically_backed = from->dynamically_backed;
+    region->mmio = from->mmio;
 
     switch(from->type) {
         case VM_REGION_TYPE_ANON: region->type_data.anon.back_zeroed = from->type_data.anon.back_zeroed; break;
@@ -434,6 +436,7 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
     region->cache = cache;
     region->dynamically_backed = (flags & VM_FLAG_DYNAMICALLY_BACKED) != 0;
     region->shared = (flags & VM_FLAG_SHARED) != 0;
+    region->mmio   = (flags & VM_FLAG_MMIO) != 0;
 
     switch(region->type) {
         case VM_REGION_TYPE_ANON: region->type_data.anon.back_zeroed = (flags & VM_FLAG_ZERO) != 0; break;

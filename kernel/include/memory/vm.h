@@ -42,6 +42,7 @@ typedef enum {
 #define VM_FLAG_NONE 0
 #define VM_FLAG_FIXED (1 << 1)
 #define VM_FLAG_DYNAMICALLY_BACKED (1 << 2)
+#define VM_FLAG_MMIO (1 << 3) /* physical address is device memory */
 #define VM_FLAG_ZERO (1 << 10) /* only applies to anonymous mappings */
 
 #define VM_NO_HINT 0
@@ -60,6 +61,7 @@ typedef struct {
     vm_protection_t protection;
     bool dynamically_backed : 1;
     bool shared             : 1;
+    bool mmio               : 1;
 
     rb_node_t region_tree_node;
     list_node_t region_cache_node;
