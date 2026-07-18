@@ -27,3 +27,7 @@ void cpu_local_init(uint32_t core_id) {
 uint32_t arch_cpu_local_get_core_hart_id(uint32_t core_id) {
     return g_cpu_local_storage[core_id].hart_id;
 }
+
+arch_cpu_local_t* cpu_local_get_other(uint32_t core_id) {
+    return &g_cpu_local_storage[core_id];
+}

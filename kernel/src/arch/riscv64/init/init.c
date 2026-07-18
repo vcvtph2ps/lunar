@@ -27,7 +27,9 @@ ATOMIC uint32_t g_init_finished_core_count = 0;
 
 void arch_init_bsp() {
     run_stage(INIT_STAGE_BASE_MEM, 0);
-    // run_stage(INIT_STAGE_ARCH_CPU, 0);
+    run_stage(INIT_STAGE_ARCH_CPU, 0);
+    run_stage(INIT_STAGE_TIME, 0);
+    run_stage(INIT_STAGE_SCHED, 0);
     arch_panic("mroaww");
 
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
@@ -40,6 +42,9 @@ void arch_init_ap(uint32_t core_id) {
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) == 0) { arch_spin_hint(); }
 
     run_stage(INIT_STAGE_BASE_MEM, core_id);
+    run_stage(INIT_STAGE_ARCH_CPU, core_id);
+    run_stage(INIT_STAGE_TIME, core_id);
+    run_stage(INIT_STAGE_SCHED, core_id);
 
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }

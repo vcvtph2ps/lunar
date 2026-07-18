@@ -1,4 +1,5 @@
 #include <arch/riscv64/internal/csr.h>
+#include <common/assert.h>
 #include <common/interrupts/interrupt.h>
 #include <stdint.h>
 
@@ -25,4 +26,9 @@ void arch_interrupt_restore(arch_interrupt_state_t state) {
     } else {
         ARCH_CSR_CLEAR_BITS(sstatus, ARCH_CSR_SSTATUS_SIE);
     }
+}
+
+[[noreturn]] void arch_send_ipi(uint32_t core_id) {
+    (void) core_id;
+    assert(false && "Not implemented");
 }

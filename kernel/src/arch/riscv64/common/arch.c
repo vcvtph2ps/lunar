@@ -8,6 +8,10 @@ void arch_memory_fence() {
     __asm__ volatile("fence iorw, iorw" ::: "memory");
 }
 
+void arch_wait_for_interrupt() {
+    __asm__ volatile("wfi" ::: "memory");
+}
+
 static void serial_sink(int c, void* ctx) {
     (void) ctx;
     arch_sbi_console_putchar((char) c);
