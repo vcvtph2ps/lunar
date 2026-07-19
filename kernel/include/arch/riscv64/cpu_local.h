@@ -10,7 +10,6 @@ typedef struct arch_cpu_local arch_cpu_local_t;
 
 struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_cpu_local_t* self;
-    uint32_t tsc_ticks_per_us; // only here so the damn thing compiles
     uint32_t core_id;
     uint32_t hart_id;
 

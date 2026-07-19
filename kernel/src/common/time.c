@@ -7,7 +7,6 @@
 static time_timer_t* g_time_timekeeping_timer;
 
 static uint64_t g_init_time_value;
-static uint32_t g_tsc_ticks_per_us;
 
 static uint64_t g_realtime_base_ns;
 static uint64_t g_realtime_mono_ref_ns;
@@ -20,7 +19,6 @@ void time_init(time_timer_t* timekeeping_timer) {
     LOG_INFO("initialising timekeeping using %s\n", timekeeping_timer->name);
     g_time_timekeeping_timer = timekeeping_timer;
     g_init_time_value = g_time_timekeeping_timer->read_microseconds(g_time_timekeeping_timer);
-    g_tsc_ticks_per_us = CPU_LOCAL_READ(tsc_ticks_per_us);
 
     g_realtime_base_ns = g_init_boot_info->boot_timestamp * 1000000000ULL;
     g_realtime_mono_ref_ns = 0;
@@ -32,7 +30,7 @@ void time_init(time_timer_t* timekeeping_timer) {
 uint64_t time_monotonic_ns() {
     uint64_t time_value_now = g_time_timekeeping_timer->read_microseconds(g_time_timekeeping_timer);
     uint64_t elapsed_ticks = time_value_now - g_init_time_value;
-    return (elapsed_ticks / g_tsc_ticks_per_us) * 1000ULL;
+    return elapsed_ticks * 1000ULL;
 }
 
 uint64_t time_realtime_ns() {
