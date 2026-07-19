@@ -2,6 +2,7 @@
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <lib/list.h>
+#include <memory/pmm.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -18,6 +19,8 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
         bool yield_pending;
         list_t queue;
     } defered_work;
+
+    pmm_t pmm;
 
     scheduler_t scheduler;
     ipi_request_t* ipi_queue;
