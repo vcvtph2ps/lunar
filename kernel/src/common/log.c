@@ -74,7 +74,7 @@ void log_framebuffer_init() {
                 0,
                 0
             );
-            log_sink_t sink = { .min_level = LOG_LEVEL_STRC, .write = framebuffer_sink, .ctx = ft_ctx, .is_framebuffer = true, .framebuffer_index = i };
+            log_sink_t sink = { .min_level = LOG_LEVEL_INFO, .write = framebuffer_sink, .ctx = ft_ctx, .is_framebuffer = true, .framebuffer_index = i };
             if(log_add_sink(&sink)) {
                 LOG_OKAY("Framebuffer logging initialized for framebuffer %zu\n", i);
             } else {
