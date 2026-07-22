@@ -24,7 +24,7 @@ static uint64_t arch_tsc_read_raw(time_timer_t* self) {
     return arch_tsc_read();
 }
 
-static uint64_t arch_tsc_read_ms(time_timer_t* self) {
+static uint64_t arch_tsc_read_us(time_timer_t* self) {
     (void) self;
     uint64_t tsc_value = arch_tsc_read();
     uint64_t tsc_ticks_per_us = CPU_LOCAL_READ(tsc_ticks_per_us);
@@ -45,7 +45,7 @@ time_timer_t* arch_tsc_init_timer(time_timer_t* calibration_timer) {
         g_tsc_timer->score = 50;
         g_tsc_timer->sleep = arch_tsc_sleep;
         g_tsc_timer->read_raw = arch_tsc_read_raw;
-        g_tsc_timer->read_microseconds = arch_tsc_read_ms;
+        g_tsc_timer->read_microseconds = arch_tsc_read_us;
         g_tsc_timer->private = nullptr;
     }
 
