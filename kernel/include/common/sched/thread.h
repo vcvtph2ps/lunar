@@ -21,6 +21,8 @@ struct thread {
     thread_state_t state;
     scheduler_t* sched;
 
+    bool migratable;
+
     list_node_t list_node_sched;
     list_node_t list_node_wait;
 
