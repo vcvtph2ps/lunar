@@ -54,24 +54,35 @@ void uacpi_kernel_unmap(void* addr, uacpi_size length) {
 
 static void uacpi_kernel_vlog(uacpi_log_level level, const uacpi_char* fmt, uacpi_va_list args) {
     log_level_t log_level;
+    const char* prefix;
     switch(level) {
-        case UACPI_LOG_ERROR: log_level = LOG_LEVEL_FAIL; break;
-        case UACPI_LOG_WARN:  log_level = LOG_LEVEL_WARN; break;
-        case UACPI_LOG_DEBUG: log_level = LOG_LEVEL_DBGL; break;
-        case UACPI_LOG_TRACE: log_level = LOG_LEVEL_STRC; break;
-        case UACPI_LOG_INFO:  log_level = LOG_LEVEL_INFO; break;
+        case UACPI_LOG_ERROR:
+            log_level = LOG_LEVEL_FAIL;
+            prefix = LOG_COLORIZE("fail |", "91") " uacpi: ";
+            break;
+        case UACPI_LOG_WARN:
+            log_level = LOG_LEVEL_WARN;
+            prefix = LOG_COLORIZE("warn |", "93") " uacpi: ";
+            break;
+        case UACPI_LOG_DEBUG:
+            log_level = LOG_LEVEL_DBGL;
+            prefix = LOG_COLORIZE("dbgl |", "34") " uacpi: ";
+            break;
+        case UACPI_LOG_TRACE:
+            log_level = LOG_LEVEL_STRC;
+            prefix = LOG_COLORIZE("strc |", "95") " uacpi: ";
+            break;
+        case UACPI_LOG_INFO:
+            log_level = LOG_LEVEL_INFO;
+            prefix = LOG_COLORIZE("info |", "96") " uacpi: ";
+            break;
+        default: return;
     }
 
-
-    switch(level) {
-        case UACPI_LOG_ERROR: log_print(log_level, LOG_COLORIZE("fail |", "91") " uacpi: "); break;
-        case UACPI_LOG_WARN:  log_print(log_level, LOG_COLORIZE("warn |", "93") " uacpi: "); break;
-        case UACPI_LOG_DEBUG: log_print(log_level, LOG_COLORIZE("dbgl |", "34") " uacpi: "); break;
-        case UACPI_LOG_TRACE: log_print(log_level, LOG_COLORIZE("strc |", "95") " uacpi: "); break;
-        case UACPI_LOG_INFO:  log_print(log_level, LOG_COLORIZE("info |", "96") " uacpi: "); break;
-    }
-
-    log_vprint(log_level, fmt, args);
+    arch_interrupt_state_t saved = log_lock_acquire();
+    log_print_lockless(log_level, "%s", prefix);
+    log_vprint_lockless(log_level, fmt, args);
+    log_lock_release(saved);
 }
 
 UACPI_PRINTF_DECL(2, 3)

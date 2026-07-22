@@ -152,3 +152,11 @@ void log_print(log_level_t level, const char* fmt, ...) {
     spinlock_noint_unlock(&g_log_lock, state);
     va_end(val);
 }
+
+arch_interrupt_state_t log_lock_acquire(void) {
+    return spinlock_noint_lock(&g_log_lock);
+}
+
+void log_lock_release(arch_interrupt_state_t state) {
+    spinlock_noint_unlock(&g_log_lock, state);
+}

@@ -1,4 +1,5 @@
 #pragma once
+#include <common/interrupts/interrupt.h>
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -53,6 +54,18 @@ void log_vprint_lockless(log_level_t log, const char* fmt, va_list val);
 
 void log_vprint(log_level_t log, const char* fmt, va_list val);
 [[gnu::format(printf, 2, 3)]] void log_print(log_level_t log, const char* fmt, ...);
+
+/**
+ * @brief Acquire/release the global log lock manually.
+ * @return The previous interrupt state before acquiring the lock
+ */
+arch_interrupt_state_t log_lock_acquire(void);
+
+/**
+ * @brief Release the global log lock and restore the previous interrupt state.
+ * @param state The previous interrupt state to restore
+ */
+void log_lock_release(arch_interrupt_state_t state);
 
 #define LOG_COLORIZE(text, color) "\x1b[1m\x1b[" color "m" text "\x1b[0m"
 
