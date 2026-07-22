@@ -47,6 +47,12 @@ void sched_thread_schedule(thread_t* thread);
 void sched_yield(thread_state_t state);
 
 /**
+ * @brief Puts the current thread to sleep for the specified duration in milliseconds
+ * @param msec The duration to sleep in milliseconds
+ */
+void sched_sleep(uint64_t msec);
+
+/**
  * @brief Initializes the scheduler for the current core
  * @param core_id The ID of the current core
  */

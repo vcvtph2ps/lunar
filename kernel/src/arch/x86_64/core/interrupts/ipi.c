@@ -26,6 +26,9 @@ void ipi_init(uint32_t core_id) {
 }
 
 void arch_send_ipi(uint32_t core_id) {
-    if(g_ipi_vector == 0xff) { LOG_WARN("IPI vector not allocated yet, cannot send IPI to core %d\n", core_id); }
+    if(g_ipi_vector == 0xff) {
+        LOG_WARN("IPI vector not allocated yet, cannot send IPI to core %d\n", core_id);
+        return;
+    }
     arch_lapic_send_ipi(arch_cpu_local_get_core_lapic_id(core_id), g_ipi_vector);
 }

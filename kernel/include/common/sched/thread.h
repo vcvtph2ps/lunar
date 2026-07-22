@@ -1,4 +1,5 @@
 #pragma once
+#include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/types.h>
@@ -17,6 +18,8 @@ enum thread_state {
 };
 
 struct thread {
+    spinlock_no_dw_t lock;
+
     uint32_t tid;
     thread_state_t state;
     scheduler_t* sched;
@@ -26,7 +29,7 @@ struct thread {
     list_node_t list_node_sched;
     list_node_t list_node_wait;
 
-    ATOMIC wait_queue_t* target_wait_queue;
+    wait_queue_t* target_wait_queue;
 
     bool in_interrupt_handler;
 };

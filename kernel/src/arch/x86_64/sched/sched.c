@@ -44,18 +44,27 @@ static void sched_timer_handler(arch_interrupt_frame_t* frame, void* ctx) {
 }
 
 static void internal_sched_thread_drop(thread_t* thread) {
-    if(thread == thread->sched->idle_thread) return;
+    if(thread == thread->sched->idle_thread) {
+        spinlock_nodw_unlock(&thread->lock);
+        return;
+    }
 
     // @todo: reap
     switch(thread->state) {
-        case THREAD_STATE_READY: sched_thread_schedule(thread); break;
-        case THREAD_STATE_DEAD:  {
+        case THREAD_STATE_READY:
+            sched_thread_schedule(thread);
+            spinlock_nodw_unlock(&thread->lock);
+            break;
+        case THREAD_STATE_DEAD: {
             LOG_INFO("thread %u is dead, dropping\n", thread->tid);
+            spinlock_nodw_unlock(&thread->lock);
             break;
         }
         case THREAD_STATE_BLOCKED: {
-            wait_queue_t* queue = ATOMIC_XCHG(&sched_arch_thread_current()->target_wait_queue, nullptr, __ATOMIC_SEQ_CST);
+            wait_queue_t* queue = thread->target_wait_queue;
+            thread->target_wait_queue = nullptr;
             if(queue) { wait_queue_add_thread(queue, thread); }
+            spinlock_nodw_unlock(&thread->lock);
             break;
         }
         default: assertf(false, "invalid state on drop %d", thread->state);
@@ -80,6 +89,7 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, void* proces
     (void) process;
 
     x86_64_thread_t* thread = heap_alloc(sizeof(x86_64_thread_t));
+    thread->common.lock = SPINLOCK_NO_DW_INIT;
     thread->common.tid = tid;
     thread->common.state = THREAD_STATE_READY;
     thread->common.sched = sched;
@@ -116,8 +126,13 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     x86_64_thread_t* next = CONTAINER_OF(t_next, x86_64_thread_t, common);
     CPU_LOCAL_WRITE(current_thread, next);
 
-    t_current->state = yield_state; // @note: possible race here since we haven't *stopped* using the thread but it would be marked ready
+    spinlock_nodw_lock(&t_current->lock);
+    t_current->state = yield_state;
+
+    spinlock_nodw_lock(&t_next->lock);
     t_next->state = THREAD_STATE_RUNNING;
+    spinlock_nodw_unlock(&t_next->lock);
+
     x86_64_thread_t* prev = x86_64_context_switch(current, next);
     internal_sched_thread_drop(&prev->common);
 }

@@ -272,17 +272,17 @@ uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void) {
 /**
  * Spin for N microseconds.
  */
-[[noreturn]] void uacpi_kernel_stall(uacpi_u8 usec) {
-    (void) usec;
-    assert(false);
+void uacpi_kernel_stall(uacpi_u8 usec) {
+    uint64_t start = time_monotonic_ns();
+    uint64_t delta = usec * 1000ULL;
+    while((time_monotonic_ns() - start) < delta) { arch_spin_hint(); }
 }
 
 /**
  * Sleep for N milliseconds.
  */
-[[noreturn]] void uacpi_kernel_sleep(uacpi_u64 msec) {
-    (void) msec;
-    assert(false);
+void uacpi_kernel_sleep(uacpi_u64 msec) {
+    sched_sleep(msec);
 }
 
 /**
@@ -366,15 +366,17 @@ uacpi_thread_id uacpi_kernel_get_thread_id(void) {
  * instruction on x86, 'msr daifset, #3' on aarch64 etc.
  */
 uacpi_interrupt_state uacpi_kernel_disable_interrupts(void) {
-    assert(false);
+    arch_interrupt_state_t state = arch_interrupt_disable();
+    return (uacpi_interrupt_state) state.enabled;
 }
 
 /**
  * Restore the state of the interrupt flags to the kernel-defined value provided
  * in 'state'.
  */
-[[noreturn]] void uacpi_kernel_restore_interrupts(uacpi_interrupt_state) {
-    assert(false);
+void uacpi_kernel_restore_interrupts(uacpi_interrupt_state interrupt_state) {
+    arch_interrupt_state_t state = (arch_interrupt_state_t) { .enabled = (bool) interrupt_state };
+    arch_interrupt_restore(state);
 }
 
 /**
