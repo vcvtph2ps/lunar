@@ -512,9 +512,60 @@ void uacpi_kernel_unlock_spinlock(uacpi_handle handle, uacpi_cpu_flags flags) {
     spinlock_noint_unlock(spinlock, (arch_interrupt_state_t) { .enabled = (bool) flags });
 }
 
-uacpi_status uacpi_kernel_schedule_work(uacpi_work_type, uacpi_work_handler, uacpi_handle ctx) {
-    (void) ctx;
-    assert(false);
+typedef struct {
+    uacpi_work_handler handler;
+    uacpi_handle ctx;
+    list_node_t node;
+} uacpi_work_item_t;
+
+static spinlock_no_int_t g_uacpi_work_lock = SPINLOCK_NO_INT_INIT;
+static list_t g_uacpi_work_queue = LIST_INIT;
+ATOMIC static uint32_t g_uacpi_work_count = 0; // we use this instead of the list count so we can poll it without disabling interrupts
+static thread_t* g_uacpi_worker = nullptr;
+
+static void process_work() {
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_uacpi_work_lock);
+    if(g_uacpi_work_queue.count == 0) {
+        spinlock_noint_unlock(&g_uacpi_work_lock, state);
+        return;
+    }
+    uacpi_work_item_t* item = CONTAINER_OF(list_pop_front(&g_uacpi_work_queue), uacpi_work_item_t, node);
+    spinlock_noint_unlock(&g_uacpi_work_lock, state);
+
+    item->handler(item->ctx);
+    heap_free(item, sizeof(uacpi_work_item_t));
+}
+
+[[noreturn]] static void uacpi_worker_entry() {
+    while(1) {
+        if(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) == 0) { sched_sleep(100); }
+        process_work();
+    }
+}
+
+/**
+ * Schedules deferred work for execution.
+ * Might be invoked from an interrupt context.
+ */
+uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler handler, uacpi_handle ctx) {
+    (void) type;
+    LOG_STRC("uacpi: scheduling work handler=%p, ctx=%p\n", (void*) handler, ctx);
+
+    uacpi_work_item_t* item = (uacpi_work_item_t*) heap_alloc(sizeof(uacpi_work_item_t));
+    item->handler = handler;
+    item->ctx = ctx;
+
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_uacpi_work_lock);
+    list_push_back(&g_uacpi_work_queue, &item->node);
+    ATOMIC_LOAD_ADD(&g_uacpi_work_count, 1, ATOMIC_SEQ_CST);
+
+    if(g_uacpi_worker == nullptr) {
+        g_uacpi_worker = sched_arch_create_kernel_thread((virt_addr_t) uacpi_worker_entry);
+        sched_thread_schedule(g_uacpi_worker);
+    }
+    spinlock_noint_unlock(&g_uacpi_work_lock, state);
+
+    return UACPI_STATUS_OK;
 }
 
 /**
@@ -525,5 +576,6 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type, uacpi_work_handler, uac
  * Note that the waits must be done in this order specifically.
  */
 uacpi_status uacpi_kernel_wait_for_work_completion(void) {
-    assert(false);
+    while(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) != 0) { sched_sleep(25); }
+    return UACPI_STATUS_OK;
 }
