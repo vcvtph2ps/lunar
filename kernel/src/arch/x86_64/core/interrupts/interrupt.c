@@ -37,11 +37,16 @@ void arch_interrupt_restore(arch_interrupt_state_t state) {
     }
 }
 
+spinlock_no_int_t g_interrupt_handler_lock = SPINLOCK_NO_INT_INIT;
 interrupt_handler_fn_t g_handlers[256] = {};
+void* g_handler_contexts[256] = {};
 
-void interrupt_set_handler(uint8_t vector, interrupt_handler_fn_t handler) {
+void interrupt_set_handler(uint8_t vector, interrupt_handler_fn_t handler, void* ctx) {
     assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_interrupt_handler_lock);
     g_handlers[vector] = handler;
+    g_handler_contexts[vector] = ctx;
+    spinlock_noint_unlock(&g_interrupt_handler_lock, state);
 }
 
 extern void idt_init(uint32_t core_id);
@@ -73,7 +78,7 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
 
     if(g_handlers[frame->vector] == nullptr && frame->vector < 0x20) { arch_panic_int(frame); }
     if(g_handlers[frame->vector] != nullptr) {
-        g_handlers[frame->vector](frame);
+        g_handlers[frame->vector](frame, g_handler_contexts[frame->vector]);
     } else {
         LOG_WARN("No handler registered for interrupt vector 0x%02lx\n", frame->vector);
     }

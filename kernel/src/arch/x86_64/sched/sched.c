@@ -37,7 +37,8 @@ typedef struct [[gnu::packed]] {
 extern x86_64_thread_t* x86_64_context_switch(x86_64_thread_t* t_current, x86_64_thread_t* t_next);
 extern void x86_64_userspace_init_sysexit();
 
-static void sched_timer_handler(arch_interrupt_frame_t* frame) {
+static void sched_timer_handler(arch_interrupt_frame_t* frame, void* ctx) {
+    (void) ctx;
     (void) frame;
     CPU_LOCAL_WRITE(scheduler.yield_pending, true);
 }
@@ -124,6 +125,6 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 void sched_arch_init(uint32_t core_id) {
-    if(INIT_CORE_IS_BSP(core_id)) { interrupt_set_handler(LAPIC_TIMER_VECTOR, sched_timer_handler); }
+    if(INIT_CORE_IS_BSP(core_id)) { interrupt_set_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr); }
 }
 #pragma clang diagnostic pop

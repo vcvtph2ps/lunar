@@ -10,7 +10,8 @@
 
 uint8_t g_ipi_vector = 0xff;
 
-static void ipi_interrupt_handler(arch_interrupt_frame_t* frame) {
+static void ipi_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
+    (void) ctx;
     (void) frame;
     ipi_message_t message;
     while(ipi_pop(&message)) { ipi_handle(message); }
@@ -19,7 +20,7 @@ static void ipi_interrupt_handler(arch_interrupt_frame_t* frame) {
 void ipi_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         g_ipi_vector = arch_interrupt_alloc_allocate();
-        interrupt_set_handler(g_ipi_vector, ipi_interrupt_handler);
+        interrupt_set_handler(g_ipi_vector, ipi_interrupt_handler, nullptr);
         return;
     }
 }

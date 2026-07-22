@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-typedef void (*interrupt_handler_fn_t)(arch_interrupt_frame_t* frame);
+typedef void (*interrupt_handler_fn_t)(arch_interrupt_frame_t* frame, void* ctx);
 
 /**
  * @brief Initialize the interrupt system for the current core
@@ -21,9 +21,10 @@ void interrupt_init(uint32_t core_id);
  * @brief Register an interrupt handler for the given interrupt vector.
  * @param vector The interrupt vector to register the handler for.
  * @param handler The function to call when the specified interrupt is triggered.
+ * @param ctx A context pointer that will be passed to the handler when it is called.
  * @note handler will run in a hardirq context
  */
-void interrupt_set_handler(uint8_t vector, interrupt_handler_fn_t handler);
+void interrupt_set_handler(uint8_t vector, interrupt_handler_fn_t handler, void* ctx);
 
 /**
  * @brief Set the stack pointer to use when handling interrupts in user mode.
