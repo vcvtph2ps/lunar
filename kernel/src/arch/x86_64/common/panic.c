@@ -5,6 +5,7 @@
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
 #include <lib/helpers.h>
+#include <lib/ksym.h>
 #include <memory/vm.h>
 #include <stdarg.h>
 
@@ -32,6 +33,31 @@ static const char* g_name_table[22] = { "Divide Error",
                                         "Control Protection Exception" };
 
 ATOMIC uint32_t g_panicking_core = 0xffffffff;
+
+typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
+    struct x86_64_debug_stack_frame* rbp;
+    uint64_t rip;
+} x86_64_debug_stack_frame_t;
+
+[[clang::always_inline]] static void panic_stacktrace(virt_addr_t rbp) {
+    x86_64_debug_stack_frame_t* stack_frame = (x86_64_debug_stack_frame_t*) rbp;
+    log_print_lockless(LOG_LEVEL_FAIL, "Stack Trace:\n");
+    for(int i = 0; stack_frame != nullptr && stack_frame->rip != 0 && i < 30; i++) {
+        ksym_kernel_symbol_t symbol;
+        if(!ksym_lookup_by_address(stack_frame->rip, &symbol)) {
+            log_print_lockless(LOG_LEVEL_FAIL, "    [UNKNOWN] <%lx>\n", stack_frame->rip);
+        } else {
+            log_print_lockless(LOG_LEVEL_FAIL, "    %s+%lu <%lx>\n", symbol.name, stack_frame->rip - symbol.address, stack_frame->rip);
+        }
+        stack_frame = stack_frame->rbp;
+    }
+}
+
+[[clang::always_inline]] static void panic_stacktrace_current() {
+    x86_64_debug_stack_frame_t* stack_frame;
+    asm volatile("movq %%rbp, %0" : "=r"(stack_frame));
+    panic_stacktrace((virt_addr_t) stack_frame);
+}
 
 [[clang::always_inline]] static void panic_begin() {
     __asm__ volatile("cli;mfence;lfence" ::: "memory");
@@ -80,6 +106,8 @@ ATOMIC uint32_t g_panicking_core = 0xffffffff;
     va_start(args, fmt);
     log_vprint_lockless(LOG_LEVEL_FAIL, fmt, args);
     va_end(args);
+
+    panic_stacktrace_current();
 
     panic_end();
 }
@@ -183,6 +211,7 @@ ATOMIC uint32_t g_panicking_core = 0xffffffff;
     }
     log_print_lockless(LOG_LEVEL_FAIL, "cr4 = 0x%016lx [todo]\n", cr4);
     log_print_lockless(LOG_LEVEL_FAIL, "cr8 = 0x%016lx [tpl=%ld]\n", cr8, cr8);
+    if(!frame->is_user) { panic_stacktrace(frame->regs->rbp); }
 
     panic_end();
 }
