@@ -5,9 +5,12 @@
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <common/sched/sleep_queue.h>
 #include <common/sched/thread.h>
 #include <common/time/time.h>
 #include <lib/helpers.h>
+
+sleep_queue_t g_sched_sleep_queue = { .lock = SPINLOCK_NO_DW_INIT, .wait_queue = LIST_INIT };
 
 void sched_preempt_disable() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) < UINT32_MAX);
@@ -51,12 +54,10 @@ void sched_init(uint32_t core_id) {
     sched_arch_init(core_id);
 }
 
-[[noreturn]] void sched_sleep(uint64_t msec) {
-    (void) msec;
-    assert(false && "unimplemented");
-    // thread_t* current = sched_arch_thread_current();
-    // current->sleep_until = time_monotonic_ns() + (msec * 1000000ULL);
-    // sched_yield(THREAD_STATE_BLOCKED);
+void sched_sleep(uint64_t msec) {
+    thread_t* current = sched_arch_thread_current();
+    current->sleep_until = time_monotonic_ns() + (msec * 1000000ULL);
+    sched_yield(THREAD_STATE_BLOCKED);
 }
 
 void sched_yield(thread_state_t yield_state) {

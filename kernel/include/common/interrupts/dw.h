@@ -12,7 +12,7 @@ typedef struct dw_item {
     dw_cleanup_fn_t cleanup_fn;
     void* data;
     list_node_t list_node;
-    bool in_use;
+    ATOMIC bool in_use;
 } dw_item_t;
 
 /**

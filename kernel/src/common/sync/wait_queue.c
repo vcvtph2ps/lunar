@@ -1,8 +1,8 @@
 #include <common/sched/sched.h>
 #include <common/sync/wait_queue.h>
+#include <common/time/time.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
-
 
 bool wait_queue_empty(wait_queue_t* queue) {
     spinlock_nodw_lock(&queue->lock);
@@ -28,9 +28,19 @@ void wait_queue_join(wait_queue_t* queue) {
     sched_yield(THREAD_STATE_BLOCKED);
 }
 
+void wait_queue_join_timeout(wait_queue_t* queue, uint64_t timeout_ms) {
+    thread_t* current = sched_arch_thread_current();
+    spinlock_nodw_lock(&current->lock);
+    current->target_wait_queue = queue;
+    current->sleep_until = time_monotonic_ns() + (timeout_ms * 1000000ULL);
+    spinlock_nodw_unlock(&current->lock);
+    sched_yield(THREAD_STATE_BLOCKED);
+}
+
 void wait_queue_add_thread(wait_queue_t* queue, thread_t* thread) {
     spinlock_nodw_lock(&queue->lock);
     list_push(&queue->list, &thread->list_node_wait);
+    thread->current_wait_queue = queue;
     spinlock_nodw_unlock(&queue->lock);
 }
 

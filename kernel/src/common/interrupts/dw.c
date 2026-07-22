@@ -22,7 +22,7 @@ dw_item_t* dw_create(dw_function_t fn, void* data) {
     item->fn = fn;
     item->data = data;
     item->cleanup_fn = cleanup_created_dw;
-    item->in_use = false;
+    ATOMIC_STORE(&item->in_use, false, ATOMIC_SEQ_CST);
     return item;
 }
 
@@ -36,8 +36,9 @@ static bool internal_enable() {
 void dw_queue(dw_item_t* item) {
     sched_preempt_disable();
     dw_status_disable();
-    item->in_use = true;
-    list_push(&CPU_LOCAL_GET_SELF()->defered_work.queue, &item->list_node);
+
+    if(!ATOMIC_XCHG(&item->in_use, true, ATOMIC_SEQ_CST)) { list_push(&CPU_LOCAL_GET_SELF()->defered_work.queue, &item->list_node); }
+
     internal_enable();
     sched_preempt_enable();
 }
@@ -60,8 +61,11 @@ void dw_process() {
         sched_preempt_enable();
 
         dw_item->fn(dw_item->data);
-        if(dw_item->cleanup_fn) { dw_item->cleanup_fn(dw_item); }
-        dw_item->in_use = false;
+        if(dw_item->cleanup_fn) {
+            dw_item->cleanup_fn(dw_item);
+        } else {
+            ATOMIC_STORE(&dw_item->in_use, false, ATOMIC_SEQ_CST);
+        }
     }
 }
 

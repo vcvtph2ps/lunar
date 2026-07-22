@@ -8,6 +8,7 @@
 #include <common/interrupts/dw.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <common/sync/wait_queue.h>
 #include <lib/helpers.h>
 #include <memory/ptm.h>
 #include <stddef.h>

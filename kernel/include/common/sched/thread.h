@@ -28,8 +28,11 @@ struct thread {
 
     list_node_t list_node_sched;
     list_node_t list_node_wait;
+    list_node_t list_node_sleep_queue;
 
-    wait_queue_t* target_wait_queue;
+    uint64_t sleep_until; // The time (in nanoseconds) until which the thread should sleep
+    wait_queue_t* current_wait_queue; // The wait queue the thread is currently in, if any
+    wait_queue_t* target_wait_queue; // The wait queue the thread is trying to enter, if any
 
     bool in_interrupt_handler;
 };

@@ -3,11 +3,14 @@
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/sched/thread.h>
 #include <common/assert.h>
+#include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
+#include <common/sched/sleep_queue.h>
 #include <common/sched/thread.h>
+#include <common/time/time.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <lib/types.h>
@@ -37,11 +40,21 @@ typedef struct [[gnu::packed]] {
 extern x86_64_thread_t* x86_64_context_switch(x86_64_thread_t* t_current, x86_64_thread_t* t_next);
 extern void x86_64_userspace_init_sysexit();
 
+extern sleep_queue_t g_sched_sleep_queue;
+dw_item_t* g_sleep_queue_check_dw;
+
+static void sleep_queue_check_dw(void* data) {
+    (void) data;
+    sleep_queue_check(&g_sched_sleep_queue);
+}
+
 static void sched_timer_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
     (void) frame;
     CPU_LOCAL_WRITE(scheduler.yield_pending, true);
+    dw_queue(g_sleep_queue_check_dw);
 }
+
 
 static void internal_sched_thread_drop(thread_t* thread) {
     if(thread == thread->sched->idle_thread) {
@@ -61,9 +74,17 @@ static void internal_sched_thread_drop(thread_t* thread) {
             break;
         }
         case THREAD_STATE_BLOCKED: {
+            LOG_INFO("thread %u is blocking\n", thread->tid);
             wait_queue_t* queue = thread->target_wait_queue;
             thread->target_wait_queue = nullptr;
-            if(queue) { wait_queue_add_thread(queue, thread); }
+            if(queue) {
+                LOG_INFO("thread %u is blocking on wait queue %p\n", thread->tid, queue);
+                wait_queue_add_thread(queue, thread);
+            }
+            if(thread->sleep_until > 0) {
+                LOG_INFO("thread %u is sleeping for %lu ns\n", thread->tid, thread->sleep_until - time_monotonic_ns());
+                sleep_queue_insert(&g_sched_sleep_queue, thread);
+            }
             spinlock_nodw_unlock(&thread->lock);
             break;
         }
@@ -141,6 +162,10 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 void sched_arch_init(uint32_t core_id) {
-    if(INIT_CORE_IS_BSP(core_id)) { interrupt_set_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr); }
+    if(INIT_CORE_IS_BSP(core_id)) {
+        interrupt_set_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr);
+        g_sleep_queue_check_dw = dw_create(sleep_queue_check_dw, nullptr);
+        g_sleep_queue_check_dw->cleanup_fn = nullptr;
+    }
 }
 #pragma clang diagnostic pop

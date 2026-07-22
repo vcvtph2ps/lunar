@@ -25,6 +25,13 @@ void wait_queue_join(wait_queue_t* queue);
 /**
  * @brief Join the wait queue, blocking the calling thread until the queue is empty.
  * @param queue Pointer to the wait queue to join.
+ * @param timeout_ms The maximum time to wait in milliseconds.
+ */
+void wait_queue_join_timeout(wait_queue_t* queue, uint64_t timeout_ms);
+
+/**
+ * @brief Join the wait queue, blocking the calling thread until the queue is empty.
+ * @param queue Pointer to the wait queue to join.
  */
 void wait_queue_add_thread(wait_queue_t* queue, thread_t* thread);
 
