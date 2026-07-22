@@ -147,6 +147,7 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle* out_handle) {
     (void) base;
+    (void) len;
     LOG_STRC("uacpi: mapping io port base=0x%04lx, len=%zu\n", base, len);
 
     *out_handle = (uacpi_handle) base;
@@ -154,6 +155,7 @@ uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handl
 }
 
 void uacpi_kernel_io_unmap(uacpi_handle handle) {
+    (void) handle;
     LOG_STRC("uacpi: unmapping io port handle=%p\n", handle);
 }
 
@@ -414,16 +416,23 @@ typedef struct {
     uint32_t vector;
     uacpi_interrupt_handler handler;
     uacpi_handle ctx;
+    dw_item_t* work_item;
 } uacpi_kernel_interrupt_ctx_t;
 
 #if defined(__ARCH_X86_64__)
 static void uacpi_kernel_interrupt_handler(arch_interrupt_frame_t* frame, void* p_ctx) {
     (void) frame;
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
+    dw_queue(ctx->work_item);
+}
+
+static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
+    uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
     uacpi_interrupt_ret ret = ctx->handler(ctx->ctx);
-    if(ret == UACPI_INTERRUPT_NOT_HANDLED) { arch_panic("[uacpi] Handled interrupt\n"); }
+    if(ret == UACPI_INTERRUPT_NOT_HANDLED) { arch_panic("[uacpi] Unhandled interrupt\n"); }
 }
 #endif
+
 
 uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interrupt_handler handler, uacpi_handle ctx, uacpi_handle* out_irq_handle) {
 #if defined(__ARCH_X86_64__)
@@ -435,6 +444,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     kernel_ctx->vector = vector;
     kernel_ctx->handler = handler;
     kernel_ctx->ctx = ctx;
+    kernel_ctx->work_item = dw_create(uacpi_kernel_interrupt_handler_deferred, kernel_ctx);
 
     // @todo: every interrupt will be routed to the bsp :/
     arch_ioapic_map_legacy_irq(irq, CPU_LOCAL_READ(lapic_id), false, true, vector);
