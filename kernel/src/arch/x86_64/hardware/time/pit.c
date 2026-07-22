@@ -21,7 +21,8 @@ static inline void pit_set_reload(uint16_t reload_value) {
 static time_timer_t* g_pit_timer = nullptr;
 
 static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
-    (void) self;
+    arch_interrupt_state_t irq_state = spinlock_noint_lock(&self->lock);
+
     uint64_t total_ticks = (PIT_FREQUENCY * microseconds) / 1000000ULL;
     if(total_ticks == 0) total_ticks = 1;
 
@@ -41,6 +42,8 @@ static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
             last = current;
         }
     }
+
+    spinlock_noint_unlock(&self->lock, irq_state);
 }
 
 time_timer_t* arch_pit_timer_get(void) {
@@ -51,6 +54,8 @@ time_timer_t* arch_pit_timer_get(void) {
         g_pit_timer->sleep = pit_sleep;
         g_pit_timer->read_raw = nullptr;
         g_pit_timer->read_microseconds = nullptr;
+        g_pit_timer->exclusive = true;
+        g_pit_timer->lock = SPINLOCK_NO_INT_INIT;
         g_pit_timer->private = nullptr;
     }
     return g_pit_timer;

@@ -46,6 +46,7 @@ time_timer_t* arch_tsc_init_timer(time_timer_t* calibration_timer) {
         g_tsc_timer->sleep = arch_tsc_sleep;
         g_tsc_timer->read_raw = arch_tsc_read_raw;
         g_tsc_timer->read_microseconds = arch_tsc_read_us;
+        g_tsc_timer->exclusive = false;
         g_tsc_timer->private = nullptr;
     }
 

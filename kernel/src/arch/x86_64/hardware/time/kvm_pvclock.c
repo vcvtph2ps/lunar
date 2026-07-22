@@ -84,6 +84,7 @@ time_timer_t* arch_kvm_pvclock_init() {
     pvclock_timer->sleep = arch_kvm_pvclock_sleep;
     pvclock_timer->read_microseconds = arch_kvm_pvclock_get_us;
     pvclock_timer->read_raw = arch_kvm_pvclock_get_ns;
+    pvclock_timer->exclusive = false;
     pvclock_timer->private = (void*) PTM_TO_HHDM(paddr);
 
     CPU_LOCAL_WRITE(kvm_pvclock, pvclock_timer);

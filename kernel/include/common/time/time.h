@@ -1,4 +1,5 @@
 #pragma once
+#include <common/sync/spinlock.h>
 #include <stdint.h>
 
 typedef struct time_timer time_timer_t;
@@ -20,6 +21,10 @@ struct time_timer {
     time_sleep_fn_t sleep;
     time_read_fn_t read_raw;
     time_read_fn_t read_microseconds;
+
+    // @brief If true, this timer is not per-cpu and must be locked during busy sleep.
+    bool exclusive;
+    spinlock_no_int_t lock;
 
     void* private;
 };
