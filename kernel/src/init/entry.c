@@ -96,6 +96,7 @@ const char* memmap_type_to_string(uint64_t type) {
     LOG_STRC("kernel_segment_count=%zu\n", boot_info->kernel_segment_count);
     for(size_t i = 0; i < boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* segment = &boot_info->kernel_segments[i];
+        (void) segment;
         LOG_STRC(
             "kernel_segment[%zu]: paddr=0x%016lx, vaddr=0x%016lx, size=0x%016lx, flags=%c%c%c\n",
             i,
@@ -110,6 +111,7 @@ const char* memmap_type_to_string(uint64_t type) {
     LOG_STRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
     for(size_t i = 0; i < boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &boot_info->mm_entries[i];
+        (void) entry;
         LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%s (%ld)\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, memmap_type_to_string(entry->type), entry->type);
     }
 
@@ -148,6 +150,7 @@ const char* memmap_type_to_string(uint64_t type) {
 
     for(size_t i = 0; i < boot_info->module_count; i++) {
         bootinfo_module_t* module = &boot_info->modules[i];
+        (void) module;
         LOG_STRC("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
     }
 

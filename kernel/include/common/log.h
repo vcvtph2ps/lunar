@@ -76,6 +76,8 @@ void log_vprint(log_level_t log, const char* fmt, va_list val);
         log_print(LOG_LEVEL_INFO, LOG_COLORIZE("info | ", "96") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
+#if defined(__DEBUG__)
+
 #define LOG_DBGL(fmt, ...)                                                                            \
     do {                                                                                              \
         log_print(LOG_LEVEL_DBGL, LOG_COLORIZE("dbgl | ", "34") "%s: " fmt, __func__, ##__VA_ARGS__); \
@@ -85,3 +87,10 @@ void log_vprint(log_level_t log, const char* fmt, va_list val);
     do {                                                                                              \
         log_print(LOG_LEVEL_STRC, LOG_COLORIZE("strc | ", "95") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
+
+#else
+
+#define LOG_DBGL(fmt, ...)
+#define LOG_STRC(fmt, ...)
+
+#endif
