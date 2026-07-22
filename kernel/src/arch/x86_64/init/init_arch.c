@@ -7,6 +7,8 @@
 #include <arch/x86_64/internal/msr.h>
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <common/arch.h>
+#include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/init.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
@@ -49,6 +51,7 @@ void init_stage_arch_cpu(uint32_t core_id) {
     arch_lapic_init(core_id);
     arch_fpu_init(core_id);
     ipi_init(core_id);
+    CPU_LOCAL_WRITE(online, true);
 }
 
 
@@ -79,15 +82,15 @@ void init_stage_acpi(uint32_t core_id) {
     }
 }
 
+dw_item_t* g_shutdown_item = nullptr;
 
-static uacpi_interrupt_ret power_btn(uacpi_handle ctx) {
+static void shutdown_deferred(void* ctx) {
     (void) ctx;
-    LOG_OKAY("power button pressed\n");
-
+    LOG_INFO("ACPI: Shutting down...\n");
     uacpi_status status = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S5);
     if(status != UACPI_STATUS_OK) {
         LOG_WARN("ACPI: Failed to prepare for S5: %s\n", uacpi_status_to_string(status));
-        return UACPI_INTERRUPT_NOT_HANDLED;
+        return;
     }
 
     (void) arch_interrupt_disable();
@@ -96,14 +99,25 @@ static uacpi_interrupt_ret power_btn(uacpi_handle ctx) {
     status = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5);
     if(uacpi_unlikely_error(status)) {
         LOG_WARN("ACPI: Failed to enter S5: %s\n", uacpi_status_to_string(status));
-        return UACPI_INTERRUPT_NOT_HANDLED;
+        return;
     }
+    ASSERT_UNREACHABLE();
+}
+
+static uacpi_interrupt_ret power_btn(uacpi_handle ctx) {
+    (void) ctx;
+    LOG_OKAY("power button pressed\n");
+
+    dw_queue(g_shutdown_item);
 
     return UACPI_INTERRUPT_HANDLED;
 }
 
 void init_stage_platform(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
+        g_shutdown_item = dw_create(shutdown_deferred, nullptr);
+        g_shutdown_item->cleanup_fn = nullptr;
+
         uacpi_status status = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, power_btn, nullptr);
         if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_install_fixed_event_handler, %s\n", uacpi_status_to_string(status)); }
 

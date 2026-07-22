@@ -1,8 +1,10 @@
 #pragma once
 #include <arch/x86_64/internal/gdt.h>
 #include <arch/x86_64/sched/thread.h>
+#include <common/interrupts/dw.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
+#include <common/sync/spinlock.h>
 #include <common/time/time.h>
 #include <lib/list.h>
 #include <memory/pmm.h>
@@ -18,6 +20,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
 
     uint64_t syscall_scratch;
 
+    bool online;
     uint32_t core_id;
     uint32_t lapic_id;
 
@@ -27,10 +30,18 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
         list_t queue;
     } defered_work;
 
+    bool in_hardirq;
+    bool in_softirq;
+
     pmm_t pmm;
 
     scheduler_t scheduler;
-    ipi_request_t* ipi_queue;
+
+    struct {
+        spinlock_no_int_t lock;
+        ipi_request_t* queue;
+        dw_item_t* dw_item;
+    } ipi;
 
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;

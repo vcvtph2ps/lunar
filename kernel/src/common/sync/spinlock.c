@@ -1,4 +1,6 @@
+#include <arch/x86_64/cpu_local.h>
 #include <common/arch.h>
+#include <common/assert.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
@@ -22,22 +24,32 @@ static inline void spinlock_lock_raw(ATOMIC_PARAM uint32_t* lock) {
 }
 
 void spinlock_lock(spinlock_t* lock) {
+    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_t cannot be used in hardirq context");
+    assert(!CPU_LOCAL_READ(in_softirq) && "spinlock_t cannot be used in softirq context");
+
     sched_preempt_disable();
     spinlock_lock_raw(&lock->lock);
 }
 
 void spinlock_unlock(spinlock_t* lock) {
+    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_t cannot be used in hardirq context");
+    assert(!CPU_LOCAL_READ(in_softirq) && "spinlock_t cannot be used in softirq context");
+
     spinlock_unlock_raw(&lock->lock);
     sched_preempt_enable();
 }
 
 void spinlock_nodw_lock(spinlock_no_dw_t* lock) {
+    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_no_dw_t cannot be used in hardirq context");
+
     sched_preempt_disable();
     dw_status_disable();
     spinlock_lock_raw(&lock->lock);
 }
 
 void spinlock_nodw_unlock(spinlock_no_dw_t* lock) {
+    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_no_dw_t cannot be used in hardirq context");
+
     spinlock_unlock_raw(&lock->lock);
     dw_status_enable();
     sched_preempt_enable();

@@ -9,6 +9,7 @@ void cpu_local_init_bsp(uintptr_t cpu_local_ptr) {
     arch_cpu_local_t* cpu_local = &g_cpu_local_storage[0];
     cpu_local->self = cpu_local;
     cpu_local->core_id = 0;
+    cpu_local->online = false;
 
     // Set to 1 to prevent preemption and deferred work until the scheduler is initialized
     cpu_local->defered_work.counter = 1;
@@ -19,6 +20,7 @@ void cpu_local_init(uint32_t core_id) {
     arch_cpu_local_t* cpu_local = &g_cpu_local_storage[core_id];
     cpu_local->self = cpu_local;
     cpu_local->core_id = core_id;
+    cpu_local->online = false;
 
     // Set to 1 to prevent preemption and deferred work until the scheduler is initialized
     cpu_local->defered_work.counter = 1;

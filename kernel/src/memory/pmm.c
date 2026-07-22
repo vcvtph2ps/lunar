@@ -55,7 +55,17 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
     uintptr_t addr = (uintptr_t) PTM_FROM_HHDM(allocated_entry);
     pagedb_page_ref(addr >> 12);
 
+#if defined(__RELEASE__)
     if(flags & PMM_FLAG_ZERO) { memset((void*) PTM_TO_HHDM(addr), 0, ARCH_PAGE_SIZE_DEFAULT); }
+#else
+    if(flags & PMM_FLAG_ZERO) {
+        memset((void*) PTM_TO_HHDM(addr), 0, ARCH_PAGE_SIZE_DEFAULT);
+    } else {
+        memset((void*) PTM_TO_HHDM(addr), 0xcc, ARCH_PAGE_SIZE_DEFAULT);
+    }
+#endif
+
+
     return addr;
 }
 

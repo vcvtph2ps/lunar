@@ -31,13 +31,27 @@ static const char* g_name_table[22] = { "Divide Error",
                                         "Virtualization Exception",
                                         "Control Protection Exception" };
 
-ATOMIC uint32_t g_panicked = false;
+ATOMIC uint32_t g_panicking_core = 0xffffffff;
 
 [[clang::always_inline]] static void panic_begin() {
     __asm__ volatile("cli;mfence;lfence" ::: "memory");
-    if(ATOMIC_XCHG(&g_panicked, true, ATOMIC_SEQ_CST)) {
+    uint32_t core_id = CPU_LOCAL_READ(core_id);
+
+    uint32_t old_value = ATOMIC_XCHG(&g_panicking_core, core_id, ATOMIC_SEQ_CST);
+
+    if(old_value == core_id) {
+        log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %d (recursive panic)\n", core_id);
         while(1) { arch_wait_for_interrupt(); }
     }
+
+    if(old_value != 0xffffffff) {
+        while(1) { arch_wait_for_interrupt(); }
+    }
+
+    // @note: we set these to false, we need to be able to grab any kind of lock. and it doesn't matter anyway the kernel panicked
+    CPU_LOCAL_WRITE(in_hardirq, false);
+    CPU_LOCAL_WRITE(in_softirq, false);
+
     ipi_broadcast((ipi_message_t) { .type = IPI_HALT });
 
     uint64_t apic_id = arch_get_core_id();

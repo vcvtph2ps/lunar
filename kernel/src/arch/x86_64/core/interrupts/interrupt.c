@@ -76,6 +76,7 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         dw_status_disable();
     }
 
+    CPU_LOCAL_WRITE(in_hardirq, true);
     if(g_handlers[frame->vector] == nullptr && frame->vector < 0x20) { arch_panic_int(frame); }
     if(g_handlers[frame->vector] != nullptr) {
         g_handlers[frame->vector](frame, g_handler_contexts[frame->vector]);
@@ -83,11 +84,14 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         LOG_WARN("No handler registered for interrupt vector 0x%02lx\n", frame->vector);
     }
     if(frame->vector >= 32) arch_lapic_eoi();
+    CPU_LOCAL_WRITE(in_hardirq, false);
 
     if(is_threaded) {
+        CPU_LOCAL_WRITE(in_softirq, false);
         (void) arch_interrupt_enable();
         dw_status_enable();
         (void) arch_interrupt_disable();
+        CPU_LOCAL_WRITE(in_softirq, false);
 
         sched_preempt_enable();
 

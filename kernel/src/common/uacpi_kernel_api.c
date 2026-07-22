@@ -145,72 +145,58 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
     return UACPI_STATUS_OK;
 }
 
-typedef struct {
-    uacpi_io_addr base;
-    uacpi_size len;
-} kernel_io_handle_t;
-
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle* out_handle) {
+    (void) base;
     LOG_STRC("uacpi: mapping io port base=0x%04lx, len=%zu\n", base, len);
-    kernel_io_handle_t* handle = (kernel_io_handle_t*) heap_alloc(sizeof(kernel_io_handle_t));
-    handle->base = base;
-    handle->len = len;
-    *out_handle = (uacpi_handle) handle;
+
+    *out_handle = (uacpi_handle) base;
     return UACPI_STATUS_OK;
 }
 
 void uacpi_kernel_io_unmap(uacpi_handle handle) {
     LOG_STRC("uacpi: unmapping io port handle=%p\n", handle);
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    heap_free(io_handle, sizeof(kernel_io_handle_t));
 }
 
 #if defined(__ARCH_X86_64__)
 uacpi_status uacpi_kernel_io_read8(uacpi_handle handle, uacpi_size offset, uacpi_u8* out_value) {
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    LOG_STRC("uacpi: reading 8-bit value from io port 0x%04lx\n", io_handle->base + offset);
-    assert(offset <= io_handle->len);
-    *out_value = arch_io_port_read_u8(io_handle->base + offset);
+    uacpi_io_addr io_base = (uacpi_io_addr) handle;
+    LOG_STRC("uacpi: reading 8-bit value from io port 0x%04lx\n", io_base + offset);
+    *out_value = arch_io_port_read_u8(io_base + offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_read16(uacpi_handle handle, uacpi_size offset, uacpi_u16* out_value) {
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    LOG_STRC("uacpi: reading 16-bit value from io port 0x%04lx\n", io_handle->base + offset);
-    assert(offset + 1 <= io_handle->len);
-    *out_value = arch_io_port_read_u16(io_handle->base + offset);
+    uacpi_io_addr io_base = (uacpi_io_addr) handle;
+    LOG_STRC("uacpi: reading 16-bit value from io port 0x%04lx\n", io_base + offset);
+    *out_value = arch_io_port_read_u16(io_base + offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_read32(uacpi_handle handle, uacpi_size offset, uacpi_u32* out_value) {
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    LOG_STRC("uacpi: reading 32-bit value from io port 0x%04lx\n", io_handle->base + offset);
-    assert(offset + 3 <= io_handle->len);
-    *out_value = arch_io_port_read_u32(io_handle->base + offset);
+    uacpi_io_addr io_base = (uacpi_io_addr) handle;
+    LOG_STRC("uacpi: reading 32-bit value from io port 0x%04lx\n", io_base + offset);
+    *out_value = arch_io_port_read_u32(io_base + offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_write8(uacpi_handle handle, uacpi_size offset, uacpi_u8 in_value) {
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    LOG_STRC("uacpi: write 8-bit value to io port 0x%04lx = 0x%02x\n", io_handle->base + offset, in_value);
-    assert(offset <= io_handle->len);
-    arch_io_port_write_u8(io_handle->base + offset, in_value);
+    uacpi_io_addr io_base = (uacpi_io_addr) handle;
+    LOG_STRC("uacpi: write 8-bit value to io port 0x%04lx = 0x%02x\n", io_base + offset, in_value);
+    arch_io_port_write_u8(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_write16(uacpi_handle handle, uacpi_size offset, uacpi_u16 in_value) {
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    LOG_STRC("uacpi: write 16-bit value to io port 0x%04lx = 0x%04x\n", io_handle->base + offset, in_value);
-    assert(offset + 1 <= io_handle->len);
-    arch_io_port_write_u16(io_handle->base + offset, in_value);
+    uacpi_io_addr io_base = (uacpi_io_addr) handle;
+    LOG_STRC("uacpi: write 16-bit value to io port 0x%04lx = 0x%04x\n", io_base + offset, in_value);
+    arch_io_port_write_u16(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_write32(uacpi_handle handle, uacpi_size offset, uacpi_u32 in_value) {
-    kernel_io_handle_t* io_handle = (kernel_io_handle_t*) handle;
-    LOG_STRC("uacpi: write 32-bit value to io port 0x%04lx = 0x%08x\n", io_handle->base + offset, in_value);
-    assert(offset + 3 <= io_handle->len);
-    arch_io_port_write_u32(io_handle->base + offset, in_value);
+    uacpi_io_addr io_base = (uacpi_io_addr) handle;
+    LOG_STRC("uacpi: write 32-bit value to io port 0x%04lx = 0x%08x\n", io_base + offset, in_value);
+    arch_io_port_write_u32(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
 #elif defined(__ARCH_RISCV64__)
