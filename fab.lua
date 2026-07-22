@@ -74,6 +74,7 @@ if opt_build_type == "release" then
     table.extend(c_flags, {
         "-O3",
         "-flto",
+        "-D__RELEASE__"
     })
 elseif opt_build_type == "debug" then
     table.extend(c_flags, {
@@ -81,6 +82,7 @@ elseif opt_build_type == "debug" then
         "-g",
         "-fno-lto",
         "-fno-omit-frame-pointer",
+        "-D__DEBUG__"
     })
 end
 
