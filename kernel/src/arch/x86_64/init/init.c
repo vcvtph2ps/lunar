@@ -3,6 +3,7 @@
 #include <arch/x86_64/internal/msr.h>
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <common/arch.h>
+#include <common/cpu_local.h>
 #include <common/init.h>
 #include <common/interrupts/dw.h>
 #include <common/log.h>
@@ -18,6 +19,10 @@ init_stage_handler_t g_init_stage_handlers[] = {
     INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
     INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
     INIT_STAGE(INIT_STAGE_SCHED, sched_init),
+    INIT_STAGE(INIT_STAGE_ACPI_EARLY, init_stage_acpi_early),
+    INIT_STAGE(INIT_STAGE_PLATFORM_EARLY, init_stage_platform_early),
+    INIT_STAGE(INIT_STAGE_ACPI, init_stage_acpi),
+    INIT_STAGE(INIT_STAGE_PLATFORM, init_stage_platform),
 };
 
 #undef INIT_STAGE
@@ -35,18 +40,29 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
 
 ATOMIC uint32_t g_init_finished_core_count = 0;
 
+static void arch_init_thread() {
+    uint32_t core_id = CPU_LOCAL_READ(core_id);
+    run_stage(INIT_STAGE_ACPI_EARLY, core_id);
+    run_stage(INIT_STAGE_PLATFORM_EARLY, core_id);
+    run_stage(INIT_STAGE_ACPI, core_id);
+    run_stage(INIT_STAGE_PLATFORM, core_id);
+
+    // let APs know they can start init, and wait for them
+    ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
+    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
+}
+
 void arch_init_bsp() {
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     run_stage(INIT_STAGE_TIME, 0);
     run_stage(INIT_STAGE_SCHED, 0);
 
-    // let APs know they can start init, and wait for them
-    ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
-    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
+    thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
+    thread->migratable = false;
 
+    sched_thread_schedule(thread);
     sched_arch_handoff();
-    while(1) { arch_spin_hint(); }
 }
 
 void arch_init_ap(uint32_t core_id) {
@@ -59,10 +75,9 @@ void arch_init_ap(uint32_t core_id) {
     run_stage(INIT_STAGE_TIME, core_id);
     run_stage(INIT_STAGE_SCHED, core_id);
 
-    // signal that this core has finished init
-    ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
-    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
+    thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
+    thread->migratable = false;
 
+    sched_thread_schedule(thread);
     sched_arch_handoff();
-    while(1) { arch_spin_hint(); }
 }

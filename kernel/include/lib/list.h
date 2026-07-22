@@ -1,5 +1,6 @@
 #pragma once
 
+#include <lib/helpers.h>
 #include <stddef.h>
 #include <stdint.h>
 

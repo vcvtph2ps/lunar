@@ -26,9 +26,16 @@ local flanterm = fab.git(
     "ef09b0cebee940a89d21ccf17e193782f440a856"
 )
 
+local uacpi = fab.git(
+    "uacpi",
+    "https://github.com/uACPI/uACPI.git",
+    "9c9b26d6291a1cdd9014cc5bb6b03e596697cbfd"
+)
+
 local function get_kernel_objs(kernel_flags)
     local kernel_sources = sources(fab.glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
     table.extend(kernel_sources, sources(fab.glob(path("kernel/src/arch", opt_arch, "**/*.c"))))
+    table.extend(kernel_sources, sources(fab.glob("source/*.c", { relative_to = uacpi.path })))
 
     if opt_arch == "x86_64" then
         table.extend(kernel_sources, sources(fab.glob("kernel/src/arch/x86_64/**/*.asm")))
@@ -43,6 +50,7 @@ local function get_kernel_objs(kernel_flags)
     table.insert(kernel_include_dirs,
         c.include_dir(path(fab.build_dir(), prekernel_protocol.path, "pre_kernel", "public")))
     table.insert(kernel_include_dirs, c.include_dir(path(fab.build_dir(), flanterm.path, "src")))
+    table.insert(kernel_include_dirs, c.include_dir(path(fab.build_dir(), uacpi.path, "include")))
 
     local generators = {
         c = function(sources) return clang:generate(sources, kernel_flags, kernel_include_dirs) end
@@ -67,6 +75,8 @@ local c_flags = {
     "-Wmissing-field-initializers",
 
     "-fdiagnostics-color=always",
+    "-DUACPI_FORMATTED_LOGGING",
+    "-DUACPI_SIZED_FREES"
 }
 
 -- Flags
