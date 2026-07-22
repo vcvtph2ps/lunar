@@ -117,6 +117,7 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     CPU_LOCAL_WRITE(current_thread, next);
 
     t_current->state = yield_state; // @note: possible race here since we haven't *stopped* using the thread but it would be marked ready
+    t_next->state = THREAD_STATE_RUNNING;
     x86_64_thread_t* prev = x86_64_context_switch(current, next);
     internal_sched_thread_drop(&prev->common);
 }

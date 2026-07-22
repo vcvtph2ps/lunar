@@ -60,12 +60,13 @@ void sched_yield(thread_state_t yield_state) {
     thread_t* current = sched_arch_thread_current();
 
     thread_t* next = sched_next_thread(&CPU_LOCAL_GET_SELF()->scheduler);
-    if(next == nullptr && current != current->sched->idle_thread) next = current->sched->idle_thread;
+    // If we have no next thread, and the current thread is ready to run, we can just continue running the current thread
+    if(next == nullptr && current != current->sched->idle_thread && yield_state != THREAD_STATE_READY) next = current->sched->idle_thread;
     if(next != nullptr) {
         assert(current != next);
         sched_arch_context_switch(current, next, yield_state);
     } else {
-        assert(current->state == yield_state);
+        assert(yield_state == THREAD_STATE_READY);
     }
 
     sched_arch_reset_preempt_timer();
