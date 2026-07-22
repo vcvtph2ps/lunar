@@ -119,7 +119,7 @@ static void init_ioapic(struct acpi_madt_ioapic* entry) {
     uint32_t ver = ioapic_read(ioapic, IOAPIC_REG_VER);
     ioapic->gsi_count = ((ver >> 16) & 0xFF) + 1;
 
-    LOG_INFO("ioapic[%u] mmio: 0x%x -> 0x%lx ver: 0x%08x, gsi range: %u-%u\n", ioapic->id, entry->address, mmio_virt, ver & 0xff, ioapic->gsi_base, ioapic->gsi_count);
+    LOG_INFO("ioapic[%lu] id: %u, mmio: 0x%x -> 0x%lx ver: 0x%08x, gsi range: %u-%u\n", g_ioapics.count, ioapic->id, entry->address, mmio_virt, ver & 0xff, ioapic->gsi_base, ioapic->gsi_count);
     for(uint32_t i = 0; i < ioapic->gsi_count; i++) { ioapic_set_entry(ioapic, i, IOAPIC_MASKED); }
 
     list_push_back(&g_ioapics, &ioapic->list_node);
