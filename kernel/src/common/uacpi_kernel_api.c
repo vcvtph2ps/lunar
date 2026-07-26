@@ -93,55 +93,77 @@ void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* fmt, ...) {
     va_end(val);
 }
 
+extern bool g_pci_acpi_initialized;
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle* out_handle) {
     LOG_INFO("uacpi: opening pci device at %04x:%02x:%02x:%02x\n", address.segment, address.bus, address.device, address.function);
 
-    pci_device_handle_t* handle = (pci_device_handle_t*) heap_alloc(sizeof(pci_device_handle_t));
-    handle->segment = address.segment;
-    handle->bus = address.bus;
-    handle->device = address.device;
-    handle->function = address.function;
-    *out_handle = (uacpi_handle) handle;
+    if(!g_pci_acpi_initialized) {
+        pci_device_access_t* access = (pci_device_access_t*) heap_alloc(sizeof(pci_device_access_t));
+        assert(address.segment == 0);
+        access->segment = address.segment;
+        access->bus = address.bus;
+        access->device = address.device;
+        access->function = address.function;
+        access->ecam_window = nullptr;
+
+        pci_ecam_region_t* ecam_base = pci_find_ecam_region(address.segment, address.bus);
+        if(ecam_base == nullptr && address.segment != 0) {
+            arch_panic("uacpi: failed to find ecam region for segment %04x bus %02x\n", address.segment, address.bus);
+        } else if(ecam_base == nullptr) {
+            *out_handle = (uacpi_handle) access;
+            return UACPI_STATUS_OK;
+        }
+        access->ecam_window = (uint32_t*) (ecam_base->mmio_base + pci_ecam_offset(address.bus, address.device, address.function));
+        *out_handle = (uacpi_handle) access;
+    } else {
+        pci_device_t* device;
+        if(!pci_device_find(address.segment, address.bus, address.device, address.function, &device)) {
+            LOG_FAIL("uacpi: failed to find pci device at %04x:%02x:%02x:%02x\n", address.segment, address.bus, address.device, address.function);
+            return UACPI_STATUS_NOT_FOUND;
+        }
+        *out_handle = (uacpi_handle) device;
+    }
+
     return UACPI_STATUS_OK;
 }
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) handle;
-    heap_free(pci_handle, sizeof(pci_device_handle_t));
+    pci_device_access_t* pci_access = (pci_device_access_t*) handle;
+    heap_free(pci_access, sizeof(pci_device_access_t));
 }
 
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8* value) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) device;
-    *value = pci_arch_read8(pci_handle, offset);
+    pci_device_access_t* pci_access = (pci_device_access_t*) device;
+    *value = pci_device_read_u8(pci_access, offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16* value) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) device;
-    *value = pci_arch_read16(pci_handle, offset);
+    pci_device_access_t* pci_access = (pci_device_access_t*) device;
+    *value = pci_device_read_u16(pci_access, offset);
     return UACPI_STATUS_OK;
 }
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32* value) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) device;
-    *value = pci_arch_read32(pci_handle, offset);
+    pci_device_access_t* pci_access = (pci_device_access_t*) device;
+    *value = pci_device_read_u32(pci_access, offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uacpi_u8 value) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) device;
-    pci_arch_write8(pci_handle, offset, value);
+    pci_device_access_t* pci_access = (pci_device_access_t*) device;
+    pci_device_write_u8(pci_access, offset, value);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, uacpi_u16 value) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) device;
-    pci_arch_write16(pci_handle, offset, value);
+    pci_device_access_t* pci_access = (pci_device_access_t*) device;
+    pci_device_write_u16(pci_access, offset, value);
     return UACPI_STATUS_OK;
 }
 uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, uacpi_u32 value) {
-    pci_device_handle_t* pci_handle = (pci_device_handle_t*) device;
-    pci_arch_write32(pci_handle, offset, value);
+    pci_device_access_t* pci_access = (pci_device_access_t*) device;
+    pci_device_write_u32(pci_access, offset, value);
     return UACPI_STATUS_OK;
 }
 
@@ -270,6 +292,12 @@ void uacpi_kernel_stall(uacpi_u8 usec) {
  * Sleep for N milliseconds.
  */
 void uacpi_kernel_sleep(uacpi_u64 msec) {
+    if(msec == 0) { return; }
+    if(CPU_LOCAL_READ(scheduler.preempt_counter) > 0) {
+        LOG_WARN("uacpi: sleep called with preemption disabled, busy-waiting for %lu ms\n", msec);
+        uacpi_kernel_stall(msec * 1000);
+        return;
+    }
     sched_sleep(msec);
 }
 
@@ -385,14 +413,14 @@ void uacpi_kernel_restore_interrupts(uacpi_interrupt_state interrupt_state) {
  */
 uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle handle, uacpi_u16 timeout) {
     assert(timeout == 0xffff);
-    mutex_t* spinlock = (mutex_t*) handle;
-    mutex_acquire(spinlock);
+    mutex_t* mutex = (mutex_t*) handle;
+    mutex_acquire(mutex);
     return UACPI_STATUS_OK;
 }
 
 void uacpi_kernel_release_mutex(uacpi_handle handle) {
-    mutex_t* spinlock = (mutex_t*) handle;
-    mutex_release(spinlock);
+    mutex_t* mutex = (mutex_t*) handle;
+    mutex_release(mutex);
 }
 
 /**

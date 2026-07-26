@@ -1,3 +1,4 @@
+#include <arch/x86_64/hardware/ec.h>
 #include <arch/x86_64/hardware/fpu.h>
 #include <arch/x86_64/hardware/ioapic.h>
 #include <arch/x86_64/hardware/lapic.h>
@@ -9,22 +10,30 @@
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/cpu_local.h>
+#include <common/hardware/pci.h>
 #include <common/init.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <memory/heap.h>
+#include <memory/vm.h>
 #include <uacpi/acpi.h>
 #include <uacpi/event.h>
+#include <uacpi/namespace.h>
 #include <uacpi/sleep.h>
 #include <uacpi/status.h>
 #include <uacpi/tables.h>
+#include <uacpi/types.h>
 #include <uacpi/utilities.h>
 
 void init_stage_acpi_early(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         uacpi_status status = uacpi_initialize(UACPI_FLAG_BAD_CSUM_FATAL);
         if(uacpi_unlikely_error(status)) { arch_panic("ACPI: early initialization failed uacpi_initialize, %s\n", uacpi_status_to_string(status)); }
+        pci_early_init();
     }
 }
 
@@ -81,6 +90,11 @@ static uacpi_interrupt_ret power_btn(uacpi_handle ctx) {
 
 void init_stage_platform(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
+        arch_ec_init(core_id);
+
+        bool pci = pci_init();
+        assert(pci && "PCI: Failed to initialize PCI from ACPI");
+
         g_shutdown_item = dw_create(shutdown_deferred, nullptr);
         g_shutdown_item->cleanup_fn = nullptr;
 

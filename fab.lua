@@ -75,8 +75,7 @@ local c_flags = {
     "-Wmissing-field-initializers",
 
     "-fdiagnostics-color=always",
-    "-DUACPI_FORMATTED_LOGGING",
-    "-DUACPI_SIZED_FREES"
+    "-DUACPI_OVERRIDE_CONFIG"
 }
 
 -- Flags
