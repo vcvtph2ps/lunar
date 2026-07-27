@@ -37,8 +37,8 @@ void arch_gdt_init() {
     arch_gdt_t* gdt = &CPU_LOCAL_GET_SELF()->gdt;
     arch_gdt_tss_t* tss = &CPU_LOCAL_GET_SELF()->tss;
 
-    memcpy(gdt, &g_arch_gdt_static_data, sizeof(arch_gdt_t));
-    memset(tss, 0, sizeof(arch_gdt_tss_t));
+    memory_copy(gdt, &g_arch_gdt_static_data, sizeof(arch_gdt_t));
+    memory_zero(tss, sizeof(arch_gdt_tss_t));
 
     virt_addr_t ist1_stack_virt = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, IST_PAGE_COUNT * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, true);
     virt_addr_t ist2_stack_virt = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, IST_PAGE_COUNT * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, true);

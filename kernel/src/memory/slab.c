@@ -16,7 +16,7 @@ static slab_cache_t g_alloc_magazine;
 static slab_t* slab_cache_create_slab(slab_cache_t* cache) {
     virt_addr_t block = (virt_addr_t) vm_map_anon_aligned(g_vm_global_address_space, VM_NO_HINT, cache->slab_size, cache->slab_align, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
     slab_t* slab = (slab_t*) ((block + cache->slab_size) - sizeof(slab_t));
-    memset(slab, 0, sizeof(slab_t));
+    memory_zero(slab, sizeof(slab_t));
     slab->cache = cache;
     slab->buffer = block;
     slab->free_list = nullptr;
@@ -270,7 +270,7 @@ slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t ali
     assert(alignment > 0 && "alignment must be greater than 0");
 
     slab_cache_t* cache = slab_cache_alloc_from_slab(&g_alloc_cache);
-    memset(cache, 0, sizeof(slab_cache_t) + (g_init_boot_info->core_count * sizeof(slab_cpu_cache_t)));
+    memory_zero(cache, sizeof(slab_cache_t) + (g_init_boot_info->core_count * sizeof(slab_cpu_cache_t)));
     cache->name = name;
     cache->object_size = object_size;
     cache->slab_size = PAGE_SIZE_DEFAULT * 4;

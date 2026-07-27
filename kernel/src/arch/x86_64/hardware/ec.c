@@ -185,7 +185,7 @@ static uacpi_iteration_decision ec_find_callback(void* user, uacpi_namespace_nod
         return UACPI_ITERATION_DECISION_CONTINUE;
     }
 
-    memset(device, 0, sizeof(ec_device_t));
+    memory_zero(device, sizeof(ec_device_t));
 
     if(!ec_setup_device(device, node)) {
         LOG_FAIL("ec(%s): failed to setup device\n", uacpi_namespace_node_generate_absolute_path(node));

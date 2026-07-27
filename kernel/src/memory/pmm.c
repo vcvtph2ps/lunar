@@ -56,15 +56,14 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
     pagedb_page_ref(addr >> 12);
 
 #if defined(__RELEASE__)
-    if(flags & PMM_FLAG_ZERO) { memset((void*) PTM_TO_HHDM(addr), 0, ARCH_PAGE_SIZE_DEFAULT); }
+    if(flags & PMM_FLAG_ZERO) { memory_zero((void*) PTM_TO_HHDM(addr), ARCH_PAGE_SIZE_DEFAULT); }
 #else
     if(flags & PMM_FLAG_ZERO) {
-        memset((void*) PTM_TO_HHDM(addr), 0, ARCH_PAGE_SIZE_DEFAULT);
+        memory_zero((void*) PTM_TO_HHDM(addr), ARCH_PAGE_SIZE_DEFAULT);
     } else {
-        memset((void*) PTM_TO_HHDM(addr), 0xcc, ARCH_PAGE_SIZE_DEFAULT);
+        memory_set((void*) PTM_TO_HHDM(addr), 0xcc, ARCH_PAGE_SIZE_DEFAULT);
     }
 #endif
-
 
     return addr;
 }

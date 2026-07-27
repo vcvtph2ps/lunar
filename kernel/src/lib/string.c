@@ -7,7 +7,7 @@
 
 // taken from https://git.evalyngoemer.com/evalynOS/evalynOS/src/commit/54fc9102b75f853f05f3326c2a3ad84f082ff31e/kernel/src/libc/string.c
 // thanks evalyn :3
-[[gnu::weak]] void* memcpy(void* restrict dest, const void* restrict src, size_t n) {
+[[gnu::weak]] void* memory_copy(void* restrict dest, const void* restrict src, size_t n) {
 // on x86 do a rep movsb if copying 2kb+
 #if defined(__ARCH_X86_64__)
     if(n >= 2048) {
@@ -68,7 +68,7 @@
     return dest;
 }
 
-[[gnu::weak]] void* memset(void* s, int c, size_t n) {
+[[gnu::weak]] void* memory_set(void* s, int c, size_t n) {
 // on x86 do a rep stosb if setting more than 2kb
 #if defined(__ARCH_X86_64__)
     if(n >= 2048) {
@@ -126,7 +126,7 @@
     return s;
 }
 
-[[gnu::weak]] void memmove(void* dest, const void* src, size_t count) {
+[[gnu::weak]] void memory_move(void* dest, const void* src, size_t count) {
     if(src == dest) return;
     if(src > dest) {
         for(size_t i = 0; i < count; i++) ((uint8_t*) dest)[i] = ((uint8_t*) src)[i];
@@ -135,7 +135,11 @@
     }
 }
 
-int memcmp(const void* lhs, const void* rhs, size_t count) {
+void* memory_zero(void* dest, size_t count) {
+    return memory_set(dest, 0, count);
+}
+
+int memory_compare(const void* lhs, const void* rhs, size_t count) {
     for(size_t i = 0; i < count; i++) {
         if(*((uint8_t*) lhs + i) > *((uint8_t*) rhs + i)) return -1;
         if(*((uint8_t*) lhs + i) < *((uint8_t*) rhs + i)) return 1;
@@ -143,13 +147,13 @@ int memcmp(const void* lhs, const void* rhs, size_t count) {
     return 0;
 }
 
-int strlen(const char* str) {
+int string_length(const char* str) {
     int length = 0;
     while(str[length] != '\0') length++;
     return length;
 }
 
-int strcmp(const char* s1, const char* s2) {
+int string_compare(const char* s1, const char* s2) {
     while(*s1 && (*s1 == *s2)) {
         s1++;
         s2++;
@@ -157,7 +161,7 @@ int strcmp(const char* s1, const char* s2) {
     return *(const unsigned char*) s1 - *(const unsigned char*) s2;
 }
 
-int strcasecmp(const char* s1, const char* s2) {
+int string_compare_i(const char* s1, const char* s2) {
     while(*s1 && *s2) {
         unsigned char c1 = (unsigned char) *s1;
         unsigned char c2 = (unsigned char) *s2;
@@ -169,3 +173,8 @@ int strcasecmp(const char* s1, const char* s2) {
     }
     return *(const unsigned char*) s1 - *(const unsigned char*) s2;
 }
+
+[[gnu::alias("memory_set")]] void* memset(void* dest, int ch, size_t count);
+[[gnu::alias("memory_copy")]] void* memcpy(void* restrict dest, const void* restrict src, size_t count);
+[[gnu::alias("memory_move")]] void memmove(void* dest, const void* src, size_t count);
+[[gnu::alias("memory_compare")]] int memcmp(const void* lhs, const void* rhs, size_t count);

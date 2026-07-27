@@ -18,8 +18,8 @@ void ipi_send(uint32_t core_id, ipi_message_t message) {
         return;
     }
 
-    ipi_request_t* request = (ipi_request_t*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC));
-    memcpy(&request->message, &message, sizeof(ipi_message_t));
+    ipi_request_t* request = (ipi_request_t*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_PANIC));
+    memory_copy(&request->message, &message, sizeof(ipi_message_t));
     ATOMIC_STORE(&request->next, nullptr, ATOMIC_SEQ_CST);
 
     arch_interrupt_state_t state = spinlock_noint_lock(&cpu_local->ipi.lock);
@@ -61,7 +61,7 @@ bool ipi_pop(ipi_message_t* message) {
     ATOMIC_STORE(&cpu_local->ipi.queue, ATOMIC_LOAD(&request->next, ATOMIC_SEQ_CST), ATOMIC_SEQ_CST);
 
     spinlock_noint_unlock(&cpu_local->ipi.lock, state);
-    memcpy(message, &request->message, sizeof(ipi_message_t));
+    memory_copy(message, &request->message, sizeof(ipi_message_t));
 
     // @note: this can deadlock :/
     pmm_free_page((uintptr_t) PTM_FROM_HHDM(request));

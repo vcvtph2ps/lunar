@@ -98,7 +98,7 @@ static void parse_interrupt_table(pci_host_bridge_t* pci_host_bridge, uint8_t bu
             LOG_WARN("Failed to allocate memory for PCI interrupt entry\n");
             continue;
         }
-        memset(interrupt_entry, 0, sizeof(pci_group_interrupt_entry_t));
+        memory_zero(interrupt_entry, sizeof(pci_group_interrupt_entry_t));
         interrupt_entry->bus = bus;
         interrupt_entry->device = entry->address >> 16;
         interrupt_entry->pin = entry->pin;
@@ -274,7 +274,7 @@ static uacpi_iteration_decision pci_iteration_callback(void* user, uacpi_namespa
         LOG_FAIL("Failed to allocate memory for PCI host bridge\n");
         return UACPI_ITERATION_DECISION_CONTINUE;
     }
-    memory_set(host_bridge, 0, sizeof(pci_host_bridge_t));
+    memory_zero(host_bridge, sizeof(pci_host_bridge_t));
     host_bridge->interrupt_entries = LIST_INIT;
 
     list_push_back(&g_pci_host_bridges, &host_bridge->host_bridge_list_node);

@@ -173,7 +173,7 @@ bool pci_create_device(pci_host_bridge_t* pci_host_bridge, pci_device_t* parent_
     pci_device_t* pci_device = heap_alloc(sizeof(pci_device_t));
     if(!pci_device) { return false; }
 
-    memset(pci_device, 0, sizeof(pci_device_t));
+    memory_zero(pci_device, sizeof(pci_device_t));
 
     pci_device->access.segment = pci_host_bridge->segment;
     pci_device->access.bus = bus;

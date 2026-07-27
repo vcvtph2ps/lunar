@@ -105,7 +105,8 @@ static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
             }
             break;
         case VM_REGION_TYPE_DIRECT:
-            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, region->mmio)) return false;
+            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, region->mmio))
+                return false;
             break;
     }
     return true;
@@ -436,7 +437,7 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
     region->cache = cache;
     region->dynamically_backed = (flags & VM_FLAG_DYNAMICALLY_BACKED) != 0;
     region->shared = (flags & VM_FLAG_SHARED) != 0;
-    region->mmio   = (flags & VM_FLAG_MMIO) != 0;
+    region->mmio = (flags & VM_FLAG_MMIO) != 0;
 
     switch(region->type) {
         case VM_REGION_TYPE_ANON: region->type_data.anon.back_zeroed = (flags & VM_FLAG_ZERO) != 0; break;
@@ -498,7 +499,7 @@ size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, void* src, s
         }
 
         size_t len = math_min(count - i, PAGE_SIZE_DEFAULT - offset);
-        memcpy((void*) PTM_TO_HHDM(phys), (void*) src_ptr, len);
+        memory_copy((void*) PTM_TO_HHDM(phys), (void*) src_ptr, len);
         i += len;
         src_ptr += len;
     }
@@ -520,7 +521,7 @@ size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, 
         }
 
         size_t len = math_min(count - i, PAGE_SIZE_DEFAULT - offset);
-        memcpy((void*) dest_ptr, (void*) PTM_TO_HHDM(phys), len);
+        memory_copy((void*) dest_ptr, (void*) PTM_TO_HHDM(phys), len);
         i += len;
         dest_ptr += len;
     }

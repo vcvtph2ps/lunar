@@ -110,7 +110,7 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, void* proces
     (void) process;
 
     x86_64_thread_t* thread = heap_alloc(sizeof(x86_64_thread_t));
-    memset(thread, 0, sizeof(x86_64_thread_t));
+    memory_zero(thread, sizeof(x86_64_thread_t));
     thread->common.lock = SPINLOCK_NO_DW_INIT;
     thread->common.tid = tid;
     thread->common.state = THREAD_STATE_READY;
@@ -128,7 +128,7 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
     virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
 
     init_stack_kernel_t* init_stack = (init_stack_kernel_t*) (kernel_stack_top - sizeof(init_stack_kernel_t));
-    memset(init_stack, 0, sizeof(init_stack_kernel_t));
+    memory_zero(init_stack, sizeof(init_stack_kernel_t));
     init_stack->entry = entry;
     init_stack->thread_init = (virt_addr_t) internal_thread_init_common;
     init_stack->thread_exit = (virt_addr_t) internal_thread_exit_kernel;

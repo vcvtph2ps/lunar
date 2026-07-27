@@ -42,7 +42,7 @@ static const char* get_name(header_t* header, uint64_t name_offset) {
 
 void ksym_load(void* symbol_data) {
     if(g_kernel_symbols_header != nullptr) LOG_WARN("ksym: symbol data reloaded");
-    if(memcmp(symbol_data, IDENTIFIER, 4) != 0) arch_panic("ksym: invalid kernel symbol file identifier");
+    if(memory_compare(symbol_data, IDENTIFIER, 4) != 0) arch_panic("ksym: invalid kernel symbol file identifier");
     header_t* header = (header_t*) symbol_data;
     if(header->revision > REVISION) arch_panic("ksym: invalid kernel symbol file revision");
     g_kernel_symbols_header = header;
@@ -85,7 +85,7 @@ bool ksym_lookup_by_name(const char* name, ksym_kernel_symbol_t* symbol) {
     for(size_t i = 0; i < g_kernel_symbols_header->symbols_count; i++) {
         symbol_t* ksymbol = SYMBOL_AT(g_kernel_symbols_header, i);
         if(!IS_GLOBAL(ksymbol)) continue;
-        if(!strcmp(get_name(g_kernel_symbols_header, ksymbol->name_offset), name)) continue;
+        if(!string_compare(get_name(g_kernel_symbols_header, ksymbol->name_offset), name)) continue;
 
         symbol->name = get_name(g_kernel_symbols_header, ksymbol->name_offset);
         symbol->address = ksymbol->value;

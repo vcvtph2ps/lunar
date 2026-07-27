@@ -154,7 +154,7 @@ const char* memmap_type_to_string(uint64_t type) {
         bootinfo_module_t* module = &boot_info->modules[i];
         (void) module;
         LOG_STRC("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
-        if(strcmp(module->name, "/boot/kernel.ksym") == 0) { ksym_load((void*) module->phys_addr + g_init_boot_info->hhdm_offset); }
+        if(string_compare(module->name, "/boot/kernel.ksym") == 0) { ksym_load((void*) module->phys_addr + g_init_boot_info->hhdm_offset); }
     }
 
     LOG_STRC("cpu_count=%ld\n", boot_info->core_count);
