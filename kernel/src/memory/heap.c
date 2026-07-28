@@ -65,7 +65,12 @@ void* heap_realloc(void* address, size_t current_size, size_t new_size) {
 }
 
 void* heap_reallocarray(void* array, size_t element_size, size_t current_count, size_t new_count) {
-    return heap_realloc(array, current_count * element_size, new_count * element_size);
+    size_t old_bytes;
+    if(__builtin_mul_overflow(current_count, element_size, &old_bytes)) { return nullptr; }
+
+    size_t new_bytes;
+    if(__builtin_mul_overflow(new_count, element_size, &new_bytes)) { return nullptr; }
+    return heap_realloc(array, old_bytes, new_count);
 }
 
 void heap_free(void* address, size_t size) {

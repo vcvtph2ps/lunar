@@ -17,7 +17,6 @@ void mutex_acquire(mutex_t* mutex) {
 
     for(int i = 0; i < 50; i++) {
         if(EXPECT_LIKELY(try_lock(mutex, true))) return;
-        sched_yield(THREAD_STATE_READY);
     }
 
     arch_interrupt_state_t previous_state = spinlock_noint_lock(&mutex->lock);

@@ -39,6 +39,10 @@ void* uacpi_kernel_map(uacpi_phys_addr paddr, uacpi_size length) {
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
 
     virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_NORMAL, aligned_paddr, VM_FLAG_NONE);
+    if(vaddr == 0) {
+        LOG_FAIL("uacpi: failed to map physical address %p, length=%zu\n", (void*) paddr, length);
+        return nullptr;
+    }
 
     return (void*) (vaddr + alignment_diff);
 }
@@ -95,11 +99,19 @@ void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* fmt, ...) {
 
 extern bool g_pci_acpi_initialized;
 
+typedef struct {
+    bool allocated;
+    pci_device_access_t* access;
+} pci_handle_t;
+
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle* out_handle) {
     LOG_INFO("uacpi: opening pci device at %04x:%02x:%02x:%02x\n", address.segment, address.bus, address.device, address.function);
 
+    pci_handle_t* handle = (pci_handle_t*) heap_alloc(sizeof(pci_handle_t));
+
     if(!g_pci_acpi_initialized) {
         pci_device_access_t* access = (pci_device_access_t*) heap_alloc(sizeof(pci_device_access_t));
+
         assert(address.segment == 0);
         access->segment = address.segment;
         access->bus = address.bus;
@@ -107,21 +119,27 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handl
         access->function = address.function;
         access->ecam_window = nullptr;
 
+        handle->allocated = true;
+        handle->access = access;
+        *out_handle = (uacpi_handle) handle;
+
         pci_ecam_region_t* ecam_base = pci_find_ecam_region(address.segment, address.bus);
         if(ecam_base == nullptr && address.segment != 0) {
             arch_panic("uacpi: failed to find ecam region for segment %04x bus %02x\n", address.segment, address.bus);
         } else if(ecam_base == nullptr) {
-            *out_handle = (uacpi_handle) access;
             return UACPI_STATUS_OK;
         }
         access->ecam_window = (uint32_t*) (ecam_base->mmio_base + pci_ecam_offset(address.bus, address.device, address.function));
-        *out_handle = (uacpi_handle) access;
     } else {
         pci_device_t* device;
         if(!pci_device_find(address.segment, address.bus, address.device, address.function, &device)) {
             LOG_FAIL("uacpi: failed to find pci device at %04x:%02x:%02x:%02x\n", address.segment, address.bus, address.device, address.function);
+            heap_free(handle, sizeof(pci_handle_t));
             return UACPI_STATUS_NOT_FOUND;
         }
+
+        handle->allocated = false;
+        handle->access = &device->access;
         *out_handle = (uacpi_handle) device;
     }
 
@@ -129,41 +147,42 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handl
 }
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) handle;
-    heap_free(pci_access, sizeof(pci_device_access_t));
+    pci_handle_t* pci_handle = (pci_handle_t*) handle;
+    if(pci_handle->allocated) { heap_free(pci_handle->access, sizeof(pci_device_access_t)); }
+    heap_free(pci_handle, sizeof(pci_handle_t));
 }
 
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8* value) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) device;
-    *value = pci_device_read_u8(pci_access, offset);
+    pci_handle_t* pci_access = (pci_handle_t*) device;
+    *value = pci_device_read_u8(pci_access->access, offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16* value) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) device;
-    *value = pci_device_read_u16(pci_access, offset);
+    pci_handle_t* pci_access = (pci_handle_t*) device;
+    *value = pci_device_read_u16(pci_access->access, offset);
     return UACPI_STATUS_OK;
 }
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32* value) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) device;
-    *value = pci_device_read_u32(pci_access, offset);
+    pci_handle_t* pci_access = (pci_handle_t*) device;
+    *value = pci_device_read_u32(pci_access->access, offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uacpi_u8 value) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) device;
-    pci_device_write_u8(pci_access, offset, value);
+    pci_handle_t* pci_access = (pci_handle_t*) device;
+    pci_device_write_u8(pci_access->access, offset, value);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, uacpi_u16 value) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) device;
-    pci_device_write_u16(pci_access, offset, value);
+    pci_handle_t* pci_access = (pci_handle_t*) device;
+    pci_device_write_u16(pci_access->access, offset, value);
     return UACPI_STATUS_OK;
 }
 uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, uacpi_u32 value) {
-    pci_device_access_t* pci_access = (pci_device_access_t*) device;
-    pci_device_write_u32(pci_access, offset, value);
+    pci_handle_t* pci_access = (pci_handle_t*) device;
+    pci_device_write_u32(pci_access->access, offset, value);
     return UACPI_STATUS_OK;
 }
 
@@ -323,7 +342,7 @@ typedef struct {
  * Create/free an opaque kernel (semaphore-like) event object.
  */
 uacpi_handle uacpi_kernel_create_event(void) {
-    return (uacpi_handle) heap_alloc(sizeof(kernel_event_t));
+    return (uacpi_handle) heap_zalloc(sizeof(kernel_event_t));
 }
 
 void uacpi_kernel_free_event(uacpi_handle handle) {
@@ -575,6 +594,11 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
     (void) type;
     LOG_STRC("uacpi: scheduling work handler=%p, ctx=%p\n", (void*) handler, ctx);
 
+    if(g_uacpi_worker == nullptr) {
+        g_uacpi_worker = sched_arch_create_kernel_thread((virt_addr_t) uacpi_worker_entry);
+        sched_thread_schedule(g_uacpi_worker);
+    }
+
     uacpi_work_item_t* item = (uacpi_work_item_t*) heap_alloc(sizeof(uacpi_work_item_t));
     item->handler = handler;
     item->ctx = ctx;
@@ -583,10 +607,6 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
     list_push_back(&g_uacpi_work_queue, &item->node);
     ATOMIC_LOAD_ADD(&g_uacpi_work_count, 1, ATOMIC_SEQ_CST);
 
-    if(g_uacpi_worker == nullptr) {
-        g_uacpi_worker = sched_arch_create_kernel_thread((virt_addr_t) uacpi_worker_entry);
-        sched_thread_schedule(g_uacpi_worker);
-    }
     spinlock_noint_unlock(&g_uacpi_work_lock, state);
 
     return UACPI_STATUS_OK;

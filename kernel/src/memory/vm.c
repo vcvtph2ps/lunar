@@ -45,6 +45,7 @@ static list_t g_region_cache = LIST_INIT;
 }
 
 static vm_region_t* region_insert(vm_address_space_t* address_space, vm_region_t* region);
+static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t length);
 
 /// Find last region within a segment.
 static vm_region_t* find_region(vm_address_space_t* address_space, uintptr_t address, size_t length) {
@@ -96,10 +97,14 @@ static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
             for(size_t i = 0; i < length; i += PAGE_SIZE_DEFAULT) {
                 uintptr_t virtual_address = address + i;
                 uintptr_t physical_address = pmm_alloc_page(region->type_data.anon.back_zeroed ? PMM_FLAG_ZERO : PMM_FLAG_NONE);
-                if(physical_address == 0) return false;
+                if(physical_address == 0) {
+                    region_unmap(region, address, i);
+                    return false;
+                }
 
                 if(!ptm_map(region->address_space, virtual_address, physical_address, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false)) {
                     pmm_free_page(physical_address);
+                    region_unmap(region, address, i);
                     return false;
                 }
             }
@@ -118,7 +123,10 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
 
     switch(region->type) {
         case VM_REGION_TYPE_ANON:
-            // @todo: unmap phys mem
+            for(size_t i = 0; i < length; i += PAGE_SIZE_DEFAULT) {
+                uintptr_t phys;
+                if(ptm_physical(region->address_space, address + i, &phys)) { pmm_free_page(phys); }
+            }
             break;
         case VM_REGION_TYPE_DIRECT: break;
     }

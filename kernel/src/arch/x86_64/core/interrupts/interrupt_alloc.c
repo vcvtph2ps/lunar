@@ -16,7 +16,7 @@ bool arch_interrupt_alloc_claim(uint8_t vector) {
     }
     g_vector_map[vector] = 1;
     spinlock_unlock(&g_vector_lock);
-    return vector;
+    return true;
 }
 
 uint8_t arch_interrupt_alloc_allocate() {

@@ -43,7 +43,10 @@ typedef enum {
 #define VM_FLAG_FIXED (1 << 1)
 #define VM_FLAG_DYNAMICALLY_BACKED (1 << 2)
 #define VM_FLAG_MMIO (1 << 3) /* physical address is device memory */
+#define VM_FLAG_SHARED (1 << 4)
 #define VM_FLAG_ZERO (1 << 10) /* only applies to anonymous mappings */
+
+typedef uint64_t vm_flags_t;
 
 #define VM_NO_HINT 0
 
@@ -89,14 +92,6 @@ struct vm_address_space {
     rb_tree_t regions_tree;
     spinlock_no_dw_t lock;
 };
-
-#define VM_FLAG_NONE 0
-#define VM_FLAG_FIXED (1 << 1)
-#define VM_FLAG_DYNAMICALLY_BACKED (1 << 2)
-#define VM_FLAG_SHARED (1 << 3)
-#define VM_FLAG_ZERO (1 << 10) /* only applies to anonymous mappings */
-
-typedef uint64_t vm_flags_t;
 
 extern vm_address_space_t* g_vm_global_address_space;
 

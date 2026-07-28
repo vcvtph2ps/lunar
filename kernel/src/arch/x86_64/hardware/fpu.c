@@ -55,7 +55,10 @@ void arch_fpu_init(uint32_t core_id) {
 }
 
 void* arch_fpu_alloc_area() {
-    return heap_alloc(g_fpu_area_size);
+    void* ptr = heap_alloc(g_fpu_area_size);
+    if(!ptr) { return nullptr; }
+    assert(((uintptr_t) ptr) % 64 == 0);
+    return ptr;
 }
 
 void arch_fpu_free_area(void* area) {

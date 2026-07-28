@@ -156,6 +156,10 @@ if opt_build_type == "debug" then
         "-fsanitize=undefined",
         "-fstack-protector-all"
     })
+elseif opt_build_type == "release" then
+    table.extend(kernel_flags, {
+        "-fstack-protector-strong"
+    })
 end
 
 table.extend(objects, get_kernel_objs(kernel_flags))

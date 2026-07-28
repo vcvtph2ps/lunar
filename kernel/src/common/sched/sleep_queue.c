@@ -22,6 +22,7 @@ void sleep_queue_insert(sleep_queue_t* queue, thread_t* item) {
             spinlock_nodw_unlock(&queue->lock);
             return;
         }
+        node = node->next;
     }
 
     // the thread has the largest sleep_until

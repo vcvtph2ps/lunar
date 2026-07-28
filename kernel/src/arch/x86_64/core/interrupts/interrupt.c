@@ -42,8 +42,8 @@ interrupt_handler_fn_t g_handlers[256] = {};
 void* g_handler_contexts[256] = {};
 
 void interrupt_set_handler(uint8_t vector, interrupt_handler_fn_t handler, void* ctx) {
-    assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
     arch_interrupt_state_t state = spinlock_noint_lock(&g_interrupt_handler_lock);
+    assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
     g_handlers[vector] = handler;
     g_handler_contexts[vector] = ctx;
     spinlock_noint_unlock(&g_interrupt_handler_lock, state);

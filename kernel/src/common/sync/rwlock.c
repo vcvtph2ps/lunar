@@ -1,4 +1,5 @@
 #include <common/arch.h>
+#include <common/assert.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sync/rwlock.h>
 #include <lib/helpers.h>
@@ -6,7 +7,7 @@
 #include <stdint.h>
 
 void rwlock_init(rwlock_t* lock) {
-    lock->read_lock.inner  = lock;
+    lock->read_lock.inner = lock;
     lock->write_lock.inner = lock;
     ATOMIC_STORE(&lock->value, 0, ATOMIC_RELAXED);
 }
@@ -45,5 +46,7 @@ void rwlock_unlock_write(rwlock_write_t* lock) {
 }
 
 void rwlock_unlock_read(rwlock_read_t* lock) {
-    ATOMIC_LOAD_SUB(&lock->inner->value, 1, ATOMIC_RELEASE);
+    uint32_t value = ATOMIC_LOAD_SUB(&lock->inner->value, 1, ATOMIC_RELEASE);
+    (void) value;
+    assert(value != 0);
 }

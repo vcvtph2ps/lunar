@@ -28,6 +28,7 @@ static uint64_t arch_tsc_read_us(time_timer_t* self) {
     (void) self;
     uint64_t tsc_value = arch_tsc_read();
     uint64_t tsc_ticks_per_us = CPU_LOCAL_READ(tsc_ticks_per_us);
+    assert(tsc_ticks_per_us > 0 && "TSC ticks per microsecond is zero, TSC not calibrated");
     return tsc_value / tsc_ticks_per_us;
 }
 

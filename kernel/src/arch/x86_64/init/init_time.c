@@ -16,7 +16,7 @@
 #include <common/time/time.h>
 
 typedef struct {
-    time_timer_t* timers[16];
+    time_timer_t* timers[16]; // @todo: make this dynamic
     time_timer_t* best_timer;
     size_t count;
 } timer_registry_t;

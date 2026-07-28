@@ -42,6 +42,7 @@ static const char* get_name(header_t* header, uint64_t name_offset) {
 
 void ksym_load(void* symbol_data) {
     if(g_kernel_symbols_header != nullptr) LOG_WARN("ksym: symbol data reloaded");
+    if(symbol_data == nullptr) arch_panic("ksym: symbol data is null");
     if(memory_compare(symbol_data, IDENTIFIER, 4) != 0) arch_panic("ksym: invalid kernel symbol file identifier");
     header_t* header = (header_t*) symbol_data;
     if(header->revision > REVISION) arch_panic("ksym: invalid kernel symbol file revision");

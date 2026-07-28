@@ -180,12 +180,12 @@ void arch_ioapic_init() {
     LOG_OKAY("setup %zu ioapics\n", g_ioapics.count);
 }
 
-void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool polarity, bool trigger_mode, uint8_t vector) {
+void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool low_polarity, bool trigger_mode, uint8_t vector) {
     uint64_t redirect_entry = vector;
     redirect_entry &= ~((uint64_t) 0xFF << 56);
     redirect_entry |= ((uint64_t) lapic_id) << 56;
 
-    if(polarity) redirect_entry |= IOAPIC_PIN_POLARITY;
+    if(low_polarity) redirect_entry |= IOAPIC_PIN_POLARITY;
     if(!trigger_mode) redirect_entry |= IOAPIC_TRIGGER_LEVEL;
     uint32_t local_index;
     ioapic_t* ioapic = find_ioapic_by_gsi(gsi, &local_index);
@@ -193,11 +193,11 @@ void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool polarity, bool trig
     ioapic_set_entry(ioapic, local_index, redirect_entry);
 }
 
-void arch_ioapic_map_legacy_irq(uint8_t irq, uint8_t lapic_id, bool fallback_polarity, bool fallback_trigger_mode, uint8_t vector) {
+void arch_ioapic_map_legacy_irq(uint8_t irq, uint8_t lapic_id, bool fallback_low_polarity, bool fallback_trigger_mode, uint8_t vector) {
     if(irq < 16) {
         switch(g_legacy_irq_map[irq].flags & LEGACY_POLARITY) {
-            case LEGACY_POLARITY_LOW:  fallback_polarity = true; break;
-            case LEGACY_POLARITY_HIGH: fallback_polarity = false; break;
+            case LEGACY_POLARITY_LOW:  fallback_low_polarity = true; break;
+            case LEGACY_POLARITY_HIGH: fallback_low_polarity = false; break;
         }
         switch(g_legacy_irq_map[irq].flags & LEGACY_TRIGGER) {
             case LEGACY_TRIGGER_EDGE:  fallback_trigger_mode = true; break;
@@ -205,5 +205,5 @@ void arch_ioapic_map_legacy_irq(uint8_t irq, uint8_t lapic_id, bool fallback_pol
         }
         irq = g_legacy_irq_map[irq].gsi;
     }
-    arch_ioapic_map_gsi(irq, lapic_id, fallback_polarity, fallback_trigger_mode, vector);
+    arch_ioapic_map_gsi(irq, lapic_id, fallback_low_polarity, fallback_trigger_mode, vector);
 }

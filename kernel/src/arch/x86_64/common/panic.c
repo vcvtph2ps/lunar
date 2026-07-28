@@ -198,17 +198,23 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
     uint64_t cr4 = arch_cr_read_cr4();
     uint64_t cr8 = arch_cr_read_cr8();
 
-    uint64_t kernel_cr3 = g_vm_global_address_space->ptm.top_level_page_table;
 
     log_print_lockless(LOG_LEVEL_FAIL, "\n");
     log_print_lockless(LOG_LEVEL_FAIL, "cr0 = 0x%016lx\n", cr0);
     log_print_lockless(LOG_LEVEL_FAIL, "cr2 = 0x%016lx [faulting address]\n", cr2);
     log_print_lockless(LOG_LEVEL_FAIL, "cr3 = 0x%016lx", cr3);
-    if(cr3 == kernel_cr3) {
-        log_print_lockless(LOG_LEVEL_FAIL, " [main kernel page table]\n");
+
+    if(g_vm_global_address_space == nullptr) {
+        uint64_t kernel_cr3 = g_vm_global_address_space->ptm.top_level_page_table;
+        if(cr3 == kernel_cr3) {
+            log_print_lockless(LOG_LEVEL_FAIL, " [main kernel page table]\n");
+        } else {
+            log_print_lockless(LOG_LEVEL_FAIL, " [other page table]\n");
+        }
     } else {
-        log_print_lockless(LOG_LEVEL_FAIL, " [other page table]\n");
+        log_print_lockless(LOG_LEVEL_FAIL, " [no global page table]\n");
     }
+
     log_print_lockless(LOG_LEVEL_FAIL, "cr4 = 0x%016lx [todo]\n", cr4);
     log_print_lockless(LOG_LEVEL_FAIL, "cr8 = 0x%016lx [tpl=%ld]\n", cr8, cr8);
     if(!frame->is_user) { panic_stacktrace(frame->regs->rbp); }

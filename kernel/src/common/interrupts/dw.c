@@ -37,7 +37,11 @@ void dw_queue(dw_item_t* item) {
     sched_preempt_disable();
     dw_status_disable();
 
-    if(!ATOMIC_XCHG(&item->in_use, true, ATOMIC_SEQ_CST)) { list_push(&CPU_LOCAL_GET_SELF()->defered_work.queue, &item->list_node); }
+    if(!ATOMIC_XCHG(&item->in_use, true, ATOMIC_SEQ_CST)) {
+        arch_interrupt_state_t prev_state = arch_interrupt_disable();
+        list_push(&CPU_LOCAL_GET_SELF()->defered_work.queue, &item->list_node);
+        arch_interrupt_restore(prev_state);
+    }
 
     internal_enable();
     sched_preempt_enable();
