@@ -364,6 +364,7 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
 
         size_t split_length = ((uintptr_t) address + length) - split_region->base;
         if(split_length > split_region->length) split_length = split_region->length;
+        uintptr_t split_base = split_region->base;
 
         switch(type) {
             case REWRITE_TYPE_DELETE: region_unmap(split_region, split_region->base, split_length); goto r_no_clone;
@@ -375,7 +376,6 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
                 break;
         }
 
-        uintptr_t split_base = split_region->base;
         vm_region_t* region = clone_to(address_space == g_vm_global_address_space, split_base, split_length, split_region);
 
     r_no_clone:
