@@ -109,15 +109,19 @@ void sched_arch_reset_preempt_timer() {
 static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, void* process, scheduler_t* sched, virt_addr_t kernel_stack_top, virt_addr_t stack) {
     (void) process;
 
-    x86_64_thread_t* thread = heap_alloc(sizeof(x86_64_thread_t));
-    memory_zero(thread, sizeof(x86_64_thread_t));
+    x86_64_thread_t* thread = heap_zalloc(sizeof(x86_64_thread_t));
+    if(thread == nullptr) {
+        LOG_FAIL("Failed to allocate memory for thread object\n");
+        return nullptr;
+    }
+
+    thread->stack_pointer = stack;
+    thread->kernel_stack_top = kernel_stack_top;
+
     thread->common.lock = SPINLOCK_NO_DW_INIT;
     thread->common.tid = tid;
     thread->common.state = THREAD_STATE_READY;
     thread->common.sched = sched;
-    thread->common.migratable = true;
-    thread->stack_pointer = stack;
-    thread->kernel_stack_top = kernel_stack_top;
 
     LOG_INFO("Created thread with tid %lu\n", tid);
     return thread;

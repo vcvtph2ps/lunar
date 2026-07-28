@@ -9,8 +9,18 @@
  * @brief Allocates a block of memory of the given size on the heap.
  * @param size The size of the block to allocate, in bytes.
  * @return a pointer to the allocated block, or nullptr if the allocation failed.
+ * @note The allocated memory is not initialized and may contain garbage values.
  */
 void* heap_alloc(size_t size);
+
+/**
+ * @brief Allocates a block of memory of the given size on the heap.
+ * @param size The size of the block to allocate, in bytes.
+ * @return a pointer to the allocated block, or nullptr if the allocation failed.
+ * @note The allocated memory is zero-initialized.
+ */
+void* heap_zalloc(size_t size);
+
 
 /**
  * @brief Reallocates a block of memory on the heap to a new size.

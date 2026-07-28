@@ -45,6 +45,13 @@ void* heap_alloc(size_t size) {
     return slab_cache_alloc(find_cache(size));
 }
 
+void* heap_zalloc(size_t size) {
+    void* address = heap_alloc(size);
+    if(EXPECT_UNLIKELY(address == nullptr)) return nullptr;
+    memory_zero(address, size);
+    return address;
+}
+
 void* heap_realloc(void* address, size_t current_size, size_t new_size) {
     if(current_size == new_size) return address;
     if(address == nullptr && new_size == 0) return address;

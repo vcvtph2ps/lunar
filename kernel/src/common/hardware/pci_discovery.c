@@ -98,7 +98,7 @@ static void parse_interrupt_table(pci_host_bridge_t* pci_host_bridge, uint8_t bu
             LOG_WARN("Failed to allocate memory for PCI interrupt entry\n");
             continue;
         }
-        memory_zero(interrupt_entry, sizeof(pci_group_interrupt_entry_t));
+
         interrupt_entry->bus = bus;
         interrupt_entry->device = entry->address >> 16;
         interrupt_entry->pin = entry->pin;
@@ -269,15 +269,13 @@ pci_ecam_region_t* pci_find_ecam_region(uint16_t segment, uint8_t bus) {
 static uacpi_iteration_decision pci_iteration_callback(void* user, uacpi_namespace_node* node, uint32_t depth) {
     (void) user;
     (void) depth;
-    pci_host_bridge_t* host_bridge = heap_alloc(sizeof(pci_host_bridge_t));
+    pci_host_bridge_t* host_bridge = heap_zalloc(sizeof(pci_host_bridge_t));
     if(!host_bridge) {
         LOG_FAIL("Failed to allocate memory for PCI host bridge\n");
         return UACPI_ITERATION_DECISION_CONTINUE;
     }
-    memory_zero(host_bridge, sizeof(pci_host_bridge_t));
-    host_bridge->interrupt_entries = LIST_INIT;
 
-    list_push_back(&g_pci_host_bridges, &host_bridge->host_bridge_list_node);
+    host_bridge->interrupt_entries = LIST_INIT;
 
     uint64_t segment = 0;
     uacpi_eval_integer(node, "_SEG", nullptr, &segment);
@@ -304,6 +302,7 @@ static uacpi_iteration_decision pci_iteration_callback(void* user, uacpi_namespa
     enumerate_pci_bus(scan_ctx, scan_ctx->host_bridge->start_bus_number);
     heap_free(scan_ctx, sizeof(acpi_pci_scan_ctx_t));
 
+    list_push_back(&g_pci_host_bridges, &host_bridge->host_bridge_list_node);
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
