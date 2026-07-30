@@ -55,52 +55,10 @@ static void sched_timer_handler(arch_interrupt_frame_t* frame, void* ctx) {
     dw_queue(g_sleep_queue_check_dw);
 }
 
-
-static void internal_sched_thread_drop(thread_t* thread) {
-    if(thread == thread->sched->idle_thread) {
-        spinlock_nodw_unlock(&thread->lock);
-        return;
-    }
-
-    // @todo: reap
-    switch(thread->state) {
-        case THREAD_STATE_READY:
-            sched_thread_schedule(thread);
-            spinlock_nodw_unlock(&thread->lock);
-            break;
-        case THREAD_STATE_DEAD: {
-            LOG_INFO("thread %u is dead, dropping\n", thread->tid);
-            spinlock_nodw_unlock(&thread->lock);
-            break;
-        }
-        case THREAD_STATE_BLOCKED: {
-            LOG_INFO("thread %u is blocking\n", thread->tid);
-            wait_queue_t* queue = thread->target_wait_queue;
-            thread->target_wait_queue = nullptr;
-            if(queue) {
-                LOG_INFO("thread %u is blocking on wait queue %p\n", thread->tid, queue);
-                wait_queue_add_thread(queue, thread);
-            }
-            if(thread->sleep_until > 0) {
-                LOG_INFO("thread %u is sleeping for %lu ns\n", thread->tid, thread->sleep_until - time_monotonic_ns());
-                sleep_queue_insert(&g_sched_sleep_queue, thread);
-            }
-            spinlock_nodw_unlock(&thread->lock);
-            break;
-        }
-        default: assertf(false, "invalid state on drop %d", thread->state);
-    }
+static void arch_thread_init_common(x86_64_thread_t* prev) {
+    sched_thread_init_common(&prev->common);
 }
 
-static void internal_thread_init_common(x86_64_thread_t* prev) { // NOLINT
-    internal_sched_thread_drop(&prev->common);
-    (void) arch_interrupt_enable();
-    sched_arch_reset_preempt_timer();
-}
-
-static void internal_thread_exit_kernel() {
-    sched_yield(THREAD_STATE_DEAD);
-}
 
 void sched_arch_reset_preempt_timer() {
     arch_lapic_timer_oneshot_ms(10);
@@ -118,10 +76,9 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, void* proces
     thread->stack_pointer = stack;
     thread->kernel_stack_top = kernel_stack_top;
 
-    thread->common.lock = SPINLOCK_NO_DW_INIT;
-    thread->common.tid = tid;
-    thread->common.state = THREAD_STATE_READY;
-    thread->common.sched = sched;
+    ATOMIC_STORE(&thread->common.tid, tid, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&thread->common.current_state, THREAD_STATE_READY, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&thread->common.sched, sched, ATOMIC_SEQ_CST);
 
     LOG_INFO("Created thread with tid %lu\n", tid);
     return thread;
@@ -134,8 +91,8 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
     init_stack_kernel_t* init_stack = (init_stack_kernel_t*) (kernel_stack_top - sizeof(init_stack_kernel_t));
     memory_zero(init_stack, sizeof(init_stack_kernel_t));
     init_stack->entry = entry;
-    init_stack->thread_init = (virt_addr_t) internal_thread_init_common;
-    init_stack->thread_exit = (virt_addr_t) internal_thread_exit_kernel;
+    init_stack->thread_init = (virt_addr_t) arch_thread_init_common;
+    init_stack->thread_exit = (virt_addr_t) sched_thread_exit_kernel;
 
     return &sched_arch_create_thread_common(process_allocate_id(), nullptr, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack)->common;
 }
@@ -152,15 +109,11 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     x86_64_thread_t* next = CONTAINER_OF(t_next, x86_64_thread_t, common);
     CPU_LOCAL_WRITE(current_thread, next);
 
-    spinlock_nodw_lock(&t_current->lock);
-    t_current->state = yield_state;
-
-    spinlock_nodw_lock(&t_next->lock);
-    t_next->state = THREAD_STATE_RUNNING;
-    spinlock_nodw_unlock(&t_next->lock);
+    ATOMIC_STORE(&t_current->current_state, yield_state, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&t_next->current_state, THREAD_STATE_RUNNING, ATOMIC_SEQ_CST);
 
     x86_64_thread_t* prev = x86_64_context_switch(current, next);
-    internal_sched_thread_drop(&prev->common);
+    sched_thread_drop(&prev->common);
 }
 
 

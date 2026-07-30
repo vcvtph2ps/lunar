@@ -6,7 +6,7 @@
 
 typedef struct {
     spinlock_no_dw_t lock;
-    list_t wait_queue;
+    list_t queue;
 } sleep_queue_t;
 
 void sleep_queue_insert(sleep_queue_t* queue, thread_t* item);

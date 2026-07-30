@@ -60,7 +60,7 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_SCHED, 0);
 
     thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
-    thread->migratable = false;
+    ATOMIC_STORE(&thread->migratable, false, ATOMIC_SEQ_CST);
 
     sched_thread_schedule(thread);
     sched_arch_handoff();
@@ -77,7 +77,7 @@ void arch_init_ap(uint32_t core_id) {
     run_stage(INIT_STAGE_SCHED, core_id);
 
     thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
-    thread->migratable = false;
+    ATOMIC_STORE(&thread->migratable, false, ATOMIC_SEQ_CST);
 
     sched_thread_schedule(thread);
     sched_arch_handoff();

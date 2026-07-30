@@ -81,3 +81,18 @@ void sched_arch_reset_preempt_timer();
  * @brief Hands off execution to the scheduler for the first time on the current CPU\
  */
 [[noreturn]] void sched_arch_handoff();
+
+/**
+ * @brief Drops a thread after it has been switched away from.
+ */
+void sched_thread_drop(thread_t* thread);
+
+/**
+ * @brief Common thread init routine called after first context switch.
+ */
+void sched_thread_init_common(thread_t* prev);
+
+/**
+ * @brief Thread exit routine called when a kernel thread returns.
+ */
+[[noreturn]] void sched_thread_exit_kernel();
