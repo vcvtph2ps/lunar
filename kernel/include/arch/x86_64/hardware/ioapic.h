@@ -27,3 +27,17 @@ void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool low_polarity, bool 
  * @param vector Interrupt vector to map the IRQ to
  */
 void arch_ioapic_map_legacy_irq(uint8_t irq, uint8_t lapic_id, bool fallback_low_polarity, bool fallback_trigger_mode, uint8_t vector);
+
+/**
+ * @brief Resolve the GSI that a legacy IRQ maps to
+ * @param irq IRQ number to resolve
+ * @return the GSI
+ */
+uint8_t arch_ioapic_gsi_of_irq(uint8_t irq);
+
+/**
+ * @brief Mask or unmask a GSI
+ * @param gsi GSI to mask/unmask
+ * @param masked true = mask, false = unmask
+ */
+void arch_ioapic_mask_gsi(uint8_t gsi, bool masked);

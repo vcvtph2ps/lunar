@@ -473,6 +473,7 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request*) {
 
 typedef struct {
     uint32_t vector;
+    uint8_t gsi;
     uacpi_interrupt_handler handler;
     uacpi_handle ctx;
     dw_item_t* work_item;
@@ -482,12 +483,14 @@ typedef struct {
 static void uacpi_kernel_interrupt_handler(arch_interrupt_frame_t* frame, void* p_ctx) {
     (void) frame;
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
+    arch_ioapic_mask_gsi(ctx->gsi, true);
     dw_queue(ctx->work_item);
 }
 
 static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
     uacpi_interrupt_ret ret = ctx->handler(ctx->ctx);
+    arch_ioapic_mask_gsi(ctx->gsi, false);
     if(ret == UACPI_INTERRUPT_NOT_HANDLED) { arch_panic("[uacpi] Unhandled interrupt\n"); }
 }
 #endif
@@ -501,6 +504,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     LOG_STRC("uacpi: installing interrupt handler for irq=%u -> %u\n", irq, vector);
 
     kernel_ctx->vector = vector;
+    kernel_ctx->gsi = arch_ioapic_gsi_of_irq(irq);
     kernel_ctx->handler = handler;
     kernel_ctx->ctx = ctx;
     kernel_ctx->work_item = dw_create(uacpi_kernel_interrupt_handler_deferred, kernel_ctx);

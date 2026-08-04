@@ -4,12 +4,11 @@
 #include <common/log.h>
 #include <lib/list.h>
 #include <lib/types.h>
+#include <memory/heap.h>
 #include <memory/vm.h>
 #include <stdint.h>
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
-
-#include "memory/heap.h"
 
 // I/O APIC registers
 #define IOAPIC_REG_ID 0x00
@@ -88,6 +87,12 @@ static void ioapic_write(ioapic_t* ioapic, uint8_t reg, uint32_t data) {
 static uint32_t ioapic_read(ioapic_t* ioapic, uint8_t reg) {
     arch_io_mem_write_u32(ioapic->mmio_base, (uint32_t) reg);
     return arch_io_mem_read_u32(ioapic->mmio_base + 0x10);
+}
+
+static uint64_t ioapic_get_entry(ioapic_t* ioapic, uint8_t index) {
+    uint32_t low = ioapic_read(ioapic, IOAPIC_REG_REDTBL_BASE + (index * 2));
+    uint32_t high = ioapic_read(ioapic, IOAPIC_REG_REDTBL_BASE + (index * 2) + 1);
+    return ((uint64_t) high << 32) | low;
 }
 
 static void ioapic_set_entry(ioapic_t* ioapic, uint8_t index, uint64_t data) {
@@ -193,6 +198,11 @@ void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool low_polarity, bool 
     ioapic_set_entry(ioapic, local_index, redirect_entry);
 }
 
+uint8_t arch_ioapic_gsi_of_irq(uint8_t irq) {
+    if(irq < 16) { irq = g_legacy_irq_map[irq].gsi; }
+    return irq;
+}
+
 void arch_ioapic_map_legacy_irq(uint8_t irq, uint8_t lapic_id, bool fallback_low_polarity, bool fallback_trigger_mode, uint8_t vector) {
     if(irq < 16) {
         switch(g_legacy_irq_map[irq].flags & LEGACY_POLARITY) {
@@ -203,7 +213,22 @@ void arch_ioapic_map_legacy_irq(uint8_t irq, uint8_t lapic_id, bool fallback_low
             case LEGACY_TRIGGER_EDGE:  fallback_trigger_mode = true; break;
             case LEGACY_TRIGGER_LEVEL: fallback_trigger_mode = false; break;
         }
-        irq = g_legacy_irq_map[irq].gsi;
     }
-    arch_ioapic_map_gsi(irq, lapic_id, fallback_low_polarity, fallback_trigger_mode, vector);
+    arch_ioapic_map_gsi(arch_ioapic_gsi_of_irq(irq), lapic_id, fallback_low_polarity, fallback_trigger_mode, vector);
+}
+
+void arch_ioapic_mask_gsi(uint8_t gsi, bool masked) {
+    uint32_t local_index;
+    ioapic_t* ioapic = find_ioapic_by_gsi(gsi, &local_index);
+    assert(ioapic && "ioapic must exist for gsi");
+
+    uint64_t entry = ioapic_get_entry(ioapic, local_index);
+
+    if(masked) {
+        entry |= IOAPIC_MASKED;
+    } else {
+        entry &= ~IOAPIC_MASKED;
+    }
+
+    ioapic_set_entry(ioapic, local_index, entry);
 }
