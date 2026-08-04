@@ -32,13 +32,25 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr* out_rsdp_address) {
     return UACPI_STATUS_OK;
 }
 
+// god this is suck a hackkkk
+static bool uacpi_phys_is_ram(uintptr_t paddr, size_t length) {
+    const uintptr_t end = paddr + length;
+    for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
+        bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
+        if(entry->type == BOOTINFO_MM_TYPE_BAD || entry->type == BOOTINFO_MM_TYPE_RESERVED) { continue; }
+        if(paddr >= entry->phys_base && end <= entry->phys_base + entry->length) { return true; }
+    }
+    return false;
+}
+
 void* uacpi_kernel_map(uacpi_phys_addr paddr, uacpi_size length) {
     LOG_STRC("uacpi: mapping addr=%p, length=%zu\n", (void*) paddr, length);
     const uacpi_phys_addr aligned_paddr = ALIGN_DOWN(paddr, PAGE_SIZE_DEFAULT);
     const uacpi_size alignment_diff = paddr - aligned_paddr;
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
 
-    virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_NORMAL, aligned_paddr, VM_FLAG_NONE);
+    const bool mmio = !uacpi_phys_is_ram(aligned_paddr, aligned_length);
+    virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, mmio ? VM_CACHE_DISABLE : VM_CACHE_NORMAL, aligned_paddr, mmio ? VM_FLAG_MMIO : VM_FLAG_NONE);
     if(vaddr == 0) {
         LOG_FAIL("uacpi: failed to map physical address %p, length=%zu\n", (void*) paddr, length);
         return nullptr;
