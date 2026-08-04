@@ -42,6 +42,22 @@ typedef enum {
     PCI_MSI_TYPE_MSIX,
 } pci_msi_type_t;
 
+typedef enum {
+    PCI_BAR_TYPE_NONE,
+    PCI_BAR_TYPE_IO,
+    PCI_BAR_TYPE_MMIO_32,
+    PCI_BAR_TYPE_MMIO_64,
+} pci_bar_type_t;
+
+typedef struct {
+    pci_bar_type_t type;
+    uint64_t physical_base;
+    uint64_t size;
+
+    uint64_t virtual_base;
+    bool prefetchable;
+} pci_bar_t;
+
 typedef struct {
     uint16_t vendor;
     uint16_t device;
@@ -59,6 +75,13 @@ typedef struct {
     pci_msi_type_t msi_type;
 
     bool is_bridge;
+
+    struct {
+        uint8_t pin;
+        uint8_t line;
+    } interrupt_info;
+
+    pci_bar_t bars[6];
 
     union {
         struct {

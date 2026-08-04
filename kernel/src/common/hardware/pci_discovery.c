@@ -403,8 +403,20 @@ bool pci_init() {
 
     LIST_FOR_EACH(&g_pci_devices, device_node) {
         pci_device_t* device = CONTAINER_OF(device_node, pci_device_t, device_list_node);
+
+        const char* interrupt_pin;
+
+        switch(device->device_info.interrupt_info.pin) {
+            case 0:  interrupt_pin = "none"; break;
+            case 1:  interrupt_pin = "INTA#"; break;
+            case 2:  interrupt_pin = "INTB#"; break;
+            case 3:  interrupt_pin = "INTC#"; break;
+            case 4:  interrupt_pin = "INTD#"; break;
+            default: interrupt_pin = "invalid"; break;
+        }
+
         LOG_INFO(
-            "PCI: Device %04x:%02x:%02x.%u %04x:%04x class=%02x:%02x.%02x rev=%02x pcie=%s msi=%s\n",
+            "PCI: Device %04x:%02x:%02x.%u %04x:%04x class=%02x:%02x.%02x rev=%02x pcie=%s msi=%s irq=%u pin=%s\n",
             device->access.segment,
             device->access.bus,
             device->access.device,
@@ -416,8 +428,17 @@ bool pci_init() {
             device->device_info.prog_if,
             device->device_info.revision_id,
             device->device_info.pcie ? "yes" : "no",
-            device->device_info.msi_type == PCI_MSI_TYPE_NONE ? "none" : (device->device_info.msi_type == PCI_MSI_TYPE_MSI ? "msi" : "msix")
+            device->device_info.msi_type == PCI_MSI_TYPE_NONE ? "none" : (device->device_info.msi_type == PCI_MSI_TYPE_MSI ? "msi" : "msix"),
+            device->device_info.interrupt_info.line,
+            interrupt_pin
         );
+
+        for(int i = 0; i < 6; i++) {
+            pci_bar_t* bar = &device->device_info.bars[i];
+            if(bar->type == PCI_BAR_TYPE_NONE) { continue; }
+
+            LOG_INFO("\tBAR[%d] type=%d phys=0x%lx size=0x%lx\n", i, bar->type, bar->physical_base, bar->size);
+        }
     }
 
     g_pci_acpi_initialized = true;
