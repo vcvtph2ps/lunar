@@ -1,6 +1,6 @@
-#include <arch/x86_64/cpu_local.h>
 #include <common/arch.h>
 #include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
@@ -56,8 +56,9 @@ void spinlock_nodw_unlock(spinlock_no_dw_t* lock) {
 }
 
 
-// @todo: do we need to disable dw here too? maybe not since hardirqs should already be disabled when this is used, but maybe we should just to be safe?
 [[nodiscard]] arch_interrupt_state_t spinlock_noint_lock(spinlock_no_int_t* lock) {
+    sched_preempt_disable();
+    dw_status_disable();
     arch_interrupt_state_t state = arch_interrupt_disable();
     spinlock_lock_raw(&lock->lock);
     return state;
@@ -66,4 +67,6 @@ void spinlock_nodw_unlock(spinlock_no_dw_t* lock) {
 void spinlock_noint_unlock(spinlock_no_int_t* lock, arch_interrupt_state_t interrupt_state) {
     spinlock_unlock_raw(&lock->lock);
     arch_interrupt_restore(interrupt_state);
+    dw_status_enable();
+    sched_preempt_enable();
 }

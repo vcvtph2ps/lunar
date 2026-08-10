@@ -6,26 +6,30 @@
 #include <common/sync/mutex.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
+#include <lib/types.h>
 
-static bool try_lock(mutex_t* mutex, bool weak) {
+static bool try_lock(mutex_t* mutex) {
     mutex_state_t state = MUTEX_STATE_UNLOCKED;
-    return __atomic_compare_exchange_n(&mutex->state, &state, MUTEX_STATE_LOCKED, weak, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);
+    return ATOMIC_COMPARE_EXCHANGE_STRONG(&mutex->state, &state, MUTEX_STATE_LOCKED, ATOMIC_ACQ_REL, ATOMIC_RELAXED);
 }
 
 void mutex_acquire(mutex_t* mutex) {
-    if(EXPECT_LIKELY(try_lock(mutex, true))) return;
+    sched_preempt_disable();
+    if(EXPECT_LIKELY(try_lock(mutex))) return;
 
     for(int i = 0; i < 50; i++) {
-        if(EXPECT_LIKELY(try_lock(mutex, true))) return;
+        if(EXPECT_LIKELY(try_lock(mutex))) return;
     }
 
     arch_interrupt_state_t previous_state = spinlock_noint_lock(&mutex->lock);
-    if(EXPECT_LIKELY(__atomic_exchange_n(&mutex->state, MUTEX_STATE_CONTESTED, __ATOMIC_ACQ_REL) != MUTEX_STATE_UNLOCKED)) {
+    if(EXPECT_LIKELY(ATOMIC_XCHG(&mutex->state, MUTEX_STATE_CONTESTED, ATOMIC_ACQ_REL) != MUTEX_STATE_UNLOCKED)) {
         spinlock_noint_unlock(&mutex->lock, previous_state);
+        sched_preempt_enable();
         wait_queue_join(&mutex->wait_queue);
         previous_state = spinlock_noint_lock(&mutex->lock);
+        sched_preempt_disable();
     } else {
-        __atomic_store_n(&mutex->state, MUTEX_STATE_LOCKED, __ATOMIC_RELEASE);
+        ATOMIC_STORE(&mutex->state, MUTEX_STATE_LOCKED, ATOMIC_RELEASE);
     }
 
     spinlock_noint_unlock(&mutex->lock, previous_state);
@@ -33,7 +37,10 @@ void mutex_acquire(mutex_t* mutex) {
 
 void mutex_release(mutex_t* mutex) {
     mutex_state_t state = MUTEX_STATE_LOCKED;
-    if(EXPECT_LIKELY(__atomic_compare_exchange_n(&mutex->state, &state, MUTEX_STATE_UNLOCKED, false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))) return;
+    if(EXPECT_LIKELY(ATOMIC_COMPARE_EXCHANGE_STRONG(&mutex->state, &state, MUTEX_STATE_UNLOCKED, ATOMIC_ACQ_REL, ATOMIC_RELAXED))) {
+        sched_preempt_enable();
+        return;
+    }
 
     arch_interrupt_state_t previous_state = spinlock_noint_lock(&mutex->lock);
 
@@ -51,7 +58,8 @@ void mutex_release(mutex_t* mutex) {
     thread_t* thread = wait_queue_pop(&mutex->wait_queue);
     sched_thread_schedule(thread);
 
-    if(mutex->wait_queue.list.count == 0) __atomic_store_n(&mutex->state, MUTEX_STATE_LOCKED, __ATOMIC_RELEASE);
+    if(mutex->wait_queue.list.count == 0) ATOMIC_STORE(&mutex->state, MUTEX_STATE_LOCKED, ATOMIC_RELEASE);
 
     spinlock_noint_unlock(&mutex->lock, previous_state);
+    sched_preempt_enable();
 }

@@ -1,6 +1,7 @@
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/interrupts/interrupt.h>
+#include <common/sched/sched.h>
 #include <common/sync/rwlock.h>
 #include <lib/helpers.h>
 #include <stdatomic.h>
@@ -13,6 +14,7 @@ void rwlock_init(rwlock_t* lock) {
 }
 
 rwlock_write_t* rwlock_lock_write(rwlock_t* lock) {
+    sched_preempt_disable();
     uint32_t expected;
 
     for(;;) {
@@ -27,6 +29,7 @@ rwlock_write_t* rwlock_lock_write(rwlock_t* lock) {
 }
 
 rwlock_read_t* rwlock_lock_read(rwlock_t* lock) {
+    sched_preempt_disable();
     uint32_t old = ATOMIC_LOAD(&lock->value, ATOMIC_RELAXED);
 
     for(;;) {
@@ -43,10 +46,12 @@ rwlock_read_t* rwlock_lock_read(rwlock_t* lock) {
 
 void rwlock_unlock_write(rwlock_write_t* lock) {
     ATOMIC_STORE(&lock->inner->value, 0, ATOMIC_RELEASE);
+    sched_preempt_enable();
 }
 
 void rwlock_unlock_read(rwlock_read_t* lock) {
     uint32_t value = ATOMIC_LOAD_SUB(&lock->inner->value, 1, ATOMIC_RELEASE);
     (void) value;
     assert(value != 0);
+    sched_preempt_enable();
 }
