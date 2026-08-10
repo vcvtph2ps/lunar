@@ -1,7 +1,7 @@
-#include <arch/x86_64/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
 #include <common/init.h>
+#include <common/interrupts/interrupt.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>

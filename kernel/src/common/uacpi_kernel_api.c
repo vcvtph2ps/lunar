@@ -3,14 +3,13 @@
 #include <common/cpu_local.h>
 #include <common/hardware/pci.h>
 #include <common/init.h>
+#include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sync/mutex.h>
 #include <common/time/time.h>
 
 #if defined(__ARCH_X86_64__)
-#include <arch/x86_64/cpu_local.h>
 #include <arch/x86_64/hardware/ioapic.h>
-#include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <arch/x86_64/io.h>
 #endif

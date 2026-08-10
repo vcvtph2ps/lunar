@@ -1,5 +1,6 @@
 #pragma once
 #include <arch/riscv64/sched/thread.h>
+#include <common/interrupts/dw.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <lib/list.h>
@@ -14,6 +15,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_cpu_local_t* self;
     riscv64_thread_t* current_thread;
 
+    bool online;
     uint32_t core_id;
     uint32_t hart_id;
 
@@ -23,10 +25,18 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
         list_t queue;
     } defered_work;
 
+    bool in_hardirq;
+    bool in_softirq;
+
     pmm_t pmm;
 
     scheduler_t scheduler;
-    ipi_request_t* ipi_queue;
+
+    struct {
+        spinlock_no_int_t lock;
+        ipi_request_t* queue;
+        dw_item_t* dw_item;
+    } ipi;
 };
 
 uint32_t arch_cpu_local_get_core_hart_id(uint32_t core_id);
