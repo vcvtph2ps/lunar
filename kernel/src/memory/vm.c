@@ -65,7 +65,7 @@ static vm_region_t* find_region(vm_address_space_t* address_space, uintptr_t add
  * @warning Assumes address space lock is acquired.
  * @returns true = hole found, false = not found
  */
-static bool find_hole(vm_address_space_t* address_space, uintptr_t address, size_t length, size_t align, uintptr_t* hole) {
+static bool find_hole_aligned(vm_address_space_t* address_space, uintptr_t address, size_t length, size_t align, uintptr_t* hole) {
     uintptr_t aligned = ALIGN_UP(address, align);
     if(segment_in_bounds(aligned, length, address_space->start, address_space->end) && find_region(address_space, aligned, length) == nullptr) {
         *hole = aligned;
@@ -83,6 +83,27 @@ static bool find_hole(vm_address_space_t* address_space, uintptr_t address, size
         }
 
         address = ALIGN_UP(region->base + region->length, align);
+    }
+    return false;
+}
+
+/**
+ * @brief Find a hole (free space) in an address space satisfying the given alignment.
+ * @note Prefers a hole aligned to 2MB or 1GB so the ptm and use large mappings
+ * @param align Required alignment (must be a power of two and a multiple of PAGE_SIZE_DEFAULT)
+ * @warning Assumes address space lock is acquired.
+ * @returns true = hole found, false = not found
+ */
+static bool find_hole(vm_address_space_t* address_space, uintptr_t address, size_t length, size_t align, uintptr_t* hole) {
+    size_t candidates[3];
+    size_t count = 0;
+
+    if(align <= PAGE_SIZE_HUGE) candidates[count++] = PAGE_SIZE_HUGE;
+    if(align <= PAGE_SIZE_LARGE) candidates[count++] = PAGE_SIZE_LARGE;
+    if(count == 0 || candidates[count - 1] != align) candidates[count++] = align;
+
+    for(size_t i = 0; i < count; ++i) {
+        if(find_hole_aligned(address_space, address, length, candidates[i], hole)) return true;
     }
     return false;
 }

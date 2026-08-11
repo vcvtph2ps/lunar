@@ -371,7 +371,7 @@ void pci_early_init() {
         size_t map_size = bus_count * 256 * 8 * PAGE_SIZE_DEFAULT;
         region->mmio_base = (uint64_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(map_size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_DISABLE, region->phys_base, VM_FLAG_MMIO);
 
-        LOG_STRC("PCI: ECAM segment %u mapped: phys=%lx virt=%lx buses=%u-%u\n", region->segment, region->phys_base, region->mmio_base, region->start_bus, region->end_bus);
+        LOG_STRC("PCI: ECAM segment %u mapped: phys=%lx virt=%lx size=%lx buses=%u-%u\n", region->segment, region->phys_base, region->mmio_base, map_size, region->start_bus, region->end_bus);
     }
 
     uacpi_table_unref(&mcfg_table);
