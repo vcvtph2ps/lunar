@@ -23,4 +23,9 @@
     do {                                                                   \
         arch_panic("Unreachable, file %s, line %d\n", __FILE__, __LINE__); \
     } while(0)
+
+#define ASSERT_TODO()                                               \
+    do {                                                            \
+        arch_panic("TODO, file %s, line %d\n", __FILE__, __LINE__); \
+    } while(0)
 // NOLINTEND

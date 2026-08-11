@@ -44,7 +44,7 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
     spinlock_nodw_lock(&pmm->pmm_lock);
     if(pmm->num_pages == 0) {
         spinlock_nodw_unlock(&pmm->pmm_lock);
-        if(flags & PMM_FLAG_PANIC) { arch_panic("out of physical memory!"); }
+        if(flags & PMM_FLAG_PANIC) { arch_panic("pmm: out of physical memory!"); }
         return 0;
     }
     pmm_entry_t* allocated_entry = pmm->free_list;

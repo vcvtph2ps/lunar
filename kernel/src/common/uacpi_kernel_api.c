@@ -490,7 +490,7 @@ static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
     uacpi_interrupt_ret ret = ctx->handler(ctx->ctx);
     arch_ioapic_mask_gsi(ctx->gsi, false);
-    if(ret == UACPI_INTERRUPT_NOT_HANDLED) { arch_panic("[uacpi] Unhandled interrupt\n"); }
+    if(ret == UACPI_INTERRUPT_NOT_HANDLED) { arch_panic("uacpi: Unhandled interrupt\n"); }
 }
 #endif
 
