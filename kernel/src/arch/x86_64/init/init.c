@@ -24,6 +24,7 @@ init_stage_handler_t g_init_stage_handlers[] = {
     INIT_STAGE(INIT_STAGE_PLATFORM_EARLY, init_stage_platform_early),
     INIT_STAGE(INIT_STAGE_ACPI, init_stage_acpi),
     INIT_STAGE(INIT_STAGE_PLATFORM, init_stage_platform),
+    INIT_STAGE(INIT_STAGE_VFS, init_stage_vfs) 
 };
 
 #undef INIT_STAGE
@@ -47,6 +48,7 @@ static void arch_init_thread() {
     run_stage(INIT_STAGE_PLATFORM_EARLY, core_id);
     run_stage(INIT_STAGE_ACPI, core_id);
     run_stage(INIT_STAGE_PLATFORM, core_id);
+    run_stage(INIT_STAGE_VFS, core_id);
 
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);

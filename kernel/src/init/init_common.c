@@ -11,5 +11,6 @@ const char* init_stage_to_str(init_stage_t stage) {
         case INIT_STAGE_PLATFORM_EARLY: return "platform_early";
         case INIT_STAGE_ACPI:           return "acpi";
         case INIT_STAGE_PLATFORM:       return "platform";
+        case INIT_STAGE_VFS:            return "vfs";
     }
 }

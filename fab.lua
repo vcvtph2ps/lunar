@@ -17,7 +17,7 @@ assert(ld ~= nil, "No ld.lld found")
 local prekernel_protocol = fab.git(
     "prekernel-protocol",
     "https://github.com/vcvtph2ps/theia",
-    "e08a8f57cb5fe8a0e350534ecf8195508e869966"
+    "18ff696c3fce1d84e18637d7c89d571d4758a001"
 )
 
 local flanterm = fab.git(

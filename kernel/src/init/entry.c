@@ -47,6 +47,7 @@ const char* memmap_type_to_string(uint64_t type) {
         case BOOTINFO_MM_TYPE_ACPI_NVS:         return "acpi_nvs";
         case BOOTINFO_MM_TYPE_RESERVED:         return "reserved";
         case BOOTINFO_MM_TYPE_BAD:              return "bad";
+        case BOOTINFO_MM_TYPE_MODULE:           return "module";
         default:                                return "unknown";
     }
 }
