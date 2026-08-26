@@ -13,6 +13,7 @@ typedef struct scheduler scheduler_t; // NOLINT
 enum thread_state {
     THREAD_STATE_READY,
     THREAD_STATE_RUNNING,
+    THREAD_STATE_BLOCKED_PENDING,
     THREAD_STATE_BLOCKED,
     THREAD_STATE_DYING,
     THREAD_STATE_DEAD

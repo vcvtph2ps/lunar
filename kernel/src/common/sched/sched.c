@@ -43,12 +43,15 @@ void sched_thread_schedule(thread_t* thread) {
 
     thread_state_t state = ATOMIC_LOAD(&thread->current_state, ATOMIC_ACQUIRE);
     switch(state) {
-        case THREAD_STATE_DYING:
+        case THREAD_STATE_DYING:  [[fallthrough]];
         case THREAD_STATE_DEAD:  spinlock_unlock(&sched->lock); return;
-        case THREAD_STATE_RUNNING:
+
+        case THREAD_STATE_RUNNING: [[fallthrough]];
+        case THREAD_STATE_BLOCKED_PENDING:
             ATOMIC_STORE(&thread->wake_pending, true, ATOMIC_RELEASE);
             spinlock_unlock(&sched->lock);
             return;
+
         case THREAD_STATE_READY:   [[fallthrough]];
         case THREAD_STATE_BLOCKED: break;
     }
@@ -101,7 +104,7 @@ void sched_init(uint32_t core_id) {
 void sched_sleep(uint64_t msec) {
     thread_t* current = sched_arch_thread_current();
     current->sleep_until = time_monotonic_ns() + (msec * 1000000ULL);
-    sched_yield(THREAD_STATE_BLOCKED);
+    sched_yield(THREAD_STATE_BLOCKED_PENDING);
 }
 
 void sched_yield(thread_state_t yield_state) {
@@ -137,13 +140,21 @@ void sched_thread_drop(thread_t* thread) {
             sched_thread_schedule(thread);
             return;
 
-        case THREAD_STATE_BLOCKED: {
+        case THREAD_STATE_BLOCKED_PENDING: {
             ATOMIC_STORE(&thread->in_run_queue, false, ATOMIC_RELEASE);
 
             if(ATOMIC_XCHG(&thread->wake_pending, false, ATOMIC_ACQ_REL)) {
+                if(ATOMIC_LOAD(&thread->sleep_until, ATOMIC_RELAXED) != 0) {
+                    ATOMIC_STORE(&thread->sleep_until, 0, ATOMIC_RELAXED);
+                    spinlock_nodw_lock(&g_sched_sleep_queue.lock);
+                    list_node_delete(&g_sched_sleep_queue.queue, &thread->list_node_sleep_queue);
+                    spinlock_nodw_unlock(&g_sched_sleep_queue.lock);
+                }
                 sched_thread_schedule(thread);
                 return;
             }
+
+            ATOMIC_STORE(&thread->current_state, THREAD_STATE_BLOCKED, ATOMIC_RELEASE);
 
             wait_queue_t* wq = ATOMIC_XCHG(&thread->target_wait_queue, nullptr, ATOMIC_ACQ_REL);
             if(wq) { wait_queue_add_thread(wq, thread); }
