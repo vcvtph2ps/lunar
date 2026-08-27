@@ -14,7 +14,8 @@ typedef enum {
     INIT_STAGE_PLATFORM_EARLY,
     INIT_STAGE_ACPI,
     INIT_STAGE_PLATFORM,
-    INIT_STAGE_VFS
+    INIT_STAGE_VFS,
+    INIT_STAGE_USERSPACE,
 } init_stage_t;
 
 typedef struct {
@@ -37,3 +38,4 @@ void init_stage_platform_early(uint32_t core_id);
 void init_stage_acpi(uint32_t core_id);
 void init_stage_platform(uint32_t core_id);
 void init_stage_vfs(uint32_t core_id);
+void init_stage_userspace(uint32_t core_id);

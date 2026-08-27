@@ -1,8 +1,8 @@
 #pragma once
-#include <lib/helpers.h>
 #include <common/fs/io.h>
 #include <common/sync/rwlock.h>
 #include <common/sync/spinlock.h>
+#include <lib/helpers.h>
 #include <lib/list.h>
 
 typedef enum : uint8_t {
@@ -42,7 +42,6 @@ typedef struct {
 
     /// The type of the node (file or directory)
     vfs_node_type_t type;
-
 
     struct {
         vfs_permissions_t user;
