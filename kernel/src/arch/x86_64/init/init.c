@@ -50,11 +50,12 @@ static void arch_init_thread() {
     run_stage(INIT_STAGE_ACPI, core_id);
     run_stage(INIT_STAGE_PLATFORM, core_id);
     run_stage(INIT_STAGE_VFS, core_id);
-    run_stage(INIT_STAGE_USERSPACE, core_id);
-
+    
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
+    
+    run_stage(INIT_STAGE_USERSPACE, core_id);
 }
 
 void arch_init_bsp() {

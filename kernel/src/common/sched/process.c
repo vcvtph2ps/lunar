@@ -42,10 +42,12 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     process_t* process = heap_zalloc(sizeof(process_t));
     process->process_id = process_allocate_id();
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
+    process->address_space = process_address_space;
 
     thread_t* thread = sched_arch_create_thread_user(process, user_stack, entry_point, true);
     assert(thread != nullptr);
     list_push(&process->thread_list, &thread->list_node_process);
+
 
     *out_thread = thread;
     return process;

@@ -1,5 +1,7 @@
 #include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/fpu.h>
 #include <arch/x86_64/hardware/lapic_timer.h>
+#include <arch/x86_64/internal/msr.h>
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/sched/thread.h>
 #include <common/assert.h>
@@ -15,6 +17,7 @@
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/heap.h>
+#include <memory/ptm.h>
 #include <memory/vm.h>
 
 #define LAPIC_TIMER_VECTOR 0x20
@@ -74,6 +77,12 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     thread->stack_pointer = stack;
     thread->kernel_stack_top = kernel_stack_top;
     thread->common.process = process;
+    thread->fpu_area = nullptr;
+    thread->fsbase = 0;
+    thread->gsbase = 0;
+    if(process) {
+        thread->fpu_area = arch_fpu_alloc_area();
+    }
 
     ATOMIC_STORE(&thread->common.tid, tid, ATOMIC_SEQ_CST);
     ATOMIC_STORE(&thread->common.current_state, THREAD_STATE_READY, ATOMIC_SEQ_CST);
@@ -96,12 +105,12 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
     return &sched_arch_create_thread_common(process_allocate_id(), nullptr, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack)->common;
 }
 
-
 thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_stack_top, virt_addr_t entry, bool inherit_pid) {
     virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
     virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
 
     init_stack_user_t* init_stack = (init_stack_user_t*) (kernel_stack_top - sizeof(init_stack_user_t));
+    memory_zero(init_stack, sizeof(init_stack_user_t));
     init_stack->entry = entry;
     init_stack->thread_init = (virt_addr_t) arch_thread_init_common;
     init_stack->thread_init_user = (virt_addr_t) x86_64_userspace_init_sysexit;
@@ -122,7 +131,27 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     LOG_STRC("core %d, current=%u, next=%u, state=%u\n", CPU_LOCAL_READ(core_id), t_current->tid, t_next->tid, yield_state);
     x86_64_thread_t* current = CONTAINER_OF(t_current, x86_64_thread_t, common);
     x86_64_thread_t* next = CONTAINER_OF(t_next, x86_64_thread_t, common);
+
     CPU_LOCAL_WRITE(current_thread, next);
+    interrupt_set_usermode_stack(next->stack_pointer);
+
+    if(current->common.process) {
+        arch_fpu_save(current->fpu_area);
+    }
+    if(next->common.process) {
+        arch_fpu_load(next->fpu_area);
+    }
+    if(current->common.process && next->common.process && current->common.process != next->common.process) {
+        ptm_load_address_space(next->common.process->address_space);
+    } else if(next->common.process) {
+        ptm_load_address_space(next->common.process->address_space);
+    }
+
+    current->gsbase = arch_msr_read(ARCH_MSR_OTHER_GS_BASE);
+    current->fsbase = arch_msr_read(ARCH_MSR_FS_BASE);
+
+    arch_msr_write(ARCH_MSR_OTHER_GS_BASE, next->gsbase);
+    arch_msr_write(ARCH_MSR_FS_BASE, next->fsbase);
 
     ATOMIC_STORE(&t_current->current_state, yield_state, ATOMIC_SEQ_CST);
     ATOMIC_STORE(&t_next->current_state, THREAD_STATE_RUNNING, ATOMIC_SEQ_CST);

@@ -40,7 +40,9 @@ void arch_fpu_load(void* ptr) {
 
 // @note: the prekernel will setup the FPU for us, so we don't need to do it here
 void arch_fpu_init(uint32_t core_id) {
-    if(!INIT_CORE_IS_BSP(core_id)) { return; }
+    if(!INIT_CORE_IS_BSP(core_id)) {
+        return;
+    }
 
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
         g_fpu_area_size = arch_cpuid(0x0d, 0, ARCH_CPUID_ECX);
@@ -55,8 +57,10 @@ void arch_fpu_init(uint32_t core_id) {
 }
 
 void* arch_fpu_alloc_area() {
-    void* ptr = heap_alloc(g_fpu_area_size);
-    if(!ptr) { return nullptr; }
+    void* ptr = heap_zalloc(g_fpu_area_size);
+    if(!ptr) {
+        return nullptr;
+    }
     assert(((uintptr_t) ptr) % 64 == 0);
     return ptr;
 }

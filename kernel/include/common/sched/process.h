@@ -2,6 +2,7 @@
 #include <common/ldr/ldr.h>
 #include <common/sync/spinlock.h>
 #include <lib/list.h>
+#include <memory/vm.h>
 #include <stdint.h>
 
 typedef struct process process_t;
@@ -12,6 +13,8 @@ struct process {
 
     spinlock_no_dw_t thread_list_lock;
     list_t thread_list;
+
+    vm_address_space_t* address_space;
 };
 
 /**

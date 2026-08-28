@@ -5,6 +5,7 @@
 #include <common/ldr/ldr.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <common/userspace/syscall.h>
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/heap.h>
@@ -16,6 +17,7 @@ void init_stage_userspace(uint32_t core_id) {
     if(!INIT_CORE_IS_BSP(core_id)) {
         return;
     }
+    syscall_init();
 
     ldr_process_load_info_t load_info;
 
