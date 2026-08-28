@@ -389,6 +389,9 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
         if(node == nullptr) break;
 
         vm_region_t* split_region = CONTAINER_OF(node, vm_region_t, region_tree_node);
+
+        if(split_region->base >= ((uintptr_t) address + length)) break;
+
         current_address = split_region->base + split_region->length;
 
         size_t split_length = ((uintptr_t) address + length) - split_region->base;
