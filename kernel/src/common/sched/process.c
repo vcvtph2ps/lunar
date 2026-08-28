@@ -32,7 +32,8 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
 
     uintptr_t entry_point;
 
-    bool success = ldr_setup_process(process_address_space, path, load_info, &user_stack, &entry_point);
+    uintptr_t user_stack_top = user_stack + stack_virt_size;
+    bool success = ldr_setup_process(process_address_space, path, load_info, &user_stack_top, &entry_point);
     if(!success) {
         LOG_FAIL("process: failed to load process\n");
         // @todo: ptm_cleanup_address_space
@@ -44,7 +45,7 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
     process->address_space = process_address_space;
 
-    thread_t* thread = sched_arch_create_thread_user(process, user_stack, entry_point, true);
+    thread_t* thread = sched_arch_create_thread_user(process, user_stack_top, entry_point, true);
     assert(thread != nullptr);
     list_push(&process->thread_list, &thread->list_node_process);
 
