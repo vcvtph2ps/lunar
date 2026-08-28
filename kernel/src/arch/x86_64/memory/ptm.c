@@ -117,6 +117,13 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
         uint32_t level = last->level;
         arch_pte_entry_t entry = table[index];
 
+        // Widen intermediate entries.
+        for(uint32_t step = 0; step + 1 < path.step_count; step++) {
+            arch_pte_entry_t* itable = path.steps[step].table;
+            arch_pte_entry_t ientry = itable[path.steps[step].index];
+            itable[path.steps[step].index] = pte_widen_table_entry(ientry, prot, privilege);
+        }
+
         if(pte_is_large(entry, level)) {
             size_t ps = pte_level_page_size(level);
             if((vaddr + i) % ps != 0 || length - i < ps) {
@@ -285,7 +292,9 @@ void ptm_init_kernel(uint32_t core_id) {
     g_arch_pte_la57_enabled = (arch_cr_read_cr4() & (1u << 12)) != 0; /* CR4.LA57 */
 
     arch_pte_entry_t* pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
-    for(int i = 256; i < 512; i++) { pml4[i] = ARCH_PTE_PRESENT | ARCH_PTE_RW | (pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC) & ARCH_PTE_ADDR_MASK); }
+    for(int i = 256; i < 512; i++) {
+        pml4[i] = ARCH_PTE_PRESENT | ARCH_PTE_RW | (pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC) & ARCH_PTE_ADDR_MASK);
+    }
 
     map_kernel();
 
