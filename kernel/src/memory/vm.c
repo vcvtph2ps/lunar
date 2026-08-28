@@ -146,7 +146,9 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
         case VM_REGION_TYPE_ANON:
             for(size_t i = 0; i < length; i += PAGE_SIZE_DEFAULT) {
                 uintptr_t phys;
-                if(ptm_physical(region->address_space, address + i, &phys)) { pmm_free_page(phys); }
+                if(ptm_physical(region->address_space, address + i, &phys)) {
+                    pmm_free_page(phys);
+                }
             }
             break;
         case VM_REGION_TYPE_DIRECT: break;
@@ -186,12 +188,18 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
         spinlock_nodw_unlock(&g_region_cache_lock);
 
         phys_addr_t page = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
-        if(!global_lock_acquired) { spinlock_nodw_lock(&g_vm_global_address_space->lock); }
+        if(!global_lock_acquired) {
+            spinlock_nodw_lock(&g_vm_global_address_space->lock);
+        }
 
         uintptr_t address;
-        if(!find_hole(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, PAGE_SIZE_DEFAULT, &address)) { arch_panic("vm: out of global address space"); }
+        if(!find_hole(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, PAGE_SIZE_DEFAULT, &address)) {
+            arch_panic("vm: out of global address space");
+        }
 
-        if(!ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false)) { arch_panic("failed to map region cache page"); }
+        if(!ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false)) {
+            arch_panic("failed to map region cache page");
+        }
 
         vm_region_t* region = (vm_region_t*) address;
         region[0].address_space = g_vm_global_address_space;
@@ -439,9 +447,13 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
         assertf(false, "length must be non-zero and page aligned %zu", length);
         return nullptr;
     }
-    if(address % align != 0) { address = ALIGN_UP(address, align); }
+    if(address % align != 0) {
+        address = ALIGN_UP(address, align);
+    }
 
-    if(flags & VM_FLAG_FIXED) { rewrite_common(address_space, (void*) address, length, REWRITE_TYPE_DELETE, (vm_protection_t) {}, VM_CACHE_NORMAL); }
+    if(flags & VM_FLAG_FIXED) {
+        rewrite_common(address_space, (void*) address, length, REWRITE_TYPE_DELETE, (vm_protection_t) {}, VM_CACHE_NORMAL);
+    }
 
     vm_region_t* region = region_alloc(false);
     spinlock_nodw_lock(&address_space->lock);
@@ -558,7 +570,9 @@ size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, 
 }
 
 bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t addr, size_t size) {
-    if(addr < target_as->start || addr + size > target_as->end) { return false; }
+    if(addr < target_as->start || addr + size > target_as->end) {
+        return false;
+    }
 
     for(virt_addr_t i = addr; i < addr + size; i += PAGE_SIZE_DEFAULT) {
         phys_addr_t phys;
@@ -616,4 +630,39 @@ void vm_init_kernel() {
     rb_insert(&g_vm_global_address_space->regions_tree, &g_kernel_region.region_tree_node);
     rb_insert(&g_vm_global_address_space->regions_tree, &g_hhdm_region.region_tree_node);
     rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_region.region_tree_node);
+}
+
+static void vm_fault_dw(void* data) {
+    thread_t* thread = data;
+    assert(thread->vm_fault.in_process);
+    assert(thread->process != nullptr);
+
+    bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.address);
+    if(!ok) {
+        // @TODO: this should just kill the process
+        arch_panic("vm_fault_dw: page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
+    }
+
+    thread->vm_fault.in_process = false;
+}
+
+bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
+    if(fault != VM_FAULT_NOT_PRESENT) return false;
+    if(address_in_bounds(address, g_vm_global_address_space->start, g_vm_global_address_space->end)) return false;
+
+    thread_t* current_thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
+    assert(!current_thread->vm_fault.in_process);
+
+    process_t* process = current_thread->process;
+    if(process == nullptr) return false;
+
+    current_thread->vm_fault.in_process = true;
+    current_thread->vm_fault.address = address;
+    current_thread->vm_fault.dw_item.data = current_thread;
+    current_thread->vm_fault.dw_item.fn = vm_fault_dw;
+    current_thread->vm_fault.dw_item.cleanup_fn = nullptr;
+
+    dw_queue(&current_thread->vm_fault.dw_item);
+
+    return true;
 }

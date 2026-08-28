@@ -1,4 +1,5 @@
 #pragma once
+#include <common/interrupts/dw.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
@@ -25,6 +26,13 @@ struct thread {
 
     process_t* process;
     list_node_t list_node_process;
+
+    struct {
+        bool in_process;
+        virt_addr_t address;
+        dw_item_t dw_item;
+    } vm_fault;
+
 
     ATOMIC thread_state_t current_state;
 

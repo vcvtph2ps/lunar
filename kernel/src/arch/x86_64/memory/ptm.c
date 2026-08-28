@@ -1,6 +1,7 @@
 #include <arch/x86_64/internal/cpuid.h>
 #include <arch/x86_64/internal/cr.h>
 #include <arch/x86_64/internal/msr.h>
+#include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/memory.h>
 #include <common/arch.h>
 #include <common/assert.h>
@@ -273,6 +274,21 @@ static void map_kernel() {
     }
 }
 
+static void page_fault_handler(arch_interrupt_frame_t* frame, void* ctx) {
+    (void) ctx;
+    LOG_STRC("addr=0x%016lx\n", frame->interrupt_data);
+    if(!frame->is_user) {
+        arch_panic_int(frame);
+    }
+    vm_fault_reason_t reason = VM_FAULT_UKKNOWN;
+    if((frame->error & (1 << 0)) == 0) {
+        reason = VM_FAULT_NOT_PRESENT;
+    }
+    if(vm_fault(frame->interrupt_data, reason)) {
+        return;
+    }
+}
+
 void ptm_init_kernel(uint32_t core_id) {
     if(!INIT_CORE_IS_BSP(core_id)) {
         ptm_load_address_space(g_vm_global_address_space);
@@ -314,8 +330,10 @@ void ptm_init_kernel(uint32_t core_id) {
         LOG_INFO("mapping framebuffer %zu, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx\n", i, paddr, aligned_paddr, align_diff, aligned_length, (uintptr_t) new_vaddr);
         g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + align_diff);
     }
+
     log_framebuffer_reinit();
     log_framebuffer_enable(true);
+    interrupt_set_handler(0x0E, page_fault_handler, nullptr);
 }
 
 bool ptm_init_user(vm_address_space_t* address_space) {
