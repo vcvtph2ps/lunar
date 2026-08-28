@@ -50,6 +50,10 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
             log_print_lockless(LOG_LEVEL_FAIL, "    %s+%lu <%lx>\n", symbol.name, stack_frame->rip - symbol.address, stack_frame->rip);
         }
         stack_frame = stack_frame->rbp;
+        if((uintptr_t) stack_frame < MEMORY_KERNELSPACE_START) {
+            log_print_lockless(LOG_LEVEL_FAIL, "    <stack trace ends with userspace rbp>");
+            break;
+        }
     }
 }
 
