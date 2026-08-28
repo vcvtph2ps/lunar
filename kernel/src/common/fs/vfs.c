@@ -84,12 +84,12 @@ static vfs_dentry_t* dentry_for_node(vfs_node_t* node) {
 
     vfs_node_t* root_node;
     if(vfs_root_node(&root_node) != VFS_RESULT_OK) return nullptr;
-    
+
     if(root_node != node) {
         vfs_node_put(root_node);
         return nullptr;
     }
-    
+
     vfs_node_put(root_node);
     return vfs_dentry_get(g_root_dentry);
 }
@@ -179,7 +179,9 @@ vfs_result_t vfs_unmount(const vfs_path_t* path) {
 
 vfs_result_t vfs_root_node(vfs_node_t** out_root_node) {
     spinlock_lock(&g_vfs_list_lock);
-    if(g_vfs_list.count == 0) { return VFS_RESULT_ERR_NOT_FOUND; }
+    if(g_vfs_list.count == 0) {
+        return VFS_RESULT_ERR_NOT_FOUND;
+    }
     vfs_t* root_vfs = CONTAINER_OF(g_vfs_list.head, vfs_t, global_list_node);
     spinlock_unlock(&g_vfs_list_lock);
 
@@ -203,7 +205,7 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node) {
     return VFS_RESULT_OK;
 }
 
-vfs_result_t vfs_perform_io(vfs_path_t* path, io_request_t* request) {
+vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);
     if(res != VFS_RESULT_OK) return res;
@@ -223,7 +225,7 @@ vfs_result_t vfs_perform_io(vfs_path_t* path, io_request_t* request) {
     return res;
 }
 
-vfs_result_t vfs_get_attributes(vfs_path_t* path, vfs_node_attr_t* attr) {
+vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* attr) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);
     if(res != VFS_RESULT_OK) return res;
@@ -358,7 +360,9 @@ vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size) {
         memory_copy(buf + pos, d->name, d->name_length);
         buf[--pos] = '/';
     }
-    if(pos == end) { buf[0] = '/'; }
+    if(pos == end) {
+        buf[0] = '/';
+    }
 
     vfs_dentry_put(dentry);
     *out_buf = buf;

@@ -179,14 +179,14 @@ vfs_result_t vfs_lookup(const vfs_path_t* path, vfs_node_t** out_result_node);
  * @param path The path to find the node to perform the IO on
  * @param request The IO request to perform
  */
-vfs_result_t vfs_perform_io(vfs_path_t* path, io_request_t* request);
+vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request);
 
 /**
  * @brief Gets the attributes of the given node
  * @param path The path to the node to get the attributes of
  * @param out_attr A pointer to a vfs_node_attr_t variable to receive the node attributes
  */
-vfs_result_t vfs_get_attributes(vfs_path_t* path, vfs_node_attr_t* out_attr);
+vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_attr);
 
 /**
  * @brief Constructs a path representing the absolute path to the given node

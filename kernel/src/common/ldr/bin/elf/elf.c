@@ -1,8 +1,10 @@
 #include <common/assert.h>
+#include <common/ldr/abi/sysv.h>
 #include <common/ldr/bin/elf.h>
 #include <common/log.h>
 
 #include "common/fs/vfs.h"
+#include "common/ldr/ldr.h"
 #include "elf_fmt.h"
 #include "lib/string.h"
 #include "lib/types.h"
@@ -17,6 +19,17 @@
 #define ELF_MACHINE_EXPECTED ELF_MACHINE_RISCV
 #define ELF_MACHINE_EXPECTED_NAME "ELF_MACHINE_RISCV"
 #endif
+
+static bool elf_can_load(const void* buffer, size_t size) {
+    if(!buffer || size < 4) {
+        LOG_STRC("elf_can_load: buffer is null or too small, size=%zu\n", size);
+        return false;
+    }
+
+    const elf64_elf_header_t* elf_header = (const elf64_elf_header_t*) buffer;
+    return memory_compare(elf_header->ident, "\x7f" "ELF", 4) == 0;
+}
+
 
 static bool elf_file_supported(const elf64_elf_header_t* elf_header) {
     assert(elf_header);
@@ -94,14 +107,14 @@ static bool internal_allocate_for_image(vm_address_space_t* address_space, const
     return true;
 }
 
-static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, vfs_path_t* path, size_t phdr_index, elf64_program_header_t* phdr, elf_image_allocation_t* allocation) {
+static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, const vfs_path_t* path, size_t phdr_index, elf64_program_header_t* phdr, elf_image_allocation_t* allocation) {
     vm_protection_t flags = VM_PROT_NO_ACCESS;
     flags.read = (phdr->flags & ELF_PROG_FLAGS_READ) != 0;
     flags.write = (phdr->flags & ELF_PROG_FLAGS_WRITE) != 0;
     flags.execute = (phdr->flags & ELF_PROG_FLAGS_EXECUTE) != 0;
 
     uintptr_t start_vaddr = ALIGN_DOWN(allocation->image_offset + phdr->vaddr, PAGE_SIZE_DEFAULT);
-    uintptr_t end_vaddr = ALIGN_DOWN(allocation->image_offset + phdr->vaddr, PAGE_SIZE_DEFAULT);
+    uintptr_t end_vaddr = ALIGN_UP(allocation->image_offset + phdr->vaddr + phdr->mem_size, PAGE_SIZE_DEFAULT);
     vm_rewrite_prot(address_space, (void*) start_vaddr, end_vaddr - start_vaddr, flags);
 
     // @todo: we must bounce buffer user io...
@@ -125,7 +138,7 @@ static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, vfs_p
     return true;
 }
 
-static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, vfs_path_t* path, elf64_program_header_t* phdr, elf_loader_info_t* out_loader_info) {
+static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, const vfs_path_t* path, elf64_program_header_t* phdr, elf_loader_info_t* out_loader_info) {
     void* phdr_data = heap_alloc(phdr->file_size);
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
@@ -155,8 +168,7 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, vfs
     return true;
 }
 
-
-static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf_header_t* elf_header, vfs_path_t* path, elf_loader_info_t* out_loader_info) {
+static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf_header_t* elf_header, const vfs_path_t* path, elf_loader_info_t* out_loader_info) {
     elf_image_allocation_t allocation = {};
 
     elf64_program_header_t* phdr_cache = heap_alloc(sizeof(elf64_program_header_t) * elf_header->program_header_count);
@@ -235,7 +247,7 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
     return true;
 }
 
-bool elf_load_file(vm_address_space_t* address_space, vfs_path_t* path, elf_loader_info_t* out_elf_loader_info) {
+bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, elf_loader_info_t* out_elf_loader_info) {
     vfs_node_attr_t attributes;
     if(vfs_get_attributes(path, &attributes) != VFS_RESULT_OK) {
         LOG_FAIL("elf: failed to get attributes of elf file");
@@ -277,3 +289,22 @@ bool elf_load_file(vm_address_space_t* address_space, vfs_path_t* path, elf_load
 
     return true;
 }
+
+static bool elf_load_file_ldr(vm_address_space_t* address_space, const vfs_path_t* path, ldr_image_info_t* out_image, void* out_format_info) {
+    elf_loader_info_t* loader_info = heap_alloc(sizeof(elf_loader_info_t));
+    if(loader_info == nullptr) {
+        LOG_FAIL("elf: failed to allocate loader info\n");
+        return false;
+    }
+
+    if(!elf_load_file(address_space, path, loader_info)) {
+        heap_free(loader_info, sizeof(elf_loader_info_t));
+        return false;
+    }
+
+    out_image->entry_point = loader_info->executable_entry_point;
+    *(elf_loader_info_t**) out_format_info = loader_info;
+    return true;
+}
+
+ldr_loader_t g_elf_loader = { .can_load = elf_can_load, .load = elf_load_file_ldr, .load_abi = sysv_load_abi };

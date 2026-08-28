@@ -8,6 +8,7 @@ typedef enum thread_state thread_state_t;
 typedef struct thread thread_t;
 
 typedef struct wait_queue wait_queue_t; // NOLINT
+typedef struct process process_t; // NOLINT
 typedef struct scheduler scheduler_t; // NOLINT
 
 enum thread_state {
@@ -21,6 +22,9 @@ enum thread_state {
 
 struct thread {
     uint32_t tid;
+
+    process_t* process;
+    list_node_t list_node_process;
 
     ATOMIC thread_state_t current_state;
 

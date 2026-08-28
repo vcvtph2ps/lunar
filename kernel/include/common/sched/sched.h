@@ -1,4 +1,5 @@
 #pragma once
+#include <common/sched/process.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
 #include <common/sync/wait_queue.h>
@@ -33,6 +34,17 @@ void sched_preempt_enable();
  * @return A pointer to the newly created thread structure
  */
 thread_t* sched_arch_create_kernel_thread(virt_addr_t entry_point);
+
+/**
+ * @brief Creates a new user thread within the specified process
+ * @param process The process to create the thread in
+ * @param user_stack_top The top of the user stack for the new thread
+ * @param entry The entry point virtual address for the thread
+ * @param inherit_pid Whether the thread should inherit the process ID
+ * @return A pointer to the newly created thread structure
+ */
+thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_stack_top, virt_addr_t entry, bool inherit_pid);
+
 
 /**
  * @brief Adds a thread to the scheduler's run queue

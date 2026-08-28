@@ -51,7 +51,7 @@ typedef struct {
 #define ELF_PROG_TYPE_PHDR 6
 
 #define ELF_PROG_FLAGS_EXECUTE (1 << 0)
-#define ELF_PROG_FLAGS_WRITE (1 << 0)
-#define ELF_PROG_FLAGS_READ (1 << 0)
+#define ELF_PROG_FLAGS_WRITE (1 << 1)
+#define ELF_PROG_FLAGS_READ (1 << 2)
 
 // NOLINTEND

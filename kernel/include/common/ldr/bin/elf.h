@@ -1,5 +1,5 @@
 #pragma once
-#include <common/fs/vfs.h>
+#include <common/ldr/ldr.h>
 #include <memory/vm.h>
 
 typedef struct {
@@ -33,4 +33,8 @@ typedef struct {
  * @param out_elf_loader_info information about the loaded elf file
  * @returns true if the file was loaded successfully, else false
  */
-bool elf_load_file(vm_address_space_t* address_space, vfs_path_t* path, elf_loader_info_t* out_elf_loader_info);
+bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, elf_loader_info_t* out_elf_loader_info);
+
+bool elf_is_elf_file(void* buffer, size_t size);
+
+extern ldr_loader_t g_elf_loader;
