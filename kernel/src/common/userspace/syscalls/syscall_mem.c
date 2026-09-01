@@ -51,6 +51,10 @@ syscall_ret_t syscall_sys_vm_map(syscall_args_t* args) {
         vm_flags |= VM_FLAG_SHARED;
     }
 
+    if(flags & MAP_ANON) {
+        vm_flags |= VM_FLAG_ZERO;
+    }
+
     process_t* current_process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
     virt_addr_t vaddr = (virt_addr_t) vm_map_anon(current_process->address_space, (void*) hint, ALIGN_UP(size, PAGE_SIZE_DEFAULT), vm_prot, VM_CACHE_NORMAL, vm_flags);
