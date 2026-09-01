@@ -1,0 +1,137 @@
+#include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/internal/msr.h>
+#include <common/cpu_local.h>
+#include <common/fs/vfs.h>
+#include <common/log.h>
+#include <common/userspace/fd_store.h>
+#include <common/userspace/syscall.h>
+#include <common/userspace/syscall_defs.h>
+#include <common/userspace/userspace.h>
+#include <memory/heap.h>
+#include <stdatomic.h>
+#include <stdint.h>
+
+syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
+    uintptr_t pathname_ubuffer = args->arg1;
+    size_t pathname_ubuffer_size = args->arg2;
+    int flags = args->arg3;
+    uint32_t mode = args->arg4;
+
+    user_assert(flags == 0 && "unimplemented");
+    user_assert(mode == 0 && "unimplemented");
+    user_assert(pathname_ubuffer_size <= 1024);
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    char* pathname = heap_alloc(pathname_ubuffer_size + 1);
+    vm_copy_from(pathname, process->address_space, pathname_ubuffer, pathname_ubuffer_size);
+    pathname[pathname_ubuffer_size] = '\0';
+
+    vfs_node_t* out_result_node;
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, pathname), &out_result_node);
+    heap_free(pathname, pathname_ubuffer_size + 1);
+    LOG_STRC("pathname=%s, flags=%d, mode=%d | result=%d\n", pathname, flags, mode, result);
+
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        default:                       user_assert("Invalid return value");
+    }
+
+    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node);
+    // @note: since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
+    vfs_node_put(out_result_node);
+
+    return SYSCALL_RET_VALUE(fd);
+}
+
+syscall_ret_t syscall_sys_fs_close(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_STRC("fd=%d | result=BADFD\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    fd_store_free_fd(process->fd_store, fd);
+    LOG_STRC("fd=%d | result=0\n", fd);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    uintptr_t ubuffer = args->arg2;
+    size_t ubuffer_size = args->arg3;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    char* buffer = heap_alloc(ubuffer_size);
+
+    io_request_t io_req;
+    io_req.type = IO_REQUEST_READ;
+    io_req.read.buffer = buffer;
+    io_req.read.count = ubuffer_size;
+    io_req.read.offset = entry->offset;
+    io_req.read.bytes_read = 0;
+    vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
+    switch(result) {
+        case VFS_RESULT_OK: break;
+        default:            user_assert("Invalid return value");
+    }
+
+    entry->offset += io_req.read.bytes_read;
+
+    vm_copy_to(process->address_space, ubuffer, buffer, ubuffer_size);
+    heap_free(buffer, ubuffer_size);
+    LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.offset, io_req.read.bytes_read);
+
+    return SYSCALL_RET_VALUE(io_req.read.bytes_read);
+}
+
+// syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {}
+
+/// Seek from beginning of file.
+#define SEEK_SET 0
+/// Seek from current position.
+#define SEEK_CUR 1
+/// Seek from end of file.
+#define SEEK_END 2
+
+syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    uint64_t offset = args->arg2;
+    int whence = args->arg3;
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_STRC("fd=%d | result=BADFD\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    uint64_t new_offset;
+    if(whence == SEEK_SET) {
+        new_offset = offset;
+    } else if(whence == SEEK_CUR) {
+        new_offset = entry->offset + offset;
+    } else if(whence == SEEK_END) {
+        new_offset = 0;
+        user_assert(whence != SEEK_END && "unimplemented");
+    } else {
+        LOG_STRC("fd=%d offset=%ld whence=%d | result=EINVAL\n", fd, offset, whence);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    entry->offset = new_offset;
+    LOG_STRC("fd=%d offset=%ld whence=%d | result=%ld\n", fd, offset, whence, new_offset);
+    return SYSCALL_RET_VALUE(0);
+}

@@ -5,13 +5,56 @@
 #include <common/log.h>
 #include <lib/string.h>
 #include <lib/types.h>
+#include <memory/heap.h>
 #include <memory/vm.h>
+#include <nanoprintf/nanoprintf.h>
 #include <stdint.h>
 
-#include "memory/heap.h"
+static void dump_fs_recursive(const char* path, int depth) {
+    size_t offset = 0;
+    vfs_dentry_t* dirent;
+
+    while(true) {
+        vfs_result_t res = vfs_read_dir(&VFS_MAKE_ABS_PATH(path), &offset, &dirent);
+
+        if(res != VFS_RESULT_OK) {
+            arch_panic("Failed to read directory %s (%d)\n", path, res);
+        }
+
+        if(dirent == nullptr) break;
+
+        for(int i = 0; i < depth; i++) log_print(LOG_LEVEL_INFO, "  ");
+
+        if(dirent->negative) {
+            continue;
+        }
+
+        log_print(LOG_LEVEL_INFO, "%s\n", dirent->name);
+
+        if(dirent->node->type == VFS_NODE_TYPE_DIR) {
+            char child_path[255];
+
+            if(string_compare(path, "/") == 0)
+                npf_snprintf(child_path, sizeof(child_path), "/%s", dirent->name);
+            else
+                npf_snprintf(child_path, sizeof(child_path), "%s/%s", path, dirent->name);
+
+            dump_fs_recursive(child_path, depth + 1);
+        }
+
+        vfs_dentry_put(dirent);
+    }
+}
+
+static void dump_fs(const char* root) {
+    log_print(LOG_LEVEL_INFO, "%s\n", root);
+    dump_fs_recursive(root, 1);
+}
 
 void init_stage_vfs(uint32_t core_id) {
-    if(!INIT_CORE_IS_BSP(core_id)) { return; }
+    if(!INIT_CORE_IS_BSP(core_id)) {
+        return;
+    }
 
     bootinfo_module_t* initramfs_module = nullptr;
     for(size_t i = 0; i < g_init_boot_info->module_count; i++) {
@@ -23,41 +66,17 @@ void init_stage_vfs(uint32_t core_id) {
         }
     }
 
-    if(initramfs_module == nullptr) { arch_panic("Failed to find initramfs\n"); }
+    if(initramfs_module == nullptr) {
+        arch_panic("Failed to find initramfs\n");
+    }
 
     vfs_result_t res = vfs_mount(&g_vfs_rdsk_ops, nullptr, (void*) (initramfs_module->phys_addr + g_init_boot_info->hhdm_offset));
-    if(res != VFS_RESULT_OK) { arch_panic("Failed to mount initramfs (%d)\n", res); }
+    if(res != VFS_RESULT_OK) {
+        arch_panic("Failed to mount initramfs (%d)\n", res);
+    }
     LOG_OKAY("mounted initramfs\n");
 
-    size_t offset = 0;
-    vfs_dentry_t* dirent;
-    while(true) {
-        res = vfs_read_dir(&VFS_MAKE_ABS_PATH("/"), &offset, &dirent);
-        if(res != VFS_RESULT_OK) { arch_panic("Failed to read root dir (%d)\n", res); }
-        if(dirent == nullptr) break;
-        LOG_INFO("root dirent: %s\n", dirent->name);
-        vfs_dentry_put(dirent);
-    }
-
-    log_print(LOG_LEVEL_INFO, "\n");
-    offset = 0;
-    while(true) {
-        res = vfs_read_dir(&VFS_MAKE_ABS_PATH("/test"), &offset, &dirent);
-        if(res != VFS_RESULT_OK) { arch_panic("Failed to read test dir (%d)\n", res); }
-        if(dirent == nullptr) break;
-        LOG_INFO("/test dirent: %s\n", dirent->name);
-        vfs_dentry_put(dirent);
-    }
-    log_print(LOG_LEVEL_INFO, "\n");
-    offset = 0;
-    while(true) {
-        res = vfs_read_dir(&VFS_MAKE_ABS_PATH("/test/meow"), &offset, &dirent);
-        if(res != VFS_RESULT_OK) { arch_panic("Failed to read test dir (%d)\n", res); }
-        if(dirent == nullptr) break;
-        LOG_INFO("/test/meow dirent: %s\n", dirent->name);
-        vfs_dentry_put(dirent);
-    }
-
+    dump_fs("/");
 
     vfs_node_attr_t node;
     vfs_get_attributes(&VFS_MAKE_ABS_PATH("/test/meow/nesting.txt"), &node);

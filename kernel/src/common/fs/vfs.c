@@ -225,6 +225,24 @@ vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
     return res;
 }
 
+vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request) {
+    vfs_node_get(node);
+    vfs_result_t res;
+    // @todo: ughhh this sucks. v2
+    if(request->type == IO_REQUEST_WRITE) {
+        rwlock_write_t* write_lock = rwlock_lock_write(&node->lock);
+        res = node->ops->perform_io(node, request);
+        rwlock_unlock_write(write_lock);
+    } else {
+        rwlock_read_t* read_lock = rwlock_lock_read(&node->lock);
+        res = node->ops->perform_io(node, request);
+        rwlock_unlock_read(read_lock);
+    }
+
+    vfs_node_put(node);
+    return res;
+}
+
 vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* attr) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);

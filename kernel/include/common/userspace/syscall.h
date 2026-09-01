@@ -6,6 +6,21 @@
 #include <stdint.h>
 
 typedef enum : uint64_t {
+    SYSCALL_PROC_EXIT = 0,
+    SYSCALL_DEBUG_LOG = 1,
+    SYSCALL_THREAD_TCB_SET = 2,
+
+    SYSCALL_VM_MAP = 10,
+    SYSCALL_VM_UNMAP = 11,
+    SYSCALL_VM_PROTECT = 12,
+
+    SYSCALL_FS_OPEN = 20,
+    SYSCALL_FS_CLOSE = 21,
+    SYSCALL_FS_READ = 22,
+    SYSCALL_FS_WRITE = 23,
+    SYSCALL_FS_SEEK = 24,
+    SYSCALL_FS_ISATTY = 25,
+
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;
 

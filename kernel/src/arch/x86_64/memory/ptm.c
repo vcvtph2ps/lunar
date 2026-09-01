@@ -74,7 +74,7 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     assert(paddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
-    if(!prot.read) LOG_WARN("Mapping with no read permission is not supported, ignoring");
+    if(!prot.read) LOG_WARN("Mapping with no read permission is not supported, ignoring\n");
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
     arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);

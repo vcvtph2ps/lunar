@@ -31,10 +31,13 @@ void init_stage_userspace(uint32_t core_id) {
     load_info.envc = sizeof(envp) / sizeof(envp[0]);
 
     thread_t* thread = nullptr;
-    process_t* process = process_create_from_file(&VFS_MAKE_ABS_PATH("/usr/bin/hello"), &load_info, &thread);
+    process_t* process = process_create_from_file(&VFS_MAKE_ABS_PATH("/usr/bin/hello"), &load_info, nullptr, &thread);
     if(process == nullptr) {
         arch_panic("init: failed to load /usr/bin/hello\n");
     }
+
+    // @note: this is safe since we make sure pid/tid 1 is free
+    process->process_id = 1;
 
     sched_thread_schedule(thread);
 }

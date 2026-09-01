@@ -1,16 +1,18 @@
+#include <common/assert.h>
+#include <common/fs/vfs.h>
+#include <common/ldr/ldr.h>
+#include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
+#include <common/sync/spinlock.h>
 #include <lib/helpers.h>
+#include <lib/list.h>
 #include <memory/heap.h>
 #include <memory/ptm.h>
 #include <stdint.h>
 
-#include "common/ldr/ldr.h"
-#include "common/log.h"
-#include "common/sync/spinlock.h"
-#include "lib/list.h"
-
-ATOMIC uint32_t g_next_task_id = 1;
+// @note: 0 is reserved, 1 is for the init process
+ATOMIC uint32_t g_next_task_id = 2;
 
 uint32_t process_allocate_id() {
     // @todo: don't bump allocate...
@@ -22,7 +24,7 @@ void process_free_id(uint32_t id) {
     (void) id;
 }
 
-process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_load_info_t* load_info, thread_t** out_thread) {
+process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread) {
     vm_address_space_t* process_address_space = heap_zalloc(sizeof(vm_address_space_t));
     ptm_init_user(process_address_space);
 
@@ -45,6 +47,15 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
     process->address_space = process_address_space;
 
+    // @note: nullptr is '/'
+    if(process->current_working_dir != nullptr) {
+        process->current_working_dir = vfs_node_get(current_working_dir);
+    } else {
+        process->current_working_dir = nullptr;
+    }
+
+    process->fd_store = fd_store_create();
+
     thread_t* thread = sched_arch_create_thread_user(process, user_stack_top, entry_point, true);
     assert(thread != nullptr);
     list_push(&process->thread_list, &thread->list_node_process);
@@ -52,4 +63,13 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
 
     *out_thread = thread;
     return process;
+}
+
+void process_kill(process_t* process) {
+    if(process->process_id == 1) {
+        arch_panic("PID 1 was killed\n");
+    }
+
+    // @TODO:
+    LOG_INFO("process %d was killed... unimplemented\n", process->process_id);
 }
