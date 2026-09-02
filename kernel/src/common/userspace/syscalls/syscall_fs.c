@@ -97,7 +97,33 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(io_req.read.bytes_read);
 }
 
-// syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {}
+syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    uintptr_t ubuffer = args->arg2;
+    size_t ubuffer_size = args->arg3;
+
+    char* buffer = heap_alloc(ubuffer_size);
+    vm_copy_from(buffer, CPU_LOCAL_GET_CURRENT_THREAD()->common.process->address_space, ubuffer, ubuffer_size);
+
+    LOG_DBGL("fd=%d, buffer=%.*s\n", fd, (int) ubuffer_size, buffer);
+
+    heap_free(buffer, ubuffer_size);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    LOG_STRC("fd=%d\n", fd);
+
+    // @todo: STUB
+    if(fd == 0 || fd == 1 || fd == 2) {
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    // fd_store_t* store = CPU_LOCAL_GET_CURRENT_THREAD()->common.process->fd_store;
+
+    return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTTY);
+}
 
 /// Seek from beginning of file.
 #define SEEK_SET 0
@@ -111,6 +137,10 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
     uint64_t offset = args->arg2;
     int whence = args->arg3;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    if(fd == 0 || fd == 1 || fd == 2) {
+        return SYSCALL_RET_VALUE(0);
+    }
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {

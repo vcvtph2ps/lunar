@@ -86,9 +86,9 @@ void syscall_init() {
     SYSCALL_DISPATCHER(SYSCALL_FS_OPEN, syscall_sys_fs_open);
     SYSCALL_DISPATCHER(SYSCALL_FS_CLOSE, syscall_sys_fs_close);
     SYSCALL_DISPATCHER(SYSCALL_FS_READ, syscall_sys_fs_read);
-    // SYSCALL_DISPATCHER(SYSCALL_FS_WRITE, syscall_sys_fs_write);
+    SYSCALL_DISPATCHER(SYSCALL_FS_WRITE, syscall_sys_fs_write);
     SYSCALL_DISPATCHER(SYSCALL_FS_SEEK, syscall_sys_fs_seek);
-    // SYSCALL_DISPATCHER(SYSCALL_FS_ISATTY, syscall_sys_fs_is_a_tty);
+    SYSCALL_DISPATCHER(SYSCALL_FS_ISATTY, syscall_sys_fs_is_a_tty);
     // SYSCALL_DISPATCHER(SYSCALL_FS_GET_CWD, syscall_sys_fs_get_cwd);
     // SYSCALL_DISPATCHER(SYSCALL_FS_STAT, syscall_sys_fs_stat);
     // SYSCALL_DISPATCHER(SYSCALL_FS_STAT_AT, syscall_sys_fs_stat_at);

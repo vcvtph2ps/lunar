@@ -35,7 +35,9 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node) {
         user_assert(false && "fd_store out of size");
     }
 
-    store->fds[fd] = (fd_store_entry_t) { .node = vfs_node_get(node), .offset = 0 };
+    store->fds[fd].node = vfs_node_get(node);
+    store->fds[fd].offset = 0;
+
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
     return fd;
