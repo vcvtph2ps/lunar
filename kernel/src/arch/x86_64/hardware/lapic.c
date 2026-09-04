@@ -81,9 +81,13 @@
 #define APIC_BASE_ENABLE (1 << 11)
 #define APIC_BASE_X2APIC (1 << 10)
 
+// LAPIC_*_ICR flags
+#define APIC_ICR_BUSY (1 << 12)
+
 static bool g_x2apic_mode = false;
 static phys_addr_t g_lapic_phys_base;
 static virt_addr_t g_lapic_virt_base;
+static bool g_icr_needs_fence = true;
 
 static bool internal_x2apic_supported(void) {
     return arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC);
@@ -103,7 +107,9 @@ static void apic_enable_mode(uint32_t core_id) {
     if(g_x2apic_mode) {
         msr |= APIC_BASE_X2APIC;
         arch_msr_write(ARCH_MSR_APIC_BASE_MSR, msr);
-        if(INIT_CORE_IS_BSP(core_id)) { LOG_INFO("enabling in x2apic mode\n"); }
+        if(INIT_CORE_IS_BSP(core_id)) {
+            LOG_INFO("enabling in x2apic mode\n");
+        }
         return;
     }
 
@@ -113,10 +119,15 @@ static void apic_enable_mode(uint32_t core_id) {
 
         uintptr_t address = g_lapic_phys_base;
         size_t offset = address % PAGE_SIZE_DEFAULT;
-        if(offset != 0) { address -= offset; }
+        if(offset != 0) {
+            address -= offset;
+        }
 
         g_lapic_virt_base = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_DISABLE, g_lapic_phys_base, VM_FLAG_MMIO) + offset;
         LOG_INFO("apic base address: 0x%lx -> 0x%lx\n", g_lapic_phys_base, g_lapic_virt_base);
+
+        // @note: AMD does not need a fence on lapic ipi
+        g_icr_needs_fence = arch_cpuid_get_vendor() != ARCH_CPUID_VENDOR_AMD;
     } else {
         msr = arch_msr_read(ARCH_MSR_APIC_BASE_MSR);
         msr &= ~APIC_BASE_ADDR_MASK;
@@ -206,14 +217,25 @@ static void lapic_send_icr(uint32_t apic_id, uint64_t icr) {
     }
 
     if(g_x2apic_mode) {
+        /*
+         * > An execution of WRMSR to any non-serializing MSR is not serializing. Non-serializing MSRs include the following: [...], or any of the x2APIC MSRs
+         * > Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3 (3A, 3B, 3C, & 3D): System Programming Guide
+         * @note: on amd64 platforms, WRMSR is ordered and this fence is not needed
+         */
+        if(g_icr_needs_fence) asm volatile("mfence; lfence" ::: "memory");
         lapic_write64(LAPIC_X2APIC_ICR, icr);
     } else {
         // ughhhhh
         arch_interrupt_state_t irq_state = arch_interrupt_disable();
+
+        while(arch_lapic_read(LAPIC_ICR_LOW) & APIC_ICR_BUSY) {
+            arch_spin_hint();
+        }
+
         arch_io_mem_write_u32(g_lapic_virt_base + LAPIC_ICR_HIGH, (icr >> 32));
         arch_io_mem_write_u32(g_lapic_virt_base + LAPIC_ICR_LOW, (icr & 0xFFFFFFFF));
+
         arch_interrupt_restore(irq_state);
-        while(arch_lapic_read(LAPIC_ICR_LOW) & (1 << 12)) { __builtin_ia32_pause(); }
     }
 }
 
