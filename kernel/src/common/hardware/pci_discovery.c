@@ -67,6 +67,8 @@ static uacpi_iteration_decision pci_enumerate_resources(void* ctx, uacpi_resourc
             bridge->end_bus_number = r->maximum;
             break;
         }
+        case UACPI_RESOURCE_TYPE_END_TAG: break;
+
         default: LOG_WARN("ACPI: Unknown PCI resource type %u\n", resource->type); break;
     }
 
