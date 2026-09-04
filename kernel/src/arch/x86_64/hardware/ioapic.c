@@ -112,20 +112,41 @@ static ioapic_t* find_ioapic_by_gsi(uint32_t gsi, uint32_t* entry) {
     arch_panic("No ioapic found for gsi %d\n", gsi);
 }
 
+static bool ioapic_is_absent(ioapic_t* ioapic) {
+    uint32_t value;
+
+    value = ioapic_read(ioapic, IOAPIC_REG_ID);
+    value &= ioapic_read(ioapic, IOAPIC_REG_VER);
+    value &= ioapic_read(ioapic, IOAPIC_REG_ARBITRATION);
+
+    return value == 0xFFFFFFFF;
+}
+
 static void init_ioapic(struct acpi_madt_ioapic* entry) {
     virt_addr_t mmio_virt = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_DISABLE, entry->address, VM_FLAG_MMIO);
-    if(mmio_virt == 0) { arch_panic("Failed to map ioapic MMIO region"); }
+    if(mmio_virt == 0) {
+        arch_panic("Failed to map ioapic MMIO region");
+    }
 
     ioapic_t* ioapic = (ioapic_t*) heap_alloc(sizeof(ioapic_t));
     ioapic->id = entry->id;
     ioapic->mmio_base = mmio_virt;
     ioapic->gsi_base = entry->gsi_base;
 
+    if(ioapic_is_absent(ioapic)) {
+        LOG_WARN("ioapic, id: %u was exists in the madt, but does not exist", ioapic->id);
+        heap_free(ioapic, sizeof(ioapic_t));
+        return;
+    }
+
     uint32_t ver = ioapic_read(ioapic, IOAPIC_REG_VER);
     ioapic->gsi_count = ((ver >> 16) & 0xFF) + 1;
 
+
     LOG_INFO("ioapic[%lu] id: %u, mmio: 0x%x -> 0x%lx ver: 0x%08x, gsi range: %u-%u\n", g_ioapics.count, ioapic->id, entry->address, mmio_virt, ver & 0xff, ioapic->gsi_base, ioapic->gsi_count);
-    for(uint32_t i = 0; i < ioapic->gsi_count; i++) { ioapic_set_entry(ioapic, i, IOAPIC_MASKED); }
+    for(uint32_t i = 0; i < ioapic->gsi_count; i++) {
+        ioapic_set_entry(ioapic, i, IOAPIC_MASKED);
+    }
 
     list_push_back(&g_ioapics, &ioapic->list_node);
 }
@@ -173,11 +194,12 @@ static uacpi_iteration_decision second_madt_pass(uacpi_handle handle, struct acp
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-
 void arch_ioapic_init() {
     uacpi_table tbl;
     uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &tbl);
-    if(tbl.hdr == nullptr) { arch_panic("Failed to find MADT\n"); }
+    if(tbl.hdr == nullptr) {
+        arch_panic("Failed to find MADT\n");
+    }
     uacpi_for_each_subtable(tbl.hdr, sizeof(struct acpi_madt), dump_madt_entry, nullptr);
     uacpi_for_each_subtable(tbl.hdr, sizeof(struct acpi_madt), first_madt_pass, nullptr);
     uacpi_for_each_subtable(tbl.hdr, sizeof(struct acpi_madt), second_madt_pass, nullptr);
@@ -199,7 +221,9 @@ void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool low_polarity, bool 
 }
 
 uint8_t arch_ioapic_gsi_of_irq(uint8_t irq) {
-    if(irq < 16) { irq = g_legacy_irq_map[irq].gsi; }
+    if(irq < 16) {
+        irq = g_legacy_irq_map[irq].gsi;
+    }
     return irq;
 }
 
