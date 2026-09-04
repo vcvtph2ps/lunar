@@ -1,3 +1,4 @@
+#include <arch/x86_64/hardware/16550uart.h>
 #include <arch/x86_64/hardware/ec.h>
 #include <arch/x86_64/hardware/fpu.h>
 #include <arch/x86_64/hardware/ioapic.h>
@@ -103,5 +104,7 @@ void init_stage_platform(uint32_t core_id) {
 
         status = uacpi_enable_fixed_event(UACPI_FIXED_EVENT_POWER_BUTTON);
         if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_enable_fixed_event, %s\n", uacpi_status_to_string(status)); }
+
+        arch_16550uart_setup();
     }
 }

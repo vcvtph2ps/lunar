@@ -2,10 +2,23 @@
 // https://git.evalyngoemer.com/evalynOS/evalynOS/src/commit/ee92dac22b5567f597cce3c36dba44af0b87222b/kernel/src/arch/x86_64/drivers/16550uart.c
 
 #include <arch/x86_64/hardware/16550uart.h>
+#include <arch/x86_64/hardware/ioapic.h>
+#include <arch/x86_64/interrupts/interrupt.h>
+#include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <arch/x86_64/io.h>
+#include <common/interrupts/dw.h>
+#include <common/interrupts/interrupt.h>
 #include <common/log.h>
+#include <lib/helpers.h>
+#include <lib/list.h>
+#include <lib/string.h>
+#include <memory/heap.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <uacpi/resources.h>
+#include <uacpi/status.h>
+#include <uacpi/types.h>
+#include <uacpi/utilities.h>
 
 /* Serial Port Registers */
 #define SERIAL_RX_BUFF 0 // read  ; DLAB = 0
@@ -72,9 +85,10 @@
 // just assume one at the default port for debugging
 // also always assume it exists under a hypervisor
 // for early logging in VMs even with ACPI
-uint16_t g_arch_16550uart_port = 0x3F8;
-bool g_arch_16550uart_enabled = true;
-bool g_arch_16550uart_works = false;
+bool g_default_uart_exists = false;
+arch_16550uart_t g_arch_16550uart_default_uart = {};
+
+list_t g_uart_list = LIST_INIT;
 
 static inline void serial_set_dlab(uint16_t port, bool setting) {
     arch_io_wait();
@@ -148,64 +162,103 @@ static int serial_test(uint16_t port) {
     return 0;
 }
 
-int arch_16550uart_transmit_empty() {
+int arch_16550uart_transmit_empty(arch_16550uart_t* uart) {
     arch_io_wait();
-    uint8_t data = arch_io_port_read_u8(g_arch_16550uart_port + SERIAL_LINE_INFO) & SERIAL_TX_EMPTY_BIT;
-    arch_io_wait();
-    return data;
-}
-
-int arch_16550uart_data_ready() {
-    arch_io_wait();
-    uint8_t data = arch_io_port_read_u8(g_arch_16550uart_port + SERIAL_LINE_INFO) & SERIAL_DATA_READY_BIT;
+    uint8_t data = arch_io_port_read_u8(uart->uart_port + SERIAL_LINE_INFO) & SERIAL_TX_EMPTY_BIT;
     arch_io_wait();
     return data;
 }
 
-void arch_16550uart_send(char c) {
+int arch_16550uart_data_ready(arch_16550uart_t* uart) {
+    arch_io_wait();
+    uint8_t data = arch_io_port_read_u8(uart->uart_port + SERIAL_LINE_INFO) & SERIAL_DATA_READY_BIT;
+    arch_io_wait();
+    return data;
+}
+
+void arch_16550uart_send(arch_16550uart_t* uart, char c) {
     for(int i = 0; i < 100000; i++) {
-        if(arch_16550uart_transmit_empty()) break;
+        if(arch_16550uart_transmit_empty(uart)) break;
         arch_spin_hint();
     }
     arch_io_wait();
-    arch_io_port_write_u8(g_arch_16550uart_port + SERIAL_TX_BUFF, c);
+    arch_io_port_write_u8(uart->uart_port + SERIAL_TX_BUFF, c);
     arch_io_wait();
 }
 
-int arch_16550uart_read() {
-    if(!arch_16550uart_data_ready()) return -1;
+int arch_16550uart_read(arch_16550uart_t* uart) {
+    if(!arch_16550uart_data_ready(uart)) return -1;
 
     arch_io_wait();
-    uint8_t data = arch_io_port_read_u8(g_arch_16550uart_port + SERIAL_RX_BUFF);
+    uint8_t data = arch_io_port_read_u8(uart->uart_port + SERIAL_RX_BUFF);
     arch_io_wait();
     return data;
 }
 
 static void serial_sink(int c, void* ctx) {
     (void) ctx;
-    arch_16550uart_send((char) c);
+    arch_16550uart_send(&g_arch_16550uart_default_uart, (char) c);
+}
+
+static void serial_rx_dw_handler(void* ctx) {
+    arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
+    while(1) {
+        uint8_t irr = arch_io_port_read_u8(uart->uart_port + SERIAL_INTR_INFO);
+        LOG_DBGL("UART irr = 0x%x\n", irr);
+
+        int c = arch_16550uart_read(uart);
+        if(c < 0) break;
+        LOG_DBGL("serial: %c (%d)\n", c, c);
+        uart->on_recv(uart->recv_ctx, c);
+    }
+}
+
+static void serial_rx_handler(arch_interrupt_frame_t* frame, void* ctx) {
+    (void) frame;
+
+    arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
+    dw_queue(uart->dw_item);
+}
+
+static bool try_port(uint16_t port) {
+    int status = serial_test(port);
+    if(status == 0) {
+        return false;
+    }
+
+    serial_set_interrupts(port, false);
+    serial_set_divisor(port, SERIAL_115200_BAUD);
+    serial_set_lcr(port, SERIAL_LCR_8BIT | SERIAL_LCR_1STOP | SERIAL_LCR_PARITY_NONE);
+    serial_set_fifo(port, SERIAL_FIFO_ENABLE | SERIAL_FIFO_THRESH_1B | SERIAL_FIFO_TX_FLUSH | SERIAL_FIFO_RX_FLUSH);
+    serial_set_mcr(port, SERIAL_MCR_TX_ENABLE | SERIAL_MCR_RX_ENABLE | SERIAL_MCR_IRQ_ENABLE);
+    serial_set_dlab(port, false);
+
+    if(status == 1) {
+        LOG_FAIL("Serial port at I/O port 0x%x failed part of self test\n", port);
+        return false;
+    }
+
+    return true;
 }
 
 void arch_16550uart_early_setup() {
-    serial_set_interrupts(g_arch_16550uart_port, false);
-    int status = serial_test(g_arch_16550uart_port);
-    if(status == 0) {
-        g_arch_16550uart_works = false;
-        LOG_WARN("16550uart Failed to init; Do you lack a serial port at I/O port 0x%x?\n", g_arch_16550uart_port);
+    uint16_t default_ports[] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
+    uint16_t serial_port = 0;
+    for(size_t i = 0; i < sizeof(default_ports) / sizeof(uint16_t); i++) {
+        if(try_port(default_ports[i])) {
+            serial_port = default_ports[i];
+            break;
+        }
+    }
+
+    if(serial_port == 0) {
+        LOG_WARN("16550uart Failed to early init; Do you lack a serial port at I/O port [0x3f8, 0x2f8, 0x3e8, 0x2e8]?\n");
+        LOG_WARN("Serial may be need to be discovered via ACPI\n");
         return;
     }
 
-    serial_set_divisor(g_arch_16550uart_port, SERIAL_115200_BAUD);
-    serial_set_lcr(g_arch_16550uart_port, SERIAL_LCR_8BIT | SERIAL_LCR_1STOP | SERIAL_LCR_PARITY_NONE);
-    serial_set_fifo(g_arch_16550uart_port, SERIAL_FIFO_ENABLE | SERIAL_FIFO_THRESH_1B | SERIAL_FIFO_TX_FLUSH | SERIAL_FIFO_RX_FLUSH);
-    serial_set_mcr(g_arch_16550uart_port, SERIAL_MCR_TX_ENABLE | SERIAL_MCR_RX_ENABLE | SERIAL_MCR_IRQ_ENABLE);
-    serial_set_dlab(g_arch_16550uart_port, false);
-    g_arch_16550uart_works = true;
-
-    if(status == 1) {
-        LOG_FAIL("Serial port at I/O port 0x%x failed part of self test\n", g_arch_16550uart_port);
-        return;
-    }
+    g_arch_16550uart_default_uart.uart_port = serial_port;
+    g_default_uart_exists = true;
 
     LOG_OKAY("Serial init\n");
 
@@ -215,7 +268,123 @@ void arch_16550uart_early_setup() {
         .ctx = nullptr,
     };
 
-    if(!log_add_sink(&sink)) { LOG_OKAY("Failed to add log sink; serial output will not work :(\n"); }
+    if(!log_add_sink(&sink)) {
+        LOG_OKAY("Failed to add log sink; serial output will not work :(\n");
+    }
 
-    serial_sink('\n', nullptr);
+    serial_sink('\n', &g_arch_16550uart_default_uart);
+}
+
+
+static const char* g_uart_hids[] = { "PNP0501", nullptr };
+
+typedef struct {
+    uint16_t io_port;
+    /// 0xFF if not present
+    uint8_t irq;
+    bool irq_low_polarity;
+    bool irq_edge_triggered;
+} uart_crs_t;
+
+// @todo: this shit is wrong
+static uacpi_iteration_decision uart_parse_resource(void* user, uacpi_resource* resource) {
+    uart_crs_t* crs = (uart_crs_t*) user;
+
+    switch(resource->type) {
+        case UACPI_RESOURCE_TYPE_IO: {
+            uacpi_resource_io* r = &resource->io;
+            if(crs->io_port == 0) {
+                crs->io_port = r->minimum;
+            }
+            break;
+        };
+        case UACPI_RESOURCE_TYPE_FIXED_IO: {
+            uacpi_resource_fixed_io* r = &resource->fixed_io;
+            if(crs->io_port == 0) {
+                crs->io_port = r->address;
+            }
+            break;
+        }
+        case UACPI_RESOURCE_TYPE_IRQ: {
+            uacpi_resource_irq* r = &resource->irq;
+            if(crs->irq == 0xff && r->num_irqs > 0) {
+                crs->irq = (uint8_t) r->irqs[0];
+                crs->irq_low_polarity = (r->polarity == UACPI_POLARITY_ACTIVE_LOW);
+                crs->irq_edge_triggered = (r->triggering == UACPI_TRIGGERING_EDGE);
+            }
+            break;
+        }
+        case UACPI_RESOURCE_TYPE_EXTENDED_IRQ: {
+            uacpi_resource_extended_irq* r = &resource->extended_irq;
+            if(crs->irq == 0xff && r->num_irqs > 0) {
+                crs->irq = (uint8_t) r->irqs[0];
+                crs->irq_low_polarity = (r->polarity == UACPI_POLARITY_ACTIVE_LOW);
+                crs->irq_edge_triggered = (r->triggering == UACPI_TRIGGERING_EDGE);
+            }
+            break;
+        }
+        case UACPI_RESOURCE_TYPE_END_TAG: break;
+        default:                          LOG_WARN("ACPI: Unknown UART resource type %u\n", resource->type); break;
+    }
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+static uacpi_iteration_decision uart_device_find_callback(void* user, uacpi_namespace_node* node, uacpi_u32 depth) {
+    (void) user;
+    (void) depth;
+
+    uart_crs_t crs = { .io_port = 0, .irq = 0xFF };
+    uacpi_status status = uacpi_for_each_device_resource(node, "_CRS", uart_parse_resource, &crs);
+    if(uacpi_unlikely_error(status)) {
+        LOG_WARN("16550uart: _CRS evaluation failed: %s\n", uacpi_status_to_string(status));
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }
+
+    if(crs.io_port == 0) {
+        LOG_WARN("16550uart: rejecting serial device with no IO port\n");
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }
+
+    LOG_INFO("16550uart: serial port on IO port 0x%04x\n", crs.io_port);
+    if(crs.irq != 0xff) {
+        LOG_OKAY("16550uart: interrupt on IRQ %d (polarity=%s, trigger=%s)\n", crs.irq, crs.irq_low_polarity ? "low" : "high", crs.irq_edge_triggered ? "edge" : "level");
+    } else {
+        LOG_WARN("16550uart: no interrupt\n");
+    }
+
+    arch_16550uart_t* uart = heap_alloc(sizeof(arch_16550uart_t));
+    uart->uart_port = crs.io_port;
+    uart->irq = crs.irq;
+    uart->irq_edge_triggered = crs.irq_edge_triggered;
+    uart->irq_low_polarity = crs.irq_low_polarity;
+    uart->dw_item = dw_create(serial_rx_dw_handler, uart);
+    uart->dw_item->cleanup_fn = nullptr;
+    list_push_back(&g_uart_list, &uart->uart_list_node);
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+void arch_16550uart_setup() {
+    uacpi_find_devices_at(uacpi_namespace_root(), g_uart_hids, uart_device_find_callback, nullptr);
+
+    LIST_FOR_EACH(&g_uart_list, uart_node) {
+        arch_16550uart_t* uart = CONTAINER_OF(uart_node, arch_16550uart_t, uart_list_node);
+        if(uart->uart_port != g_arch_16550uart_default_uart.uart_port) {
+            continue;
+        }
+
+        if(uart->irq == 0xff) {
+            // @todo: pick a diffrent serial port
+            LOG_WARN("16550uart: Default serial port does not support interrupt RX...\n");
+            continue;
+        }
+
+        uint8_t vector = arch_interrupt_alloc_allocate();
+        interrupt_set_handler(vector, serial_rx_handler, uart);
+
+        // @todo: lapic allocation
+        arch_ioapic_map_legacy_irq(uart->irq, 0, uart->irq_low_polarity, uart->irq_edge_triggered, vector);
+        serial_set_interrupts(uart->uart_port, true);
+    }
 }

@@ -22,7 +22,6 @@ void log_init() {
 
 static void framebuffer_sink(int c, void* ctx) {
     struct flanterm_context* ft_ctx = (struct flanterm_context*) ctx;
-    if(c == '\n') { flanterm_write(ft_ctx, "\r", 1); }
     flanterm_write(ft_ctx, (const char*) &c, 1);
 }
 
@@ -110,6 +109,9 @@ static void dispatch_to_sinks(int c, void* ctx) {
 
         if(sink->is_framebuffer && !g_log_to_framebuffer) { continue; }
 
+        if(c == '\n') {
+            sink->write('\r', sink->ctx);
+        }
         sink->write(c, sink->ctx);
     }
 }
