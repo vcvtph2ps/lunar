@@ -102,13 +102,35 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
     uintptr_t ubuffer = args->arg2;
     size_t ubuffer_size = args->arg3;
 
-    char* buffer = heap_alloc(ubuffer_size);
-    vm_copy_from(buffer, CPU_LOCAL_GET_CURRENT_THREAD()->common.process->address_space, ubuffer, ubuffer_size);
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    LOG_DBGL("fd=%d, buffer=%.*s\n", fd, (int) ubuffer_size, buffer);
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    char* buffer = heap_alloc(ubuffer_size);
+    vm_copy_from(buffer, process->address_space, ubuffer, ubuffer_size);
+
+    io_request_t io_req;
+    io_req.type = IO_REQUEST_WRITE;
+    io_req.write.buffer = buffer;
+    io_req.write.count = ubuffer_size;
+    io_req.write.offset = entry->offset;
+    io_req.write.bytes_written = 0;
+    vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
+    switch(result) {
+        case VFS_RESULT_OK: break;
+        default:            user_assert("Invalid return value");
+    }
+
+    entry->offset += io_req.write.bytes_written;
 
     heap_free(buffer, ubuffer_size);
-    return SYSCALL_RET_VALUE(0);
+    LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.write.offset, io_req.write.bytes_written);
+
+    return SYSCALL_RET_VALUE(io_req.write.bytes_written);
 }
 
 syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
