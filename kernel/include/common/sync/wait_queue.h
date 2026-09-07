@@ -41,3 +41,10 @@ void wait_queue_add_thread(wait_queue_t* queue, thread_t* thread);
  * @return Pointer to the popped thread, or nullptr if the queue is empty.
  */
 thread_t* wait_queue_pop(wait_queue_t* queue);
+
+/**
+ * @brief Wake a thread from the wait queue.
+ * @param queue Pointer to the wait queue to pop from.
+ * @return true if a thread was woken.
+ */
+bool wait_queue_wake_one(wait_queue_t* queue);

@@ -5,6 +5,7 @@
 #include <common/sched/thread.h>
 #include <common/sync/mutex.h>
 #include <common/sync/spinlock.h>
+#include <common/sync/wait_queue.h>
 #include <lib/helpers.h>
 #include <lib/types.h>
 
@@ -55,8 +56,7 @@ void mutex_release(mutex_t* mutex) {
 
     assert(mutex->wait_queue.list.count != 0);
 
-    thread_t* thread = wait_queue_pop(&mutex->wait_queue);
-    sched_thread_schedule(thread);
+    wait_queue_wake_one(&mutex->wait_queue);
 
     if(mutex->wait_queue.list.count == 0) ATOMIC_STORE(&mutex->state, MUTEX_STATE_LOCKED, ATOMIC_RELEASE);
 

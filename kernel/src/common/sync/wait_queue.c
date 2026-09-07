@@ -64,3 +64,10 @@ thread_t* wait_queue_pop(wait_queue_t* queue) {
     spinlock_nodw_unlock(&queue->lock);
     return nullptr;
 }
+
+bool wait_queue_wake_one(wait_queue_t* queue) {
+    thread_t* thread = wait_queue_pop(queue);
+    if(thread == nullptr) return false;
+    sched_thread_schedule(thread);
+    return true;
+}
