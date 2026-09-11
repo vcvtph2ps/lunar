@@ -39,10 +39,18 @@ static slab_cache_t* find_cache(size_t size) {
     return cache;
 }
 
-void* heap_alloc(size_t size) {
+static inline void* internal_heap_alloc(size_t size) {
     if(EXPECT_UNLIKELY(size == 0)) return nullptr;
     if(EXPECT_UNLIKELY(size > g_slab_other_sizes[SLAB_OTHER_COUNT - 1])) return (void*) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
     return slab_cache_alloc(find_cache(size));
+}
+
+void* heap_alloc(size_t size) {
+    void* ptr = internal_heap_alloc(size);
+#if !defined(__RELEASE__)
+    memory_set(ptr, 0xcc, size);
+#endif
+    return ptr;
 }
 
 void* heap_zalloc(size_t size) {
