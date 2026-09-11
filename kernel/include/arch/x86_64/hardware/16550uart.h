@@ -24,7 +24,7 @@ typedef struct {
     list_node_t uart_list_node;
 } arch_16550uart_t;
 
-extern arch_16550uart_t g_arch_16550uart_default_uart;
+extern arch_16550uart_t* g_arch_16550uart_default_uart;
 
 void arch_16550uart_early_setup();
 void arch_16550uart_setup();

@@ -86,7 +86,9 @@
 // also always assume it exists under a hypervisor
 // for early logging in VMs even with ACPI
 bool g_default_uart_exists = false;
-arch_16550uart_t g_arch_16550uart_default_uart = {};
+static arch_16550uart_t g_early_uart = {};
+
+arch_16550uart_t* g_arch_16550uart_default_uart = nullptr;
 
 list_t g_uart_list = LIST_INIT;
 
@@ -197,18 +199,15 @@ int arch_16550uart_read(arch_16550uart_t* uart) {
 
 static void serial_sink(int c, void* ctx) {
     (void) ctx;
-    arch_16550uart_send(&g_arch_16550uart_default_uart, (char) c);
+    arch_16550uart_send(g_arch_16550uart_default_uart, (char) c);
 }
 
 static void serial_rx_dw_handler(void* ctx) {
     arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
     while(1) {
-        uint8_t irr = arch_io_port_read_u8(uart->uart_port + SERIAL_INTR_INFO);
-        LOG_DBGL("UART irr = 0x%x\n", irr);
-
         int c = arch_16550uart_read(uart);
         if(c < 0) break;
-        LOG_DBGL("serial: %c (%d)\n", c, c);
+        // LOG_DBGL("serial: %c (%d)\n", c, c);
         uart->on_recv(uart->recv_ctx, c);
     }
 }
@@ -257,7 +256,8 @@ void arch_16550uart_early_setup() {
         return;
     }
 
-    g_arch_16550uart_default_uart.uart_port = serial_port;
+    g_arch_16550uart_default_uart = &g_early_uart;
+    g_arch_16550uart_default_uart->uart_port = serial_port;
     g_default_uart_exists = true;
 
     LOG_OKAY("Serial init\n");
@@ -370,7 +370,7 @@ void arch_16550uart_setup() {
 
     LIST_FOR_EACH(&g_uart_list, uart_node) {
         arch_16550uart_t* uart = CONTAINER_OF(uart_node, arch_16550uart_t, uart_list_node);
-        if(uart->uart_port != g_arch_16550uart_default_uart.uart_port) {
+        if(uart->uart_port != g_arch_16550uart_default_uart->uart_port) {
             continue;
         }
 
@@ -379,6 +379,8 @@ void arch_16550uart_setup() {
             LOG_WARN("16550uart: Default serial port does not support interrupt RX...\n");
             continue;
         }
+
+        g_arch_16550uart_default_uart = uart;
 
         uint8_t vector = arch_interrupt_alloc_allocate();
         interrupt_set_handler(vector, serial_rx_handler, uart);

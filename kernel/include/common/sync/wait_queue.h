@@ -48,3 +48,10 @@ thread_t* wait_queue_pop(wait_queue_t* queue);
  * @return true if a thread was woken.
  */
 bool wait_queue_wake_one(wait_queue_t* queue);
+
+/**
+ * @brief Wake all threads currently in the wait queue.
+ * @param queue Pointer to the wait queue to drain.
+ * @return The number of threads woken.
+ */
+size_t wait_queue_wake_all(wait_queue_t* queue);

@@ -1,5 +1,4 @@
 #include <common/arch.h>
-#include <common/fs/io.h>
 #include <common/fs/vfs.h>
 #include <common/init.h>
 #include <common/ldr/ldr.h>
@@ -7,11 +6,8 @@
 #include <common/sched/sched.h>
 #include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
-#include <lib/string.h>
 #include <lib/types.h>
-#include <memory/heap.h>
 #include <memory/ptm.h>
-#include <memory/vm.h>
 #include <stdint.h>
 
 void init_stage_userspace(uint32_t core_id) {
@@ -37,8 +33,19 @@ void init_stage_userspace(uint32_t core_id) {
         arch_panic("init: failed to load /usr/bin/hello\n");
     }
 
+    vfs_node_t* tty_node;
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH("/dev/tty"), &tty_node);
+    if(result != VFS_RESULT_OK) {
+        arch_panic("init: failed to open /dev/tty (%d)\n", result);
+    }
+
     // @note: this is safe since we make sure pid/tid 1 is free
     process->process_id = 1;
+
+    // Assign stdin=0, stdout=1, stderr=2 pointing at /dev/tty
+    fd_store_create_fd_at(process->fd_store, tty_node, 0);
+    fd_store_create_fd_at(process->fd_store, tty_node, 1);
+    fd_store_create_fd_at(process->fd_store, tty_node, 2);
 
     sched_thread_schedule(thread);
 }

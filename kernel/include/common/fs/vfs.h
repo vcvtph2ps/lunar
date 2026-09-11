@@ -1,5 +1,6 @@
 #pragma once
 #include <common/fs/io.h>
+#include <common/sync/mutex.h>
 #include <common/sync/rwlock.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>

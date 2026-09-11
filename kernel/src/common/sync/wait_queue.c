@@ -71,3 +71,9 @@ bool wait_queue_wake_one(wait_queue_t* queue) {
     sched_thread_schedule(thread);
     return true;
 }
+
+size_t wait_queue_wake_all(wait_queue_t* queue) {
+    size_t count = 0;
+    while(wait_queue_wake_one(queue)) count++;
+    return count;
+}
