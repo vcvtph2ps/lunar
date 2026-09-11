@@ -11,10 +11,6 @@ fd_store_t* fd_store_create() {
     store->fds_elements_count = 64;
     store->fds = heap_reallocarray(nullptr, sizeof(fd_store_entry_t), 0, store->fds_elements_count);
     store->bitmap = bitmap_create(64);
-    // @todo: don't do this
-    for(int i = 0; i <= 10; i++) {
-        bitmap_set(store->bitmap, true, i);
-    }
     return store;
 }
 
@@ -34,6 +30,20 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node) {
         // @todo: reallocate
         user_assert(false && "fd_store out of size");
     }
+
+    store->fds[fd].node = vfs_node_get(node);
+    store->fds[fd].offset = 0;
+
+    bitmap_set(store->bitmap, true, fd);
+    spinlock_unlock(&store->lock);
+    return fd;
+}
+
+uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd) {
+    spinlock_lock(&store->lock);
+
+    user_assert(fd < store->fds_elements_count && "fd out of range");
+    user_assert(!bitmap_get(store->bitmap, fd) && "fd already in use");
 
     store->fds[fd].node = vfs_node_get(node);
     store->fds[fd].offset = 0;

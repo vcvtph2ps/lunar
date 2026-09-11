@@ -1,6 +1,8 @@
 #include <common/fs/dentry.h>
 #include <common/fs/vfs.h>
+#include <common/sync/mutex.h>
 #include <common/sync/rwlock.h>
+#include <common/sync/wait_queue.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
@@ -107,9 +109,9 @@ void vfs_dentry_put(vfs_dentry_t* dentry) {
         if(remaining > 0) return;
 
         if(dentry->node != nullptr) {
-            rwlock_write_t* write_lock = rwlock_lock_write(&dentry->node->lock);
+            mutex_acquire(&dentry->node->lock);
             list_node_delete(&dentry->node->dentries, &dentry->alias_node);
-            rwlock_unlock_write(write_lock);
+            mutex_release(&dentry->node->lock);
             vfs_node_put(dentry->node);
         }
 
@@ -155,9 +157,9 @@ vfs_result_t vfs_dentry_create(vfs_dentry_t* parent, const char* name, vfs_node_
 
     if(node != nullptr) {
         vfs_node_get(node);
-        rwlock_write_t* write_lock = rwlock_lock_write(&node->lock);
+        mutex_acquire(&node->lock);
         list_push_back(&node->dentries, &dentry->alias_node);
-        rwlock_unlock_write(write_lock);
+        mutex_release(&node->lock);
     }
 
     *out_dentry = dentry;

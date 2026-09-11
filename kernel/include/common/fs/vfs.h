@@ -15,6 +15,8 @@ typedef enum : uint8_t {
 
     VFS_RESULT_ERR_READ_ONLY,
 
+    VFS_RESULT_ERR_NO_SPACE,
+
     VFS_RESULT_ERR_UNSUPPORTED
 } vfs_result_t;
 
@@ -100,7 +102,7 @@ struct vfs_node_ops {
 };
 
 struct vfs_node {
-    rwlock_t lock;
+    mutex_t lock;
 
     ATOMIC size_t refcount;
 
@@ -218,6 +220,9 @@ extern list_t g_vfs_list;
 
 /// @brief The vfs_ops_t instance for the rdsk initramfs
 extern const vfs_ops_t g_vfs_rdsk_ops;
+
+/// @brief The vfs_ops_t instance for devfs (/dev)
+extern const vfs_ops_t g_vfs_devfs_ops;
 
 /**
  * @brief Increment the reference count of a VFS node

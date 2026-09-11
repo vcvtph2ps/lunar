@@ -1,4 +1,6 @@
+#include <arch/x86_64/hardware/16550uart.h>
 #include <common/arch.h>
+#include <common/fs/devfs.h>
 #include <common/fs/io.h>
 #include <common/fs/vfs.h>
 #include <common/init.h>
@@ -75,6 +77,13 @@ void init_stage_vfs(uint32_t core_id) {
         arch_panic("Failed to mount initramfs (%d)\n", res);
     }
     LOG_OKAY("mounted initramfs\n");
+
+    vfs_path_t dev_path = VFS_MAKE_ABS_PATH("/dev");
+    res = vfs_mount(&g_vfs_devfs_ops, &dev_path, nullptr);
+    if(res != VFS_RESULT_OK) {
+        arch_panic("Failed to mount devfs at /dev (%d) ensure /dev exists in initramfs\n", res);
+    }
+    LOG_OKAY("mounted devfs at /dev\n");
 
     dump_fs("/");
 

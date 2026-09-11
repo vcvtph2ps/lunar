@@ -1,10 +1,10 @@
 #include <common/fs/dentry.h>
+#include <common/fs/io.h>
 #include <common/fs/vfs.h>
-
-#include "common/fs/io.h"
-#include "common/sync/rwlock.h"
-#include "lib/string.h"
-#include "memory/heap.h"
+#include <common/sync/mutex.h>
+#include <common/sync/rwlock.h>
+#include <lib/string.h>
+#include <memory/heap.h>
 
 spinlock_t g_vfs_list_lock;
 list_t g_vfs_list;
@@ -46,9 +46,9 @@ static vfs_result_t lookup_component(vfs_dentry_t* current, const char* componen
     }
 
     vfs_node_t* next_node;
-    rwlock_read_t* read_lock = rwlock_lock_read(&current->node->lock);
+    mutex_acquire(&current->node->lock);
     vfs_result_t res = current->node->ops->lookup(current->node, component, &next_node);
-    rwlock_unlock_read(read_lock);
+    mutex_release(&current->node->lock);
 
     if(res == VFS_RESULT_OK && next_node == nullptr) res = VFS_RESULT_ERR_NOT_FOUND;
 
@@ -72,13 +72,13 @@ static vfs_result_t lookup_component(vfs_dentry_t* current, const char* componen
 }
 
 static vfs_dentry_t* dentry_for_node(vfs_node_t* node) {
-    rwlock_read_t* read_lock = rwlock_lock_read(&node->lock);
+    mutex_acquire(&node->lock);
     vfs_dentry_t* dentry = nullptr;
     if(node->dentries.head != nullptr) {
         dentry = CONTAINER_OF(node->dentries.head, vfs_dentry_t, alias_node);
         vfs_dentry_get(dentry);
     }
-    rwlock_unlock_read(read_lock);
+    mutex_release(&node->lock);
 
     if(dentry != nullptr) return dentry;
 
@@ -210,16 +210,10 @@ vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
     vfs_result_t res = vfs_lookup(path, &node);
     if(res != VFS_RESULT_OK) return res;
 
-    // @todo: ughhh this sucks.
-    if(request->type == IO_REQUEST_WRITE) {
-        rwlock_write_t* write_lock = rwlock_lock_write(&node->lock);
-        res = node->ops->perform_io(node, request);
-        rwlock_unlock_write(write_lock);
-    } else {
-        rwlock_read_t* read_lock = rwlock_lock_read(&node->lock);
-        res = node->ops->perform_io(node, request);
-        rwlock_unlock_read(read_lock);
-    }
+    // @todo: read/write mutex
+    mutex_acquire(&node->lock);
+    res = node->ops->perform_io(node, request);
+    mutex_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -228,16 +222,11 @@ vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
 vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request) {
     vfs_node_get(node);
     vfs_result_t res;
-    // @todo: ughhh this sucks. v2
-    if(request->type == IO_REQUEST_WRITE) {
-        rwlock_write_t* write_lock = rwlock_lock_write(&node->lock);
-        res = node->ops->perform_io(node, request);
-        rwlock_unlock_write(write_lock);
-    } else {
-        rwlock_read_t* read_lock = rwlock_lock_read(&node->lock);
-        res = node->ops->perform_io(node, request);
-        rwlock_unlock_read(read_lock);
-    }
+
+    // @todo: read/write mutex
+    mutex_acquire(&node->lock);
+    res = node->ops->perform_io(node, request);
+    mutex_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -248,9 +237,10 @@ vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* attr) {
     vfs_result_t res = vfs_lookup(path, &node);
     if(res != VFS_RESULT_OK) return res;
 
-    rwlock_read_t* read_lock = rwlock_lock_read(&node->lock);
+    // @todo: read/write mutex
+    mutex_acquire(&node->lock);
     res = node->ops->get_attributes(node, attr);
-    rwlock_unlock_read(read_lock);
+    mutex_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -402,9 +392,9 @@ vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_d
     vfs_node_t* child_node = nullptr;
     const char* child_name = nullptr;
 
-    rwlock_read_t* read_lock = rwlock_lock_read(&node->lock);
+    mutex_acquire(&node->lock);
     res = node->ops->read_dir(node, offset, &child_node, &child_name);
-    rwlock_unlock_read(read_lock);
+    mutex_release(&node->lock);
 
     if(res != VFS_RESULT_OK) {
         vfs_dentry_put(dir_dentry);

@@ -21,5 +21,6 @@ fd_store_t* fd_store_create();
 void fd_store_free(fd_store_t* store);
 
 uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node);
+uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd);
 fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd);
 bool fd_store_free_fd(fd_store_t* store, uint32_t fd);

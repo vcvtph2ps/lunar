@@ -5,6 +5,7 @@
 #include <common/ldr/ldr.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
 #include <lib/string.h>
 #include <lib/types.h>

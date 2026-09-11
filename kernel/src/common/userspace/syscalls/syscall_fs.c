@@ -90,7 +90,7 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
 
     entry->offset += io_req.read.bytes_read;
 
-    vm_copy_to(process->address_space, ubuffer, buffer, ubuffer_size);
+    vm_copy_to(process->address_space, ubuffer, buffer, io_req.read.bytes_read);
     heap_free(buffer, ubuffer_size);
     LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.offset, io_req.read.bytes_read);
 
