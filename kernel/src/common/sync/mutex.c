@@ -16,10 +16,16 @@ static bool try_lock(mutex_t* mutex) {
 
 void mutex_acquire(mutex_t* mutex) {
     sched_preempt_disable();
-    if(EXPECT_LIKELY(try_lock(mutex))) return;
+    if(EXPECT_LIKELY(try_lock(mutex))) {
+        sched_preempt_enable();
+        return;
+    }
 
     for(int i = 0; i < 50; i++) {
-        if(EXPECT_LIKELY(try_lock(mutex))) return;
+        if(EXPECT_LIKELY(try_lock(mutex))) {
+            sched_preempt_enable();
+            return;
+        }
     }
 
     arch_interrupt_state_t previous_state = spinlock_noint_lock(&mutex->lock);
@@ -34,9 +40,11 @@ void mutex_acquire(mutex_t* mutex) {
     }
 
     spinlock_noint_unlock(&mutex->lock, previous_state);
+    sched_preempt_enable();
 }
 
 void mutex_release(mutex_t* mutex) {
+    sched_preempt_disable();
     mutex_state_t state = MUTEX_STATE_LOCKED;
     if(EXPECT_LIKELY(ATOMIC_COMPARE_EXCHANGE_STRONG(&mutex->state, &state, MUTEX_STATE_UNLOCKED, ATOMIC_ACQ_REL, ATOMIC_RELAXED))) {
         sched_preempt_enable();
