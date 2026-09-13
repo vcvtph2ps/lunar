@@ -510,7 +510,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
 
     // @todo: every interrupt will be routed to the bsp :/
     arch_ioapic_map_legacy_irq(irq, CPU_LOCAL_READ(lapic_id), false, true, vector);
-    interrupt_set_handler(vector, uacpi_kernel_interrupt_handler, kernel_ctx);
+    interrupt_set_hardirq_handler(vector, uacpi_kernel_interrupt_handler, kernel_ctx);
     *out_irq_handle = (uacpi_handle) kernel_ctx;
     return UACPI_STATUS_OK;
 #elif defined(__ARCH_RISCV64__)
@@ -596,6 +596,7 @@ static void process_work() {
 
 [[noreturn]] static void uacpi_worker_entry() {
     while(1) {
+        // @todo: we should just block and wait for the thread to be woken
         if(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) == 0) { sched_sleep(100); }
         process_work();
     }
@@ -609,11 +610,13 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
     (void) type;
     LOG_STRC("uacpi: scheduling work handler=%p, ctx=%p\n", (void*) handler, ctx);
 
+    // @todo: we cannot do this here, there is a chance this is first called from an interrupt context...
     if(g_uacpi_worker == nullptr) {
         g_uacpi_worker = sched_arch_create_kernel_thread((virt_addr_t) uacpi_worker_entry);
         sched_thread_schedule(g_uacpi_worker);
     }
 
+    // @todo: again. cannot call heap_alloc...
     uacpi_work_item_t* item = (uacpi_work_item_t*) heap_alloc(sizeof(uacpi_work_item_t));
     item->handler = handler;
     item->ctx = ctx;

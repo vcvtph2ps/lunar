@@ -81,11 +81,10 @@
 #define SERIAL_TEST_MAGIC 0x69
 #define SERIAL_TEST_RETRIES 5
 
-// TODO; use uACPI to find valid serial port
+// @todo: use uACPI to find valid serial port
 // just assume one at the default port for debugging
 // also always assume it exists under a hypervisor
 // for early logging in VMs even with ACPI
-bool g_default_uart_exists = false;
 static arch_16550uart_t g_early_uart = {};
 
 arch_16550uart_t* g_arch_16550uart_default_uart = nullptr;
@@ -212,13 +211,6 @@ static void serial_rx_dw_handler(void* ctx) {
     }
 }
 
-static void serial_rx_handler(arch_interrupt_frame_t* frame, void* ctx) {
-    (void) frame;
-
-    arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
-    dw_queue(uart->dw_item);
-}
-
 static bool try_port(uint16_t port) {
     int status = serial_test(port);
     if(status == 0) {
@@ -258,7 +250,6 @@ void arch_16550uart_early_setup() {
 
     g_arch_16550uart_default_uart = &g_early_uart;
     g_arch_16550uart_default_uart->uart_port = serial_port;
-    g_default_uart_exists = true;
 
     LOG_OKAY("Serial init\n");
 
@@ -358,8 +349,7 @@ static uacpi_iteration_decision uart_device_find_callback(void* user, uacpi_name
     uart->irq = crs.irq;
     uart->irq_edge_triggered = crs.irq_edge_triggered;
     uart->irq_low_polarity = crs.irq_low_polarity;
-    uart->dw_item = dw_create(serial_rx_dw_handler, uart);
-    uart->dw_item->cleanup_fn = nullptr;
+
     list_push_back(&g_uart_list, &uart->uart_list_node);
 
     return UACPI_ITERATION_DECISION_CONTINUE;
@@ -383,7 +373,10 @@ void arch_16550uart_setup() {
         g_arch_16550uart_default_uart = uart;
 
         uint8_t vector = arch_interrupt_alloc_allocate();
-        interrupt_set_handler(vector, serial_rx_handler, uart);
+
+        dw_item_t* dw_item = dw_create(serial_rx_dw_handler, uart);
+        dw_item->cleanup_fn = nullptr;
+        interrupt_set_softirq_handler(vector, dw_item);
 
         // @todo: lapic allocation
         arch_ioapic_map_legacy_irq(uart->irq, 0, uart->irq_low_polarity, uart->irq_edge_triggered, vector);

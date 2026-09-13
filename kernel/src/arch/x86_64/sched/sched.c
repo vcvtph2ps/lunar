@@ -165,7 +165,7 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 void sched_arch_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
-        interrupt_set_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr);
+        interrupt_set_hardirq_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr);
         g_sleep_queue_check_dw = dw_create(sleep_queue_check_dw, nullptr);
         g_sleep_queue_check_dw->cleanup_fn = nullptr;
     }

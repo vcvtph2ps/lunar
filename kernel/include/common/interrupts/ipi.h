@@ -1,6 +1,7 @@
 #pragma once
 
 #include <lib/helpers.h>
+#include <lib/list.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,6 +24,9 @@ typedef struct {
 typedef struct ipi_request {
     ipi_message_t message;
     ATOMIC struct ipi_request* next;
+
+    /// Linked list to store nodes that need to be freed
+    list_node_t pending_free_node;
 } ipi_request_t;
 
 /**

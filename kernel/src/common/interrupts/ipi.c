@@ -7,8 +7,11 @@
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
+#include <memory/heap.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
+
+#include "lib/list.h"
 
 void ipi_send(uint32_t core_id, ipi_message_t message) {
     sched_preempt_disable();
@@ -18,16 +21,12 @@ void ipi_send(uint32_t core_id, ipi_message_t message) {
         return;
     }
 
-    ipi_request_t* request = (ipi_request_t*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_PANIC));
+    ipi_request_t* request = (ipi_request_t*) heap_alloc(sizeof(ipi_request_t));
     memory_copy(&request->message, &message, sizeof(ipi_message_t));
     ATOMIC_STORE(&request->next, nullptr, ATOMIC_SEQ_CST);
 
-    arch_interrupt_state_t state = spinlock_noint_lock(&cpu_local->ipi.lock);
-
     ipi_request_t* prev_head = ATOMIC_XCHG(&cpu_local->ipi.queue, request, ATOMIC_SEQ_CST);
     ATOMIC_STORE(&request->next, prev_head, ATOMIC_SEQ_CST);
-
-    spinlock_noint_unlock(&cpu_local->ipi.lock, state);
 
     arch_send_ipi(core_id);
     sched_preempt_enable();
@@ -50,21 +49,16 @@ bool ipi_pop(ipi_message_t* message) {
 
     arch_cpu_local_t* cpu_local = CPU_LOCAL_GET_SELF();
 
-    arch_interrupt_state_t state = spinlock_noint_lock(&cpu_local->ipi.lock);
     ipi_request_t* request = ATOMIC_XCHG(&cpu_local->ipi.queue, nullptr, ATOMIC_SEQ_CST);
     if(request == nullptr) {
-        spinlock_noint_unlock(&cpu_local->ipi.lock, state);
         sched_preempt_enable();
         return false;
     }
 
     ATOMIC_STORE(&cpu_local->ipi.queue, ATOMIC_LOAD(&request->next, ATOMIC_SEQ_CST), ATOMIC_SEQ_CST);
-
-    spinlock_noint_unlock(&cpu_local->ipi.lock, state);
     memory_copy(message, &request->message, sizeof(ipi_message_t));
 
-    // @note: this can deadlock :/
-    pmm_free_page((uintptr_t) PTM_FROM_HHDM(request));
+    list_push_back(&cpu_local->ipi.pending_free_list, &request->pending_free_node);
 
     sched_preempt_enable();
     return true;

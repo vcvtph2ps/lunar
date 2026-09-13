@@ -333,7 +333,7 @@ void ptm_init_kernel(uint32_t core_id) {
 
     log_framebuffer_reinit();
     log_framebuffer_enable(true);
-    interrupt_set_handler(0x0E, page_fault_handler, nullptr);
+    interrupt_set_hardirq_handler(0x0E, page_fault_handler, nullptr);
 }
 
 bool ptm_init_user(vm_address_space_t* address_space) {

@@ -20,7 +20,6 @@ typedef struct {
     bool irq_low_polarity;
     bool irq_edge_triggered;
 
-    dw_item_t* dw_item;
     list_node_t uart_list_node;
 } arch_16550uart_t;
 

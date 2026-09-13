@@ -7,6 +7,7 @@
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <memory/heap.h>
 
 [[nodiscard]] arch_interrupt_state_t arch_interrupt_get_state() {
     uint64_t rflags;
@@ -41,12 +42,35 @@ spinlock_no_int_t g_interrupt_handler_lock = SPINLOCK_NO_INT_INIT;
 interrupt_handler_fn_t g_handlers[256] = {};
 void* g_handler_contexts[256] = {};
 
-void interrupt_set_handler(uint8_t vector, interrupt_handler_fn_t handler, void* ctx) {
+void interrupt_set_hardirq_handler(uint8_t vector, interrupt_handler_fn_t handler, void* ctx) {
     arch_interrupt_state_t state = spinlock_noint_lock(&g_interrupt_handler_lock);
     assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
     g_handlers[vector] = handler;
     g_handler_contexts[vector] = ctx;
     spinlock_noint_unlock(&g_interrupt_handler_lock, state);
+}
+
+static void softirq_handler(arch_interrupt_frame_t* frame, void* ctx) {
+    (void) frame;
+    dw_queue(ctx);
+}
+
+void interrupt_set_softirq_handler(uint8_t vector, dw_item_t* dw_item) {
+    assert(dw_item->cleanup_fn == nullptr);
+
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_interrupt_handler_lock);
+    assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
+    g_handlers[vector] = softirq_handler;
+    g_handler_contexts[vector] = dw_item;
+    spinlock_noint_unlock(&g_interrupt_handler_lock, state);
+}
+
+static void wake_thread_handler_dw(void* ctx) {
+    sched_thread_schedule(ctx);
+}
+
+void interrupt_set_thread_handler(uint8_t vector, thread_t* thread) {
+    interrupt_set_softirq_handler(vector, dw_create(wake_thread_handler_dw, thread));
 }
 
 extern void idt_init(uint32_t core_id);
@@ -70,14 +94,18 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
 
     if(is_threaded) {
         is_outmost_handler = !CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler;
-        if(is_outmost_handler) { CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = true; }
+        if(is_outmost_handler) {
+            CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = true;
+        }
 
         sched_preempt_disable();
         dw_status_disable();
     }
 
     CPU_LOCAL_WRITE(in_hardirq, true);
-    if(g_handlers[frame->vector] == nullptr && frame->vector < 0x20) { arch_panic_int(frame); }
+    if(g_handlers[frame->vector] == nullptr && frame->vector < 0x20) {
+        arch_panic_int(frame);
+    }
     if(g_handlers[frame->vector] != nullptr) {
         g_handlers[frame->vector](frame, g_handler_contexts[frame->vector]);
     } else {
@@ -95,7 +123,9 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
 
         sched_preempt_enable();
 
-        if(is_outmost_handler) { CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = false; }
+        if(is_outmost_handler) {
+            CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = false;
+        }
     }
 }
 
