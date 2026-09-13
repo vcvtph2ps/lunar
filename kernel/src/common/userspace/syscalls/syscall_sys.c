@@ -10,7 +10,7 @@
 [[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
     (void) args;
     LOG_STRC("exit_code=%d\n", (int) args->arg1);
-    sched_yield(THREAD_STATE_DEAD);
+    sched_yield(THREAD_STATE_TERMINATED);
     while(1);
 }
 

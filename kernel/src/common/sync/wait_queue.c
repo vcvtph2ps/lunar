@@ -10,8 +10,8 @@ extern sleep_queue_t g_sched_sleep_queue;
 bool wait_queue_empty(wait_queue_t* queue) {
     spinlock_nodw_lock(&queue->lock);
     LIST_FOR_EACH(&queue->list, thread_node) {
-        thread_t* thread = CONTAINER_OF(thread_node, thread_t, list_node_wait);
-        if(ATOMIC_LOAD(&thread->current_state, ATOMIC_SEQ_CST) == THREAD_STATE_BLOCKED) {
+        thread_t* thread = CONTAINER_OF(thread_node, thread_t, sched.wait_queue_node);
+        if(ATOMIC_LOAD(&thread->sched.state, ATOMIC_SEQ_CST) == THREAD_STATE_BLOCKED) {
             spinlock_nodw_unlock(&queue->lock);
             return false;
         }
@@ -22,21 +22,23 @@ bool wait_queue_empty(wait_queue_t* queue) {
 
 void wait_queue_join(wait_queue_t* queue) {
     thread_t* current = sched_arch_thread_current();
-    current->target_wait_queue = queue;
-    sched_yield(THREAD_STATE_BLOCKED_PENDING);
+    current->sched.wait_target = queue;
+    ATOMIC_STORE(&current->sched.sleep_cookie, ATOMIC_LOAD(&current->sched.wake_cookie, ATOMIC_RELAXED), ATOMIC_RELAXED);
+    sched_yield(THREAD_STATE_BLOCKING);
 }
 
 void wait_queue_join_timeout(wait_queue_t* queue, uint64_t timeout_ms) {
     thread_t* current = sched_arch_thread_current();
-    current->target_wait_queue = queue;
-    current->sleep_until = time_monotonic_ns() + (timeout_ms * 1000000ULL);
-    sched_yield(THREAD_STATE_BLOCKED_PENDING);
+    current->sched.wait_target = queue;
+    current->sched.sleep_until_ns = time_monotonic_ns() + (timeout_ms * 1000000ULL);
+    ATOMIC_STORE(&current->sched.sleep_cookie, ATOMIC_LOAD(&current->sched.wake_cookie, ATOMIC_RELAXED), ATOMIC_RELAXED);
+    sched_yield(THREAD_STATE_BLOCKING);
 }
 
 void wait_queue_add_thread(wait_queue_t* queue, thread_t* thread) {
     spinlock_nodw_lock(&queue->lock);
-    list_push(&queue->list, &thread->list_node_wait);
-    thread->current_wait_queue = queue;
+    list_push(&queue->list, &thread->sched.wait_queue_node);
+    thread->sched.wait_queue = queue;
     spinlock_nodw_unlock(&queue->lock);
 }
 
@@ -44,16 +46,16 @@ thread_t* wait_queue_pop(wait_queue_t* queue) {
     spinlock_nodw_lock(&queue->lock);
 
     LIST_FOR_EACH(&queue->list, thread_node) {
-        thread_t* thread = CONTAINER_OF(thread_node, thread_t, list_node_wait);
-        if(ATOMIC_LOAD(&thread->current_state, ATOMIC_SEQ_CST) == THREAD_STATE_BLOCKED) {
+        thread_t* thread = CONTAINER_OF(thread_node, thread_t, sched.wait_queue_node);
+        if(ATOMIC_LOAD(&thread->sched.state, ATOMIC_SEQ_CST) == THREAD_STATE_BLOCKED) {
             list_node_delete(&queue->list, thread_node);
-            thread->current_wait_queue = nullptr;
+            thread->sched.wait_queue = nullptr;
             spinlock_nodw_unlock(&queue->lock);
 
-            if(ATOMIC_LOAD(&thread->sleep_until, ATOMIC_RELAXED) != 0) {
-                ATOMIC_STORE(&thread->sleep_until, 0, ATOMIC_RELAXED);
+            if(ATOMIC_LOAD(&thread->sched.sleep_until_ns, ATOMIC_RELAXED) != 0) {
+                ATOMIC_STORE(&thread->sched.sleep_until_ns, 0, ATOMIC_RELAXED);
                 spinlock_nodw_lock(&g_sched_sleep_queue.lock);
-                list_node_delete(&g_sched_sleep_queue.queue, &thread->list_node_sleep_queue);
+                list_node_delete(&g_sched_sleep_queue.queue, &thread->sched.sleep_queue_node);
                 spinlock_nodw_unlock(&g_sched_sleep_queue.lock);
             }
 

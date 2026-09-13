@@ -52,11 +52,13 @@ static void arch_init_thread() {
     run_stage(INIT_STAGE_PLATFORM, core_id);
     run_stage(INIT_STAGE_VFS, core_id);
     run_stage(INIT_STAGE_TTY, core_id);
-    
+
     // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
-    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) { arch_spin_hint(); }
-    
+    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) {
+        arch_spin_hint();
+    }
+
     run_stage(INIT_STAGE_USERSPACE, core_id);
 }
 
@@ -67,7 +69,7 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_SCHED, 0);
 
     thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
-    ATOMIC_STORE(&thread->migratable, false, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&thread->sched.migratable, false, ATOMIC_SEQ_CST);
 
     sched_thread_schedule(thread);
     sched_arch_handoff();
@@ -75,7 +77,9 @@ void arch_init_bsp() {
 
 void arch_init_ap(uint32_t core_id) {
     // Wait for BSP to finish init
-    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) == 0) { arch_spin_hint(); }
+    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) == 0) {
+        arch_spin_hint();
+    }
     ptm_init_kernel(core_id);
 
     run_stage(INIT_STAGE_BASE_MEM, core_id);
@@ -84,7 +88,7 @@ void arch_init_ap(uint32_t core_id) {
     run_stage(INIT_STAGE_SCHED, core_id);
 
     thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
-    ATOMIC_STORE(&thread->migratable, false, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&thread->sched.migratable, false, ATOMIC_SEQ_CST);
 
     sched_thread_schedule(thread);
     sched_arch_handoff();

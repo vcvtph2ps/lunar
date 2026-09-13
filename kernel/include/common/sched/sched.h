@@ -13,7 +13,7 @@ struct scheduler {
     bool threaded;
 
     spinlock_t lock;
-    list_t thread_queue;
+    list_t run_queue;
     thread_t* idle_thread;
 };
 

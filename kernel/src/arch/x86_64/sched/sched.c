@@ -85,8 +85,8 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     }
 
     ATOMIC_STORE(&thread->common.tid, tid, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&thread->common.current_state, THREAD_STATE_READY, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&thread->common.sched, sched, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&thread->common.sched.owner, sched, ATOMIC_SEQ_CST);
 
     LOG_INFO("Created thread with tid %lu\n", tid);
     return thread;
@@ -153,8 +153,8 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     arch_msr_write(ARCH_MSR_OTHER_GS_BASE, next->gsbase);
     arch_msr_write(ARCH_MSR_FS_BASE, next->fsbase);
 
-    ATOMIC_STORE(&t_current->current_state, yield_state, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&t_next->current_state, THREAD_STATE_RUNNING, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&t_current->sched.state, yield_state, ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&t_next->sched.state, THREAD_STATE_RUNNING, ATOMIC_SEQ_CST);
 
     x86_64_thread_t* prev = x86_64_context_switch(current, next);
     sched_thread_drop(&prev->common);

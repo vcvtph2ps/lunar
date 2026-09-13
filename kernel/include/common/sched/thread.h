@@ -15,10 +15,10 @@ typedef struct scheduler scheduler_t; // NOLINT
 enum thread_state {
     THREAD_STATE_READY,
     THREAD_STATE_RUNNING,
-    THREAD_STATE_BLOCKED_PENDING,
+    THREAD_STATE_BLOCKING,
     THREAD_STATE_BLOCKED,
     THREAD_STATE_DYING,
-    THREAD_STATE_DEAD
+    THREAD_STATE_TERMINATED
 };
 
 struct thread {
@@ -33,34 +33,31 @@ struct thread {
         dw_item_t dw_item;
     } vm_fault;
 
+    struct {
+        ATOMIC thread_state_t state;
 
-    ATOMIC thread_state_t current_state;
+        // The scheduler to which the thread belongs
+        ATOMIC scheduler_t* owner;
 
-    // The scheduler to which the thread belongs
-    ATOMIC scheduler_t* sched;
+        // Indicates whether the thread can be migrated to another scheduler
+        ATOMIC bool migratable;
 
-    // Indicates whether the thread can be migrated to another scheduler
-    ATOMIC bool migratable;
+        ATOMIC bool in_run_queue;
+        list_node_t run_queue_node;
 
-    // Weather the thread is currently in a run queue
-    ATOMIC bool in_run_queue;
+        // The wait queue the thread is trying to enter when its block finalizes, if any
+        wait_queue_t* wait_target;
+        // The wait queue the thread is currently linked into, if any
+        wait_queue_t* wait_queue;
+        list_node_t wait_queue_node;
+        list_node_t sleep_queue_node;
 
-    // Indicates whether a thread was woken while running
-    ATOMIC bool wake_pending;
+        // The time (in nanoseconds) until which the thread should sleep, 0 if untimed
+        uint64_t sleep_until_ns;
 
-    // Node for the scheduler's run queue
-    list_node_t list_node_sched;
-    // Node for the wait queue's thread list
-    list_node_t list_node_wait;
-    // Node for the sleep queue's thread list
-    list_node_t list_node_sleep_queue;
-
-    // The time (in nanoseconds) until which the thread should sleep
-    uint64_t sleep_until;
-    // The wait queue the thread is currently in, if any
-    wait_queue_t* current_wait_queue;
-    // The wait queue the thread is trying to enter, if any
-    wait_queue_t* target_wait_queue;
+        ATOMIC uint64_t wake_cookie;
+        uint64_t sleep_cookie;
+    } sched;
 
     bool in_interrupt_handler;
 };
