@@ -1,5 +1,5 @@
-#include <arch/x86_64/cpu_local.h>
 #include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/log.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>

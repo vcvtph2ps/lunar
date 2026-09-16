@@ -1,10 +1,8 @@
-#include <arch/x86_64/internal/msr.h>
 #include <common/log.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userspace.h>
-
-#include "memory/vm.h"
+#include <memory/vm.h>
 
 #define PROT_NONE (0)
 #define PROT_READ (1 << 0)

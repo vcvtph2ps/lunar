@@ -20,6 +20,15 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
     return nullptr;
 }
 
+thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_stack_top, virt_addr_t entry, bool inherit_pid) {
+    (void) process;
+    (void) user_stack_top;
+    (void) entry;
+    (void) inherit_pid;
+    assert(false && "Not implemented");
+    return nullptr;
+}
+
 thread_t* sched_arch_thread_current() {
     assert(false && "Not implemented");
     return nullptr;

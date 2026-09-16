@@ -1,5 +1,3 @@
-#include <arch/x86_64/cpu_local.h>
-#include <arch/x86_64/internal/msr.h>
 #include <common/cpu_local.h>
 #include <common/fs/vfs.h>
 #include <common/log.h>

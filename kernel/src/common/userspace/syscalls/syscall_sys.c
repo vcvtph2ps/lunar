@@ -1,4 +1,3 @@
-#include <arch/x86_64/internal/msr.h>
 #include <common/cpu_local.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
@@ -27,9 +26,18 @@ syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(0);
 }
 
+#if defined(__ARCH_X86_64__)
+#include <arch/x86_64/internal/msr.h>
+
 syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args) {
     arch_msr_write(ARCH_MSR_FS_BASE, args->arg1);
     LOG_STRC("tcb=0x%lx\n", args->arg1);
 
     return SYSCALL_RET_VALUE(0);
 }
+#else
+syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args) {
+    (void) args;
+    assert(false && "unimplemented");
+}
+#endif

@@ -33,9 +33,11 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     scheduler_t scheduler;
 
     struct {
-        spinlock_no_int_t lock;
         ipi_request_t* queue;
-        dw_item_t* dw_item;
+        dw_item_t* dw_free_item;
+
+        spinlock_no_int_t lock;
+        list_t pending_free_list;
     } ipi;
 };
 
