@@ -42,8 +42,8 @@ internal_userspace_exit_common:
     pop r10
 
     ; load default fpu state
-    fldcw [fldcw_word]
-    ldmxcsr [ldmxcsr_dword]
+    fldcw [abs fldcw_word]
+    ldmxcsr [abs ldmxcsr_dword]
 
     pop rcx ; address to sysret to
     pop rax ; userspace stack pointer
