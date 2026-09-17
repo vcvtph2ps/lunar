@@ -15,19 +15,17 @@
 
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
-init_stage_handler_t g_init_stage_handlers[] = {
-    INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
-    INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
-    INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
-    INIT_STAGE(INIT_STAGE_SCHED, sched_init),
-    INIT_STAGE(INIT_STAGE_ACPI_EARLY, init_stage_acpi_early),
-    INIT_STAGE(INIT_STAGE_PLATFORM_EARLY, init_stage_platform_early),
-    INIT_STAGE(INIT_STAGE_ACPI, init_stage_acpi),
-    INIT_STAGE(INIT_STAGE_PLATFORM, init_stage_platform),
-    INIT_STAGE(INIT_STAGE_VFS, init_stage_vfs),
-    INIT_STAGE(INIT_STAGE_TTY, init_stage_tty),
-    INIT_STAGE(INIT_STAGE_USERSPACE, init_stage_userspace)
-};
+init_stage_handler_t g_init_stage_handlers[] = { INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
+                                                 INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
+                                                 INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
+                                                 INIT_STAGE(INIT_STAGE_SCHED, sched_init),
+                                                 INIT_STAGE(INIT_STAGE_ACPI_EARLY, init_stage_acpi_early),
+                                                 INIT_STAGE(INIT_STAGE_PLATFORM_EARLY, init_stage_platform_early),
+                                                 INIT_STAGE(INIT_STAGE_ACPI, init_stage_acpi),
+                                                 INIT_STAGE(INIT_STAGE_PLATFORM, init_stage_platform),
+                                                 INIT_STAGE(INIT_STAGE_VFS, init_stage_vfs),
+                                                 INIT_STAGE(INIT_STAGE_TTY, init_stage_tty),
+                                                 INIT_STAGE(INIT_STAGE_USERSPACE, init_stage_userspace) };
 
 #undef INIT_STAGE
 

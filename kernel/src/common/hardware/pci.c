@@ -86,27 +86,27 @@ static void parse_capabilities(pci_device_t* pci_device) {
         uint8_t cap_id = cap & 0xff;
         uint8_t next_cap_ptr = (cap >> 8) & 0xff;
 
-        LOG_STRC("\tPCIe capability at %02x: id=%02x next=%02x\n", cap_ptr, cap_id, next_cap_ptr);
+        LOG_KTRC("\tPCIe capability at %02x: id=%02x next=%02x\n", cap_ptr, cap_id, next_cap_ptr);
         switch(cap_id) {
-            case 0x1: LOG_STRC("\t\tPCI Power Management Interface\n"); break;
-            case 0x4: LOG_STRC("\t\tSlot Identification\n"); break;
+            case 0x1: LOG_KTRC("\t\tPCI Power Management Interface\n"); break;
+            case 0x4: LOG_KTRC("\t\tSlot Identification\n"); break;
             case 0x5:
                 pci_device->device_info.msi_type = PCI_MSI_TYPE_MSI;
-                LOG_STRC("\t\tMSI Capability\n");
+                LOG_KTRC("\t\tMSI Capability\n");
                 break;
-            case 0x6:  LOG_STRC("\t\tCompactPCI Hot Swap\n"); break;
-            case 0x7:  LOG_STRC("\t\tPCI-X Capability\n"); break;
-            case 0x8:  LOG_STRC("\t\tHyperTransport Capability\n"); break;
-            case 0x9:  LOG_STRC("\t\tVendor Specific Capability\n"); break;
+            case 0x6:  LOG_KTRC("\t\tCompactPCI Hot Swap\n"); break;
+            case 0x7:  LOG_KTRC("\t\tPCI-X Capability\n"); break;
+            case 0x8:  LOG_KTRC("\t\tHyperTransport Capability\n"); break;
+            case 0x9:  LOG_KTRC("\t\tVendor Specific Capability\n"); break;
             case 0x10: {
-                LOG_STRC("\t\tPCI Express Capability:\n");
+                LOG_KTRC("\t\tPCI Express Capability:\n");
                 pci_device->device_info.pcie = true;
 
                 uint16_t reg = pci_device_read_u16(&pci_device->access, cap_ptr + 2);
-                LOG_STRC("\t\t\tversion %x\n", reg & 0xf);
+                LOG_KTRC("\t\t\tversion %x\n", reg & 0xf);
 
                 uint16_t device_type = (reg >> 4) & 0xf;
-                LOG_STRC("\t\t\tdevice Type %i\n", device_type);
+                LOG_KTRC("\t\t\tdevice Type %i\n", device_type);
 
                 /*
                  * 0x4 0100b Root Port of PCI Express Root Complex
@@ -117,9 +117,9 @@ static void parse_capabilities(pci_device_t* pci_device) {
             } break;
             case 0x11:
                 pci_device->device_info.msi_type = PCI_MSI_TYPE_MSIX;
-                LOG_STRC("\t\tMSI-X Capability\n");
+                LOG_KTRC("\t\tMSI-X Capability\n");
                 break;
-            default: LOG_STRC("\t\tUnknown (%02X)\n", cap_id); break;
+            default: LOG_KTRC("\t\tUnknown (%02X)\n", cap_id); break;
         }
 
         if(cap_ptr == next_cap_ptr) {

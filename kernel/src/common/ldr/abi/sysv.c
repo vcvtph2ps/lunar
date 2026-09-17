@@ -129,7 +129,7 @@ bool sysv_load_abi(vm_address_space_t* address_space, uintptr_t* inout_user_stac
     insert_u64(stack_buf, AUXV_NULL);
 
     uintptr_t stack_pointer = ALIGN_DOWN(*inout_user_stack - stack_buf->size, 16);
-    LOG_STRC("stack_pointer=%p\n", (void*) stack_pointer);
+    LOG_KTRC("stack_pointer=%p\n", (void*) stack_pointer);
     vm_copy_to(address_space, stack_pointer, (void*) stack_buf->data, stack_buf->size);
 
     buffer_free(stack_buf);

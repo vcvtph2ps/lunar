@@ -23,7 +23,7 @@ bool pagedb_valid_page(uint64_t pfn) {
 pagedb_page_t* pagedb_get_page(uint64_t pfn) {
     uint64_t count = g_init_boot_info->pfndb_size / sizeof(pagedb_page_t);
     if(pfn >= count) {
-        LOG_STRC("pagedb_get_page: pfn=0x%lx out of range (count=0x%lx)\n", pfn, count);
+        LOG_KTRC("pagedb_get_page: pfn=0x%lx out of range (count=0x%lx)\n", pfn, count);
         return nullptr;
     }
     if(!pagedb_valid_page(pfn)) { return nullptr; }

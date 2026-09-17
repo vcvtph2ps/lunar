@@ -28,7 +28,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     vfs_node_t* out_result_node;
     vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, pathname), &out_result_node);
     heap_free(pathname, pathname_ubuffer_size + 1);
-    LOG_STRC("pathname=%s, flags=%d, mode=%d | result=%d\n", pathname, flags, mode, result);
+    LOG_UTRC("pathname=%s, flags=%d, mode=%d | result=%d\n", pathname, flags, mode, result);
 
     switch(result) {
         case VFS_RESULT_OK:            break;
@@ -50,12 +50,12 @@ syscall_ret_t syscall_sys_fs_close(syscall_args_t* args) {
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_STRC("fd=%d | result=BADFD\n", fd);
+        LOG_UTRC("fd=%d | result=BADFD\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
     fd_store_free_fd(process->fd_store, fd);
-    LOG_STRC("fd=%d | result=0\n", fd);
+    LOG_UTRC("fd=%d | result=0\n", fd);
     return SYSCALL_RET_VALUE(0);
 }
 
@@ -68,7 +68,7 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
@@ -90,7 +90,7 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
 
     vm_copy_to(process->address_space, ubuffer, buffer, io_req.read.bytes_read);
     heap_free(buffer, ubuffer_size);
-    LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.offset, io_req.read.bytes_read);
+    LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.offset, io_req.read.bytes_read);
 
     return SYSCALL_RET_VALUE(io_req.read.bytes_read);
 }
@@ -104,7 +104,7 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
@@ -126,14 +126,14 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
     entry->offset += io_req.write.bytes_written;
 
     heap_free(buffer, ubuffer_size);
-    LOG_STRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.write.offset, io_req.write.bytes_written);
+    LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.write.offset, io_req.write.bytes_written);
 
     return SYSCALL_RET_VALUE(io_req.write.bytes_written);
 }
 
 syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
     uint32_t fd = args->arg1;
-    LOG_STRC("fd=%d\n", fd);
+    LOG_UTRC("fd=%d\n", fd);
 
     // @todo: STUB
     if(fd == 0 || fd == 1 || fd == 2) {
@@ -164,7 +164,7 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_STRC("fd=%d | result=BADFD\n", fd);
+        LOG_UTRC("fd=%d | result=BADFD\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
@@ -177,11 +177,11 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
         new_offset = 0;
         user_assert(whence != SEEK_END && "unimplemented");
     } else {
-        LOG_STRC("fd=%d offset=%ld whence=%d | result=EINVAL\n", fd, offset, whence);
+        LOG_UTRC("fd=%d offset=%ld whence=%d | result=EINVAL\n", fd, offset, whence);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
     entry->offset = new_offset;
-    LOG_STRC("fd=%d offset=%ld whence=%d | result=%ld\n", fd, offset, whence, new_offset);
+    LOG_UTRC("fd=%d offset=%ld whence=%d | result=%ld\n", fd, offset, whence, new_offset);
     return SYSCALL_RET_VALUE(0);
 }

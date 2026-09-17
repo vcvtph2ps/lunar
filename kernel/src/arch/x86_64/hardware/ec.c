@@ -121,7 +121,7 @@ static uacpi_status ec_region_handler(uacpi_region_op op, uacpi_handle op_data) 
             if(!status) { arch_panic("ec: read failed for address 0x%02x\n", addr); }
 
             data->value = value;
-            LOG_STRC("ec: read addr=0x%02x -> 0x%02x\n", addr, (uint8_t) value);
+            LOG_KTRC("ec: read addr=0x%02x -> 0x%02x\n", addr, (uint8_t) value);
             return UACPI_STATUS_OK;
         }
         case UACPI_REGION_OP_WRITE: {
@@ -129,7 +129,7 @@ static uacpi_status ec_region_handler(uacpi_region_op op, uacpi_handle op_data) 
             ec_device_t* ec = (ec_device_t*) data->region_context;
             uint8_t addr = (uint8_t) data->address;
 
-            LOG_STRC("ec: write addr=0x%02x <- 0x%02x\n", addr, (uint8_t) data->value);
+            LOG_KTRC("ec: write addr=0x%02x <- 0x%02x\n", addr, (uint8_t) data->value);
 
             spinlock_nodw_lock(&ec->lock);
             bool status = ec_write(ec, addr, (uint8_t) data->value);

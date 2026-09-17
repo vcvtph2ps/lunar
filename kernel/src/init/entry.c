@@ -32,7 +32,7 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
     cpu_local_init(core_id);
 
-    LOG_STRC("kernel booted on core %ld :3\n", core_id);
+    LOG_KTRC("kernel booted on core %ld :3\n", core_id);
     arch_init_ap(core_id);
 }
 
@@ -60,7 +60,7 @@ const char* memmap_type_to_string(uint64_t type) {
     log_init();
     log_framebuffer_init();
 
-    LOG_STRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
+    LOG_KTRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
 
 #ifdef __ARCH_RISCV64__
     LOG_INFO("Platform: %s (riscv64)\n", boot_info->riscv_base_isa_string);
@@ -90,17 +90,17 @@ const char* memmap_type_to_string(uint64_t type) {
 
 #endif
 
-    LOG_STRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
-    LOG_STRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
-    LOG_STRC("hhdm_offset=0x%016lx\n", boot_info->hhdm_offset);
-    LOG_STRC("hhdm_size=0x%016lx\n", boot_info->hhdm_size);
-    LOG_STRC("pfndb_start=0x%016lx\n", boot_info->pfndb_start);
-    LOG_STRC("pfndb_size=0x%016lx\n", boot_info->pfndb_size);
-    LOG_STRC("kernel_segment_count=%zu\n", boot_info->kernel_segment_count);
+    LOG_KTRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
+    LOG_KTRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
+    LOG_KTRC("hhdm_offset=0x%016lx\n", boot_info->hhdm_offset);
+    LOG_KTRC("hhdm_size=0x%016lx\n", boot_info->hhdm_size);
+    LOG_KTRC("pfndb_start=0x%016lx\n", boot_info->pfndb_start);
+    LOG_KTRC("pfndb_size=0x%016lx\n", boot_info->pfndb_size);
+    LOG_KTRC("kernel_segment_count=%zu\n", boot_info->kernel_segment_count);
     for(size_t i = 0; i < boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* segment = &boot_info->kernel_segments[i];
         (void) segment;
-        LOG_STRC(
+        LOG_KTRC(
             "kernel_segment[%zu]: paddr=0x%016lx, vaddr=0x%016lx, size=0x%016lx, flags=%c%c%c\n",
             i,
             segment->paddr,
@@ -111,18 +111,18 @@ const char* memmap_type_to_string(uint64_t type) {
             (segment->flags & BOOTINFO_SEGMENT_FLAG_EXECUTE) ? 'x' : '-'
         );
     }
-    LOG_STRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
+    LOG_KTRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
     for(size_t i = 0; i < boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &boot_info->mm_entries[i];
         (void) entry;
-        LOG_STRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%s (%ld)\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, memmap_type_to_string(entry->type), entry->type);
+        LOG_KTRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%s (%ld)\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, memmap_type_to_string(entry->type), entry->type);
     }
 
-    LOG_STRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);
+    LOG_KTRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);
     for(size_t i = 0; i < boot_info->framebuffer_count; i++) {
         bootinfo_framebuffer_t* framebuffer = &boot_info->framebuffers[i];
 
-        LOG_STRC("framebuffer[%zu]: vaddr=0x%016lx, paddr=0x%016lx, width=%d, height=%d, pitch=%d, format=", i, (uintptr_t) framebuffer->vaddr, framebuffer->paddr, framebuffer->width, framebuffer->height, framebuffer->pitch);
+        LOG_KTRC("framebuffer[%zu]: vaddr=0x%016lx, paddr=0x%016lx, width=%d, height=%d, pitch=%d, format=", i, (uintptr_t) framebuffer->vaddr, framebuffer->paddr, framebuffer->width, framebuffer->height, framebuffer->pitch);
 
         struct fbpixel {
             uint8_t pos;
@@ -149,16 +149,16 @@ const char* memmap_type_to_string(uint64_t type) {
         for(size_t i = 0; i < 3; i++) { log_print(LOG_LEVEL_STRC, "%c%u", pixels[i].color, pixels[i].size); }
         log_print(LOG_LEVEL_STRC, "\n");
     }
-    LOG_STRC("module_count=%zu\n", boot_info->module_count);
+    LOG_KTRC("module_count=%zu\n", boot_info->module_count);
 
     for(size_t i = 0; i < boot_info->module_count; i++) {
         bootinfo_module_t* module = &boot_info->modules[i];
         (void) module;
-        LOG_STRC("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
+        LOG_KTRC("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
         if(string_compare(module->name, "/boot/kernel.ksym") == 0) { ksym_load((void*) module->phys_addr + g_init_boot_info->hhdm_offset); }
     }
 
-    LOG_STRC("cpu_count=%ld\n", boot_info->core_count);
+    LOG_KTRC("cpu_count=%ld\n", boot_info->core_count);
 
     pagedb_init();
 
