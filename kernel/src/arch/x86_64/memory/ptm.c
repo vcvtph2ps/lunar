@@ -256,7 +256,7 @@ static void map_kernel() {
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(entry->type == BOOTINFO_MM_TYPE_BAD) continue;
+        if(entry->type == BOOTINFO_MM_TYPE_RESERVED || entry->type == BOOTINFO_MM_TYPE_BAD) continue;
 
         const phys_addr_t aligned_paddr = ALIGN_DOWN(entry->phys_base, ARCH_PAGE_SIZE_4K);
         const virt_addr_t aligned_vaddr = (virt_addr_t) PTM_TO_HHDM(aligned_paddr);
@@ -267,6 +267,14 @@ static void map_kernel() {
     }
 
     arch_pte_entry_t* boot_top = (arch_pte_entry_t*) PTM_TO_HHDM(arch_cr_read_cr3() & ARCH_PTE_ADDR_MASK);
+
+    for(uintptr_t offset = 0; offset < g_init_boot_info->pfndb_bitmap_size; offset += ARCH_PAGE_SIZE_4K) {
+        uintptr_t va = g_init_boot_info->pfndb_bitmap_start + offset;
+        uintptr_t pa;
+        bool mapped = internal_ptm_physical(boot_top, va, &pa);
+        assert(mapped);
+        ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RO, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
+    }
 
     for(uintptr_t va = g_init_boot_info->pfndb_start; va < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; va += ARCH_PAGE_SIZE_4K) {
         uintptr_t pa;

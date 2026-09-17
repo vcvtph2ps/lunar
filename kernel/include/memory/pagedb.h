@@ -11,6 +11,7 @@ typedef struct [[gnu::packed, gnu::aligned(16)]] {
 
 void pagedb_init();
 
+bool pagedb_valid_page(uint64_t pfn);
 pagedb_page_t* pagedb_get_page(uint64_t pfn);
 uint32_t pagedb_page_ref(uint64_t pfn);
 uint32_t pagedb_page_deref(uint64_t pfn);

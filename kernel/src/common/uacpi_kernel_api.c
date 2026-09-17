@@ -19,6 +19,7 @@
 #include <lib/helpers.h>
 #include <lib/types.h>
 #include <memory/heap.h>
+#include <memory/pagedb.h>
 #include <memory/vm.h>
 #include <uacpi/kernel_api.h>
 #include <uacpi/log.h>
@@ -31,13 +32,34 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr* out_rsdp_address) {
     return UACPI_STATUS_OK;
 }
 
-// god this is suck a hackkkk
 static bool uacpi_phys_is_ram(uintptr_t paddr, size_t length) {
+    if(length == 0 || length > UINTPTR_MAX - paddr) { return false; }
+
     const uintptr_t end = paddr + length;
+    const uint64_t last_pfn = (end - 1) / PAGE_SIZE_DEFAULT;
+    for(uint64_t pfn = paddr / PAGE_SIZE_DEFAULT; pfn <= last_pfn; pfn++) {
+        if(!pagedb_valid_page(pfn)) { return false; }
+    }
+
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
-        bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(entry->type == BOOTINFO_MM_TYPE_BAD || entry->type == BOOTINFO_MM_TYPE_RESERVED) { continue; }
-        if(paddr >= entry->phys_base && end <= entry->phys_base + entry->length) { return true; }
+        const bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
+        if(paddr < entry->phys_base) { return false; }
+        const uintptr_t offset = paddr - entry->phys_base;
+        if(offset >= entry->length) { continue; }
+
+        switch(entry->type) {
+            case BOOTINFO_MM_TYPE_USABLE:
+            case BOOTINFO_MM_TYPE_USED:
+            case BOOTINFO_MM_TYPE_MODULE:
+            case BOOTINFO_MM_TYPE_RECLAIMABLE:
+            case BOOTINFO_MM_TYPE_ACPI_RECLAIMABLE:
+                break;
+            default: return false;
+        }
+
+        const size_t remaining = entry->length - offset;
+        if(remaining >= end - paddr) { return true; }
+        paddr += remaining;
     }
     return false;
 }

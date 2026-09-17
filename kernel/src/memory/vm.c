@@ -596,6 +596,7 @@ rb_tree_t vm_create_regions() {
 static vm_region_t g_kernel_region;
 static vm_region_t g_hhdm_region;
 static vm_region_t g_pfndb_region;
+static vm_region_t g_pfndb_bitmap_region;
 
 void vm_init_kernel() {
     extern char kernel_start[];
@@ -630,9 +631,18 @@ void vm_init_kernel() {
     g_pfndb_region.dynamically_backed = false;
     g_pfndb_region.type = VM_REGION_TYPE_ANON;
 
+    g_pfndb_bitmap_region.address_space = g_vm_global_address_space;
+    g_pfndb_bitmap_region.base = g_init_boot_info->pfndb_bitmap_start;
+    g_pfndb_bitmap_region.length = g_init_boot_info->pfndb_bitmap_size;
+    g_pfndb_bitmap_region.protection = VM_PROT_RO;
+    g_pfndb_bitmap_region.cache = VM_CACHE_NORMAL;
+    g_pfndb_bitmap_region.dynamically_backed = false;
+    g_pfndb_bitmap_region.type = VM_REGION_TYPE_ANON;
+
     rb_insert(&g_vm_global_address_space->regions_tree, &g_kernel_region.region_tree_node);
     rb_insert(&g_vm_global_address_space->regions_tree, &g_hhdm_region.region_tree_node);
     rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_region.region_tree_node);
+    rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_bitmap_region.region_tree_node);
 }
 
 static void vm_fault_dw(void* data) {

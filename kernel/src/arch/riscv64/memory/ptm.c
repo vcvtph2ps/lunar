@@ -260,6 +260,14 @@ static void map_kernel(arch_pte_entry_t* boot_top) {
         ptm_map(g_vm_global_address_space, aligned_vaddr, aligned_paddr, aligned_length, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
     }
 
+    for(uintptr_t offset = 0; offset < g_init_boot_info->pfndb_bitmap_size; offset += ARCH_PAGE_SIZE_4K) {
+        uintptr_t va = g_init_boot_info->pfndb_bitmap_start + offset;
+        uintptr_t pa;
+        bool mapped = internal_ptm_physical(boot_top, va, &pa);
+        assert(mapped);
+        ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RO, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
+    }
+
     for(uintptr_t va = g_init_boot_info->pfndb_start; va < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; va += ARCH_PAGE_SIZE_4K) {
         uintptr_t pa;
         if(internal_ptm_physical(boot_top, va, &pa)) ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false);
