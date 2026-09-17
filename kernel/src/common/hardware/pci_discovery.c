@@ -210,7 +210,7 @@ static void check_bridge(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* pci_bridge
 }
 
 static void check_function(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* pci_function) {
-    LOG_STRC(
+    LOG_KTRC(
         "PCI: Found function %04x:%02x:%02x.%u %04x:%04x (%d)\n",
         scan_ctx->host_bridge->segment,
         pci_function->access.bus,
@@ -220,8 +220,8 @@ static void check_function(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* pci_func
         pci_function->device_info.device,
         pci_function->device_info.header_type
     );
-    LOG_STRC("\tclass %02x:%02x.%02x (rev %02x)\n", pci_function->device_info.class_code, pci_function->device_info.subclass_code, pci_function->device_info.prog_if, pci_function->device_info.revision_id);
-    if(pci_function->device_info.is_bridge) { LOG_STRC("\tsecondary bus %u\n", pci_function->device_info.bridge_info.secondary_bus); }
+    LOG_KTRC("\tclass %02x:%02x.%02x (rev %02x)\n", pci_function->device_info.class_code, pci_function->device_info.subclass_code, pci_function->device_info.prog_if, pci_function->device_info.revision_id);
+    if(pci_function->device_info.is_bridge) { LOG_KTRC("\tsecondary bus %u\n", pci_function->device_info.bridge_info.secondary_bus); }
 
     list_push_back(&g_pci_devices, &pci_function->device_list_node);
     if(pci_function->device_info.is_bridge) { check_bridge(scan_ctx, pci_function); }
@@ -231,7 +231,7 @@ static void check_device(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* parent_bri
     pci_device_t* pci_device;
     if(!pci_create_device(scan_ctx->host_bridge, parent_bridge, bus, device, 0, &pci_device)) { return; }
 
-    LOG_STRC("PCI: Checking device %04x:%02x:%02x.0 vendor=%04x device=%04x\n", scan_ctx->host_bridge->segment, bus, device, pci_device->device_info.vendor, pci_device->device_info.device);
+    LOG_KTRC("PCI: Checking device %04x:%02x:%02x.0 vendor=%04x device=%04x\n", scan_ctx->host_bridge->segment, bus, device, pci_device->device_info.vendor, pci_device->device_info.device);
 
     check_function(scan_ctx, pci_device);
     if(pci_device->device_info.multifunction) {
@@ -297,9 +297,9 @@ static uacpi_iteration_decision pci_iteration_callback(void* user, uacpi_namespa
     }
 
     if(host_bridge->ecam) {
-        LOG_STRC("ACPI: Found PCI Root bridge: %s %04x:%02x-%02x 0x%p\n", uacpi_namespace_node_generate_absolute_path(node), host_bridge->segment, host_bridge->start_bus_number, host_bridge->end_bus_number, (void*) host_bridge->ecam->phys_base);
+        LOG_KTRC("ACPI: Found PCI Root bridge: %s %04x:%02x-%02x 0x%p\n", uacpi_namespace_node_generate_absolute_path(node), host_bridge->segment, host_bridge->start_bus_number, host_bridge->end_bus_number, (void*) host_bridge->ecam->phys_base);
     } else {
-        LOG_STRC("ACPI: Found PCI Root bridge: %s %04x:%02x-%02x (legacy access)\n", uacpi_namespace_node_generate_absolute_path(node), host_bridge->segment, host_bridge->start_bus_number, host_bridge->end_bus_number);
+        LOG_KTRC("ACPI: Found PCI Root bridge: %s %04x:%02x-%02x (legacy access)\n", uacpi_namespace_node_generate_absolute_path(node), host_bridge->segment, host_bridge->start_bus_number, host_bridge->end_bus_number);
     }
     enumerate_pci_bus(scan_ctx, scan_ctx->host_bridge->start_bus_number);
     heap_free(scan_ctx, sizeof(acpi_pci_scan_ctx_t));
@@ -362,7 +362,7 @@ void pci_early_init() {
     g_pci_ecam_regions = heap_alloc(sizeof(pci_ecam_region_t) * count);
 
     for(size_t i = 0; i < count; ++i) {
-        LOG_STRC("MCFG[%zu]: seg=%u buses=%u-%u base=%016lx\n", i, allocs[i].segment, allocs[i].start_bus, allocs[i].end_bus, allocs[i].address);
+        LOG_KTRC("MCFG[%zu]: seg=%u buses=%u-%u base=%016lx\n", i, allocs[i].segment, allocs[i].start_bus, allocs[i].end_bus, allocs[i].address);
         pci_ecam_region_t* region = &g_pci_ecam_regions[i];
         region->segment = allocs[i].segment;
         region->phys_base = allocs[i].address;
@@ -373,17 +373,17 @@ void pci_early_init() {
         size_t map_size = bus_count * 256 * 8 * PAGE_SIZE_DEFAULT;
         region->mmio_base = (uint64_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(map_size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_DISABLE, region->phys_base, VM_FLAG_MMIO);
 
-        LOG_STRC("PCI: ECAM segment %u mapped: phys=%lx virt=%lx size=%lx buses=%u-%u\n", region->segment, region->phys_base, region->mmio_base, map_size, region->start_bus, region->end_bus);
+        LOG_KTRC("PCI: ECAM segment %u mapped: phys=%lx virt=%lx size=%lx buses=%u-%u\n", region->segment, region->phys_base, region->mmio_base, map_size, region->start_bus, region->end_bus);
     }
 
     uacpi_table_unref(&mcfg_table);
 }
 
 bool pci_init() {
-    if(g_pci_ecam_region_count == 0) {
-        LOG_FAIL("ACPI: No MCFG regions found, cannot enumerate PCI devices\n");
-        return false;
-    }
+    // if(g_pci_ecam_region_count == 0) {
+    //     LOG_FAIL("ACPI: No MCFG regions found, cannot enumerate PCI devices\n");
+    //     return false;
+    // }
 
     const char* pci_root_ids[] = { "PNP0A03", "PNP0A08", nullptr };
     uacpi_status status = uacpi_find_devices_at(uacpi_namespace_root(), pci_root_ids, pci_iteration_callback, nullptr);
@@ -398,7 +398,11 @@ bool pci_init() {
     LOG_INFO("PCI: Found %zu root bridges\n", g_pci_host_bridges.count);
     LIST_FOR_EACH(&g_pci_host_bridges, root_bridge_node) {
         pci_host_bridge_t* bridge = CONTAINER_OF(root_bridge_node, pci_host_bridge_t, host_bridge_list_node);
-        LOG_INFO("PCI: Root bridge %04x buses=%u-%u ecam_phys=%lx\n", bridge->segment, bridge->start_bus_number, bridge->end_bus_number, bridge->ecam->phys_base);
+        if(bridge->ecam != nullptr) {
+            LOG_INFO("PCI: Root bridge %04x buses=%u-%u ecam_phys=%lx\n", bridge->segment, bridge->start_bus_number, bridge->end_bus_number, bridge->ecam->phys_base);
+        } else {
+            LOG_INFO("PCI: Root bridge %04x buses=%u-%u ecam_phys=<null>\n", bridge->segment, bridge->start_bus_number, bridge->end_bus_number);
+        }
     }
 
     LOG_INFO("PCI: Found %zu devices\n", g_pci_devices.count);

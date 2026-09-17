@@ -24,16 +24,16 @@
 void init_stage_arch_cpu(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         if(arch_cpuid_get_hypervisor() != ARCH_CPUID_HYPERVISOR_NONE) {
-            LOG_STRC("Processor: %s, \"%s\" running under \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string(), arch_cpuid_get_hypervisor_string());
+            LOG_KTRC("Processor: %s, \"%s\" running under \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string(), arch_cpuid_get_hypervisor_string());
         } else {
-            LOG_STRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
+            LOG_KTRC("Processor: %s, \"%s\"\n", arch_cpuid_get_vendor_string(), arch_cpuid_get_name_string());
         }
 
-        LOG_STRC("cr0=0x%016lx\n", arch_cr_read_cr0());
-        LOG_STRC("cr4=0x%016lx\n", arch_cr_read_cr4());
-        if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) { LOG_STRC("xcr0=0x%016lx\n", arch_cr_read_xcr0()); }
-        LOG_STRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
-        LOG_STRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
+        LOG_KTRC("cr0=0x%016lx\n", arch_cr_read_cr0());
+        LOG_KTRC("cr4=0x%016lx\n", arch_cr_read_cr4());
+        if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) { LOG_KTRC("xcr0=0x%016lx\n", arch_cr_read_xcr0()); }
+        LOG_KTRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
+        LOG_KTRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
         if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
             LOG_INFO("fpu save method: xsave, fpu_size=%d\n", arch_cpuid(0x0d, 0, ARCH_CPUID_ECX));

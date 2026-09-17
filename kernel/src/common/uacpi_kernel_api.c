@@ -65,7 +65,7 @@ static bool uacpi_phys_is_ram(uintptr_t paddr, size_t length) {
 }
 
 void* uacpi_kernel_map(uacpi_phys_addr paddr, uacpi_size length) {
-    LOG_STRC("uacpi: mapping addr=%p, length=%zu\n", (void*) paddr, length);
+    LOG_KTRC("uacpi: mapping addr=%p, length=%zu\n", (void*) paddr, length);
     const uacpi_phys_addr aligned_paddr = ALIGN_DOWN(paddr, PAGE_SIZE_DEFAULT);
     const uacpi_size alignment_diff = paddr - aligned_paddr;
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
@@ -81,7 +81,7 @@ void* uacpi_kernel_map(uacpi_phys_addr paddr, uacpi_size length) {
 }
 
 void uacpi_kernel_unmap(void* addr, uacpi_size length) {
-    LOG_STRC("uacpi: unmapping addr=%p, length=%zu\n", addr, length);
+    LOG_KTRC("uacpi: unmapping addr=%p, length=%zu\n", addr, length);
     const uintptr_t aligned_addr = ALIGN_DOWN(addr, PAGE_SIZE_DEFAULT);
     const uacpi_size alignment_diff = (uintptr_t) addr - aligned_addr;
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
@@ -95,23 +95,23 @@ static void uacpi_kernel_vlog(uacpi_log_level level, const uacpi_char* fmt, uacp
     switch(level) {
         case UACPI_LOG_ERROR:
             log_level = LOG_LEVEL_FAIL;
-            prefix = LOG_COLORIZE("fail |", "91") " uacpi: ";
+            prefix = LOG_COLORIZE("fail |", "9") " uacpi: ";
             break;
         case UACPI_LOG_WARN:
             log_level = LOG_LEVEL_WARN;
-            prefix = LOG_COLORIZE("warn |", "93") " uacpi: ";
+            prefix = LOG_COLORIZE("warn |", "11") " uacpi: ";
             break;
         case UACPI_LOG_DEBUG:
             log_level = LOG_LEVEL_DBGL;
-            prefix = LOG_COLORIZE("dbgl |", "34") " uacpi: ";
+            prefix = LOG_COLORIZE("dbgl |", "4") " uacpi: ";
             break;
         case UACPI_LOG_TRACE:
             log_level = LOG_LEVEL_STRC;
-            prefix = LOG_COLORIZE("strc |", "95") " uacpi: ";
+            prefix = LOG_COLORIZE("strc |", "13") " uacpi: ";
             break;
         case UACPI_LOG_INFO:
             log_level = LOG_LEVEL_INFO;
-            prefix = LOG_COLORIZE("info |", "96") " uacpi: ";
+            prefix = LOG_COLORIZE("info |", "14") " uacpi: ";
             break;
         default: return;
     }
@@ -222,7 +222,7 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle* out_handle) {
     (void) base;
     (void) len;
-    LOG_STRC("uacpi: mapping io port base=0x%04lx, len=%zu\n", base, len);
+    LOG_KTRC("uacpi: mapping io port base=0x%04lx, len=%zu\n", base, len);
 
     *out_handle = (uacpi_handle) base;
     return UACPI_STATUS_OK;
@@ -230,48 +230,48 @@ uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handl
 
 void uacpi_kernel_io_unmap(uacpi_handle handle) {
     (void) handle;
-    LOG_STRC("uacpi: unmapping io port handle=%p\n", handle);
+    LOG_KTRC("uacpi: unmapping io port handle=%p\n", handle);
 }
 
 #if defined(__ARCH_X86_64__)
 uacpi_status uacpi_kernel_io_read8(uacpi_handle handle, uacpi_size offset, uacpi_u8* out_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
-    LOG_STRC("uacpi: reading 8-bit value from io port 0x%04lx\n", io_base + offset);
+    LOG_KTRC("uacpi: reading 8-bit value from io port 0x%04lx\n", io_base + offset);
     *out_value = arch_io_port_read_u8(io_base + offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_read16(uacpi_handle handle, uacpi_size offset, uacpi_u16* out_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
-    LOG_STRC("uacpi: reading 16-bit value from io port 0x%04lx\n", io_base + offset);
+    LOG_KTRC("uacpi: reading 16-bit value from io port 0x%04lx\n", io_base + offset);
     *out_value = arch_io_port_read_u16(io_base + offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_read32(uacpi_handle handle, uacpi_size offset, uacpi_u32* out_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
-    LOG_STRC("uacpi: reading 32-bit value from io port 0x%04lx\n", io_base + offset);
+    LOG_KTRC("uacpi: reading 32-bit value from io port 0x%04lx\n", io_base + offset);
     *out_value = arch_io_port_read_u32(io_base + offset);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_write8(uacpi_handle handle, uacpi_size offset, uacpi_u8 in_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
-    LOG_STRC("uacpi: write 8-bit value to io port 0x%04lx = 0x%02x\n", io_base + offset, in_value);
+    LOG_KTRC("uacpi: write 8-bit value to io port 0x%04lx = 0x%02x\n", io_base + offset, in_value);
     arch_io_port_write_u8(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_write16(uacpi_handle handle, uacpi_size offset, uacpi_u16 in_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
-    LOG_STRC("uacpi: write 16-bit value to io port 0x%04lx = 0x%04x\n", io_base + offset, in_value);
+    LOG_KTRC("uacpi: write 16-bit value to io port 0x%04lx = 0x%04x\n", io_base + offset, in_value);
     arch_io_port_write_u16(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_write32(uacpi_handle handle, uacpi_size offset, uacpi_u32 in_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
-    LOG_STRC("uacpi: write 32-bit value to io port 0x%04lx = 0x%08x\n", io_base + offset, in_value);
+    LOG_KTRC("uacpi: write 32-bit value to io port 0x%04lx = 0x%08x\n", io_base + offset, in_value);
     arch_io_port_write_u32(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
@@ -522,7 +522,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     uacpi_kernel_interrupt_ctx_t* kernel_ctx = (uacpi_kernel_interrupt_ctx_t*) heap_alloc(sizeof(uacpi_kernel_interrupt_ctx_t));
 
     uint8_t vector = arch_interrupt_alloc_allocate();
-    LOG_STRC("uacpi: installing interrupt handler for irq=%u -> %u\n", irq, vector);
+    LOG_KTRC("uacpi: installing interrupt handler for irq=%u -> %u\n", irq, vector);
 
     kernel_ctx->vector = vector;
     kernel_ctx->gsi = arch_ioapic_gsi_of_irq(irq);
@@ -630,7 +630,7 @@ static void process_work() {
  */
 uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler handler, uacpi_handle ctx) {
     (void) type;
-    LOG_STRC("uacpi: scheduling work handler=%p, ctx=%p\n", (void*) handler, ctx);
+    LOG_KTRC("uacpi: scheduling work handler=%p, ctx=%p\n", (void*) handler, ctx);
 
     // @todo: we cannot do this here, there is a chance this is first called from an interrupt context...
     if(g_uacpi_worker == nullptr) {

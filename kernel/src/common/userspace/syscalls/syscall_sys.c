@@ -8,7 +8,7 @@
 
 [[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
     (void) args;
-    LOG_STRC("exit_code=%d\n", (int) args->arg1);
+    LOG_UTRC("exit_code=%d\n", (int) args->arg1);
     sched_yield(THREAD_STATE_TERMINATED);
     while(1);
 }
@@ -31,7 +31,7 @@ syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
 
 syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args) {
     arch_msr_write(ARCH_MSR_FS_BASE, args->arg1);
-    LOG_STRC("tcb=0x%lx\n", args->arg1);
+    LOG_UTRC("tcb=0x%lx\n", args->arg1);
 
     return SYSCALL_RET_VALUE(0);
 }

@@ -67,43 +67,50 @@ arch_interrupt_state_t log_lock_acquire(void);
  */
 void log_lock_release(arch_interrupt_state_t state);
 
-#define LOG_COLORIZE(text, color) "\x1b[1m\x1b[" color "m" text "\x1b[0m"
+#define LOG_COLORIZE(text, color) "\x1b[1m\x1b[38;5;" color "m" text "\x1b[0m"
 
-#define LOG_FAIL(fmt, ...)                                                                            \
-    do {                                                                                              \
-        log_print(LOG_LEVEL_FAIL, LOG_COLORIZE("fail | ", "91") "%s: " fmt, __func__, ##__VA_ARGS__); \
+#define LOG_FAIL(fmt, ...)                                                                           \
+    do {                                                                                             \
+        log_print(LOG_LEVEL_FAIL, LOG_COLORIZE("fail | ", "9") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
 #define LOG_WARN(fmt, ...)                                                                            \
     do {                                                                                              \
-        log_print(LOG_LEVEL_WARN, LOG_COLORIZE("warn | ", "93") "%s: " fmt, __func__, ##__VA_ARGS__); \
+        log_print(LOG_LEVEL_WARN, LOG_COLORIZE("warn | ", "11") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
 #define LOG_OKAY(fmt, ...)                                                                            \
     do {                                                                                              \
-        log_print(LOG_LEVEL_OKAY, LOG_COLORIZE("okay | ", "92") "%s: " fmt, __func__, ##__VA_ARGS__); \
+        log_print(LOG_LEVEL_OKAY, LOG_COLORIZE("okay | ", "10") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
 #define LOG_INFO(fmt, ...)                                                                            \
     do {                                                                                              \
-        log_print(LOG_LEVEL_INFO, LOG_COLORIZE("info | ", "96") "%s: " fmt, __func__, ##__VA_ARGS__); \
+        log_print(LOG_LEVEL_INFO, LOG_COLORIZE("info | ", "14") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
 #if defined(__DEBUG__)
 
-#define LOG_DBGL(fmt, ...)                                                                            \
-    do {                                                                                              \
-        log_print(LOG_LEVEL_DBGL, LOG_COLORIZE("dbgl | ", "34") "%s: " fmt, __func__, ##__VA_ARGS__); \
+#define LOG_DBGL(fmt, ...)                                                                           \
+    do {                                                                                             \
+        log_print(LOG_LEVEL_DBGL, LOG_COLORIZE("dbgl | ", "4") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
-#define LOG_STRC(fmt, ...)                                                                            \
+// Kernel TRaCe
+#define LOG_KTRC(fmt, ...)                                                                            \
     do {                                                                                              \
-        log_print(LOG_LEVEL_STRC, LOG_COLORIZE("strc | ", "95") "%s: " fmt, __func__, ##__VA_ARGS__); \
+        log_print(LOG_LEVEL_STRC, LOG_COLORIZE("ktrc | ", "13") "%s: " fmt, __func__, ##__VA_ARGS__); \
+    } while(0)
+
+// User TRaCe
+#define LOG_UTRC(fmt, ...)                                                                             \
+    do {                                                                                               \
+        log_print(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "%s: " fmt, __func__, ##__VA_ARGS__); \
     } while(0)
 
 #else
 
 #define LOG_DBGL(fmt, ...)
-#define LOG_STRC(fmt, ...)
+#define LOG_KTRC(fmt, ...)
 
 #endif

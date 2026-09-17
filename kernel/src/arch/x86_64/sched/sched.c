@@ -128,7 +128,7 @@ thread_t* sched_arch_thread_current() {
 }
 
 void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_state_t yield_state) {
-    LOG_STRC("core %d, current=%u, next=%u, state=%u\n", CPU_LOCAL_READ(core_id), t_current->tid, t_next->tid, yield_state);
+    LOG_KTRC("core %d, current=%u, next=%u, state=%u\n", CPU_LOCAL_READ(core_id), t_current->tid, t_next->tid, yield_state);
     x86_64_thread_t* current = CONTAINER_OF(t_current, x86_64_thread_t, common);
     x86_64_thread_t* next = CONTAINER_OF(t_next, x86_64_thread_t, common);
 

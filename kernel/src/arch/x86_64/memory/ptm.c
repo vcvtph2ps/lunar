@@ -284,7 +284,7 @@ static void map_kernel() {
 
 static void page_fault_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
-    LOG_STRC("addr=0x%016lx\n", frame->interrupt_data);
+    LOG_KTRC("addr=0x%016lx\n", frame->interrupt_data);
     if(!frame->is_user) {
         arch_panic_int(frame);
     }
