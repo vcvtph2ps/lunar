@@ -25,8 +25,8 @@ typedef enum : uint64_t {
 } syscall_nr_t;
 
 typedef enum : int64_t {
-    SYSCALL_ERROR_AGAIN = 11, // Try again (EAGAIN)
     SYSCALL_ERROR_NOENT = 2, // No such file or directory
+    SYSCALL_ERROR_AGAIN = 11, // Try again (EAGAIN)
     SYSCALL_ERROR_NOMEM = 12, // Out of memory
     SYSCALL_ERROR_FAULT = 14, // Bad address
     SYSCALL_ERROR_INVAL = 22, // Invalid argument

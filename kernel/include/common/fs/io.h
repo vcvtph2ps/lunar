@@ -23,4 +23,6 @@ typedef struct {
             size_t bytes_written;
         } write;
     };
+
+    bool no_block; // driver must some form of `WOULD_BLOCK` error instead of blocking
 } io_request_t;

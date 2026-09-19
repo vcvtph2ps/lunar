@@ -22,7 +22,7 @@ void fd_store_free(fd_store_t* store) {
     heap_free(store, sizeof(fd_store_t));
 }
 
-uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node) {
+uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_t** out_entry) {
     spinlock_lock(&store->lock);
 
     size_t fd = bitmap_find_free(store->bitmap);
@@ -33,13 +33,18 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node) {
 
     store->fds[fd].node = vfs_node_get(node);
     store->fds[fd].offset = 0;
+    store->fds[fd].access.read = false;
+    store->fds[fd].access.write = false;
+    store->fds[fd].non_blocking = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
+
+    *out_entry = &store->fds[fd];
     return fd;
 }
 
-uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd) {
+uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_entry_t** out_entry) {
     spinlock_lock(&store->lock);
 
     user_assert(fd < store->fds_elements_count && "fd out of range");
@@ -47,9 +52,14 @@ uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd)
 
     store->fds[fd].node = vfs_node_get(node);
     store->fds[fd].offset = 0;
+    store->fds[fd].access.read = false;
+    store->fds[fd].access.write = false;
+    store->fds[fd].non_blocking = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
+
+    *out_entry = &store->fds[fd];
     return fd;
 }
 

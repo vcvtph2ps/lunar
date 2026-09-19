@@ -16,6 +16,14 @@ typedef struct {
     size_t head;
     size_t tail;
 
+    struct {
+        bool canonical;
+    } mode;
+
+    /// @brief How many commited (newline sent) lines are still in the tty buffer
+    /// @note only updated in cannonical mode
+    ATOMIC uint16_t line_count;
+
     /// @brief Called when a byte is written to the tty output (e.g. to forward to UART)
     void (*on_write)(void* ctx, uint8_t c);
     void* write_ctx;

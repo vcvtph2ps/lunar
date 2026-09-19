@@ -125,6 +125,7 @@ static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, const
     io_req.read.count = phdr->file_size;
     io_req.read.offset = phdr->offset;
     io_req.read.bytes_read = 0;
+    io_req.no_block = false;
 
     vfs_result_t result = vfs_perform_io(path, &io_req);
     if(result != VFS_RESULT_OK) {
@@ -146,6 +147,7 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, con
     io_req.read.count = phdr->file_size;
     io_req.read.offset = phdr->offset;
     io_req.read.bytes_read = 0;
+    io_req.no_block = false;
 
     vfs_result_t result = vfs_perform_io(path, &io_req);
     if(result != VFS_RESULT_OK) {
@@ -179,6 +181,7 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
         io_req.read.count = sizeof(elf64_program_header_t);
         io_req.read.offset = elf_header->program_header_offset + i * elf_header->program_header_entry_size;
         io_req.read.bytes_read = 0;
+        io_req.no_block = false;
 
         vfs_result_t result = vfs_perform_io(path, &io_req);
         if(result != VFS_RESULT_OK) {
@@ -264,6 +267,7 @@ bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, el
     io_req.read.count = sizeof(elf64_elf_header_t);
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;
+    io_req.no_block = false;
 
     vfs_result_t result = vfs_perform_io(path, &io_req);
     if(result != VFS_RESULT_OK) {

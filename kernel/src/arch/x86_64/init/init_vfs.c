@@ -111,6 +111,7 @@ void init_stage_vfs(uint32_t core_id) {
     io_req.read.count = 256;
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;
+    io_req.no_block = false;
 
     res = vfs_perform_io(&VFS_MAKE_ABS_PATH("/test/meow/nesting.txt"), &io_req);
     LOG_OKAY("read /test/meow/nesting.txt: %.*s\n", (int) io_req.read.bytes_read, (char*) io_req.read.buffer);

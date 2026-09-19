@@ -18,7 +18,7 @@ void init_stage_userspace(uint32_t core_id) {
 
     ldr_process_load_info_t load_info;
 
-    char* argv[] = { "/usr/bin/hello" };
+    char* argv[] = { "/usr/bin/bash" };
     char* envp[] = {};
 
     load_info.argv = (const char**) argv;
@@ -28,9 +28,9 @@ void init_stage_userspace(uint32_t core_id) {
     load_info.envc = sizeof(envp) / sizeof(envp[0]);
 
     thread_t* thread = nullptr;
-    process_t* process = process_create_from_file(&VFS_MAKE_ABS_PATH("/usr/bin/hello"), &load_info, nullptr, &thread);
+    process_t* process = process_create_from_file(&VFS_MAKE_ABS_PATH("/usr/bin/bash"), &load_info, nullptr, &thread);
     if(process == nullptr) {
-        arch_panic("init: failed to load /usr/bin/hello\n");
+        arch_panic("init: failed to load /usr/bin/bash\n");
     }
 
     vfs_node_t* tty_node;
@@ -43,9 +43,15 @@ void init_stage_userspace(uint32_t core_id) {
     process->process_id = 1;
 
     // Assign stdin=0, stdout=1, stderr=2 pointing at /dev/tty
-    fd_store_create_fd_at(process->fd_store, tty_node, 0);
-    fd_store_create_fd_at(process->fd_store, tty_node, 1);
-    fd_store_create_fd_at(process->fd_store, tty_node, 2);
+    fd_store_entry_t* stdin;
+    fd_store_entry_t* stdout;
+    fd_store_entry_t* stderr;
+    fd_store_create_fd_at(process->fd_store, tty_node, 0, &stdin);
+    fd_store_create_fd_at(process->fd_store, tty_node, 1, &stdout);
+    fd_store_create_fd_at(process->fd_store, tty_node, 2, &stderr);
+    stdin->access.read = true;
+    stdout->access.write = true;
+    stderr->access.write = true;
 
     sched_thread_schedule(thread);
 }

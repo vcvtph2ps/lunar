@@ -9,15 +9,28 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+#define O_RDONLY 00
+#define O_WRONLY 01
+#define O_RDWR 02
+
+#define O_CREAT 0100
+#define O_EXCL 0200
+#define O_NOCTTY 0400
+#define O_TRUNC 01000
+#define O_APPEND 02000
+#define O_NONBLOCK 04000
+#define O_DSYNC 010000
+#define O_ASYNC 020000
+#define O_CLOEXEC 02000000
+#define O_SYNC 04010000
+#define O_RSYNC 04010000
+#define O_NOATIME 01000000
+
 syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     uintptr_t pathname_ubuffer = args->arg1;
     size_t pathname_ubuffer_size = args->arg2;
     int flags = args->arg3;
     uint32_t mode = args->arg4;
-
-    user_assert(flags == 0 && "unimplemented");
-    user_assert(mode == 0 && "unimplemented");
-    user_assert(pathname_ubuffer_size <= 1024);
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
@@ -28,18 +41,28 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     vfs_node_t* out_result_node;
     vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, pathname), &out_result_node);
     heap_free(pathname, pathname_ubuffer_size + 1);
-    LOG_UTRC("pathname=%s, flags=%d, mode=%d | result=%d\n", pathname, flags, mode, result);
+    LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", pathname, flags, mode, result);
+
+    // user_assert(flags == 0 && "unimplemented");
+    // user_assert(mode == 0 && "unimplemented");
+    user_assert(pathname_ubuffer_size <= 1024);
 
     switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        default:                       user_assert("Invalid return value");
+        case VFS_RESULT_OK:              break;
+        case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
+        default:                         user_assert("Invalid return value");
     }
 
-    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node);
+    fd_store_entry_t* entry;
+    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, &entry);
     // @note: since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
     vfs_node_put(out_result_node);
 
+    int access_flags = flags & O_RDWR;
+    entry->access.read = (access_flags == O_RDONLY || access_flags == O_RDWR);
+    entry->access.write = (access_flags == O_WRONLY || access_flags == O_RDWR);
+    entry->non_blocking = (flags & O_NONBLOCK) != 0;
     return SYSCALL_RET_VALUE(fd);
 }
 
@@ -72,6 +95,11 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
+    if(!entry->access.read) {
+        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, access.read=false | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
     char* buffer = heap_alloc(ubuffer_size);
 
     io_request_t io_req;
@@ -80,6 +108,8 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
     io_req.read.count = ubuffer_size;
     io_req.read.offset = entry->offset;
     io_req.read.bytes_read = 0;
+    io_req.no_block = entry->non_blocking;
+
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
         case VFS_RESULT_OK: break;
@@ -108,6 +138,11 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
+    if(!entry->access.write) {
+        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, access.write=false | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
     char* buffer = heap_alloc(ubuffer_size);
     vm_copy_from(buffer, process->address_space, ubuffer, ubuffer_size);
 
@@ -117,6 +152,8 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
     io_req.write.count = ubuffer_size;
     io_req.write.offset = entry->offset;
     io_req.write.bytes_written = 0;
+    io_req.no_block = entry->non_blocking;
+
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
         case VFS_RESULT_OK: break;
