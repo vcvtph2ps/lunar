@@ -250,7 +250,7 @@ static void map_kernel(arch_pte_entry_t* boot_top) {
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(entry->type == BOOTINFO_MM_TYPE_BAD) continue;
+        if(entry->type == BOOTINFO_MM_TYPE_RESERVED || entry->type == BOOTINFO_MM_TYPE_BAD) continue;
 
         const phys_addr_t aligned_paddr = ALIGN_DOWN(entry->phys_base, ARCH_PAGE_SIZE_4K);
         const virt_addr_t aligned_vaddr = (virt_addr_t) PTM_TO_HHDM(aligned_paddr);
