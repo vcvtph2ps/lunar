@@ -12,17 +12,41 @@
 typedef struct {
     mutex_t mutex;
     wait_queue_t queue;
+
     uint8_t buf[TTY_RB_SIZE];
+    /// @brief Where the next input byte is written
     size_t head;
+
+    /// @brief Where the next byte readable by a consumer is
     size_t tail;
 
+    /// @brief Bytes in [tail, commit) are readable, bytes in [commit, head) are still being line edited (canonical mode) and must not be consumed yet
+    size_t commit;
+
     struct {
+        /// @brief canonical/cooked mode, input is line buffered with line editing
         bool canonical;
+        /// @brief echo input back to the output
+        bool echo;
+        /// @brief echo control characters as ^X
+        bool echo_ctrl;
+
+        struct {
+            uint8_t backspace; // defaults: ^H
+            uint8_t intr; // default: ^C
+            uint8_t eof; // default: ^D
+            uint8_t kill; // default: ^U
+            uint8_t erase_word; // default: ^W
+            uint8_t del; // default: <DEL>
+        } control_chars;
     } mode;
 
-    /// @brief How many commited (newline sent) lines are still in the tty buffer
-    /// @note only updated in cannonical mode
+    /// @brief How many committed lines are still in the tty buffer
+    /// @note only updated in canonical mode
     ATOMIC uint16_t line_count;
+
+    /// @brief Set when a EOF is entered on an empty line, until new input arrives.
+    bool eof;
 
     /// @brief Called when a byte is written to the tty output (e.g. to forward to UART)
     void (*on_write)(void* ctx, uint8_t c);
