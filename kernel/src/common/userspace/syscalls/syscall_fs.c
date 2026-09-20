@@ -31,6 +31,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     size_t pathname_ubuffer_size = args->arg2;
     int flags = args->arg3;
     uint32_t mode = args->arg4;
+    (void) mode;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 

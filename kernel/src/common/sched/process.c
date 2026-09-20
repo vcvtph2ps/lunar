@@ -1,9 +1,11 @@
 #include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/fs/vfs.h>
 #include <common/ldr/ldr.h>
 #include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
+#include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
@@ -70,6 +72,10 @@ void process_kill(process_t* process) {
         arch_panic("PID 1 was killed\n");
     }
 
-    // @TODO:
+    if(process == CPU_LOCAL_GET_CURRENT_THREAD()->common.process) {
+        sched_yield(THREAD_STATE_TERMINATED);
+    }
+
+    // @todo:
     LOG_INFO("process %d was killed... unimplemented\n", process->process_id);
 }

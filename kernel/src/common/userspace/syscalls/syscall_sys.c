@@ -6,13 +6,6 @@
 #include <common/userspace/syscall_defs.h>
 #include <memory/heap.h>
 
-[[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
-    (void) args;
-    LOG_UTRC("exit_code=%d\n", (int) args->arg1);
-    sched_yield(THREAD_STATE_TERMINATED);
-    while(1);
-}
-
 syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
     uintptr_t ubuffer = args->arg1;
     size_t ubuffer_size = args->arg2;

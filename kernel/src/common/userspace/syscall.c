@@ -11,9 +11,11 @@ static fn_syscall_handler_t g_syscall_table[SYSCALL_HIGHEST_NR];
 
 static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLINT
     switch(nr) {
-        case SYSCALL_PROC_EXIT:      return "SYSCALL_EXIT";
-        case SYSCALL_THREAD_TCB_SET: return "SYSCALL_TCB_SET";
-        case SYSCALL_DEBUG_LOG:      return "SYSCALL_DEBUG_LOG";
+        case SYSCALL_PROC_EXIT:    return "SYSCALL_PROC_EXIT";
+        case SYSCALL_PROC_GETINFO: return "SYSCALL_PROC_GETINFO";
+
+        case SYSCALL_SYS_TCB_SET:   return "SYSCALL_SYS_TCB_SET";
+        case SYSCALL_SYS_DEBUG_LOG: return "SYSCALL_SYS_DEBUG_LOG";
 
         case SYSCALL_VM_MAP:     return "SYSCALL_VM_MAP";
         case SYSCALL_VM_UNMAP:   return "SYSCALL_VM_UNMAP";
@@ -76,8 +78,10 @@ void syscall_init() {
     }
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_EXIT, syscall_sys_proc_exit);
-    SYSCALL_DISPATCHER(SYSCALL_THREAD_TCB_SET, syscall_sys_thread_set_tcb);
-    SYSCALL_DISPATCHER(SYSCALL_DEBUG_LOG, syscall_sys_debug_log);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_GETINFO, syscall_sys_proc_getinfo);
+
+    SYSCALL_DISPATCHER(SYSCALL_SYS_TCB_SET, syscall_sys_thread_set_tcb);
+    SYSCALL_DISPATCHER(SYSCALL_SYS_DEBUG_LOG, syscall_sys_debug_log);
 
     SYSCALL_DISPATCHER(SYSCALL_VM_MAP, syscall_sys_vm_map);
     SYSCALL_DISPATCHER(SYSCALL_VM_UNMAP, syscall_sys_vm_unmap);
