@@ -70,7 +70,9 @@ static void wake_thread_handler_dw(void* ctx) {
 }
 
 void interrupt_set_thread_handler(uint8_t vector, thread_t* thread) {
-    interrupt_set_softirq_handler(vector, dw_create(wake_thread_handler_dw, thread));
+    dw_item_t* item = dw_create(wake_thread_handler_dw, thread);
+    item->cleanup_fn = nullptr;
+    interrupt_set_softirq_handler(vector, item);
 }
 
 extern void idt_init(uint32_t core_id);

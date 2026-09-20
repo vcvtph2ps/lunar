@@ -9,9 +9,12 @@
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
+#include <common/sched/sched.h>
+#include <common/sched/thread.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/string.h>
+#include <lib/types.h>
 #include <memory/heap.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -201,13 +204,14 @@ static void serial_sink(int c, void* ctx) {
     arch_16550uart_send(g_arch_16550uart_default_uart, (char) c);
 }
 
-static void serial_rx_dw_handler(void* ctx) {
-    arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
+[[noreturn]] static void serial_rx_thread() {
     while(1) {
-        int c = arch_16550uart_read(uart);
-        if(c < 0) break;
-        // LOG_DBGL("serial: %c (%d)\n", c, c);
-        uart->on_recv(uart->recv_ctx, c);
+        int c = arch_16550uart_read(g_arch_16550uart_default_uart);
+        if(c < 0) {
+            sched_yield(THREAD_STATE_BLOCKING);
+            continue;
+        }
+        g_arch_16550uart_default_uart->on_recv(g_arch_16550uart_default_uart->recv_ctx, c);
     }
 }
 
@@ -374,9 +378,8 @@ void arch_16550uart_setup() {
 
         uint8_t vector = arch_interrupt_alloc_allocate();
 
-        dw_item_t* dw_item = dw_create(serial_rx_dw_handler, uart);
-        dw_item->cleanup_fn = nullptr;
-        interrupt_set_softirq_handler(vector, dw_item);
+        thread_t* serial_thread = sched_arch_create_kernel_thread((virt_addr_t) serial_rx_thread);
+        interrupt_set_thread_handler(vector, serial_thread);
 
         // @todo: lapic allocation
         arch_ioapic_map_legacy_irq(uart->irq, 0, uart->irq_low_polarity, uart->irq_edge_triggered, vector);
