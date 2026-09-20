@@ -122,6 +122,10 @@ void sched_yield(thread_state_t yield_state) {
 
     thread_t* current = sched_arch_thread_current();
 
+    if(yield_state == THREAD_STATE_BLOCKING) {
+        ATOMIC_STORE(&current->sched.sleep_cookie, ATOMIC_LOAD(&current->sched.wake_cookie, ATOMIC_RELAXED), ATOMIC_RELAXED);
+    }
+
     thread_t* next = sched_next_thread(&CPU_LOCAL_GET_SELF()->scheduler);
     // If we have no next thread, and the current thread is ready to run, we can just continue running the current thread
     if(next == nullptr && current != CPU_LOCAL_READ(scheduler.idle_thread) && yield_state != THREAD_STATE_READY) next = CPU_LOCAL_READ(scheduler.idle_thread);
