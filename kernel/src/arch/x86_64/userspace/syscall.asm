@@ -26,7 +26,10 @@ x86_64_handle_syscall:
     push qword [r15 + 8]
 
     mov rdi, rsp
+
+    sti
     call x86_64_dispatch_syscall
+    cli
 
     xor r12, r12
     mov ds, r12

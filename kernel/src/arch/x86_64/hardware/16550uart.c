@@ -11,6 +11,7 @@
 #include <common/log.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
+#include <common/sync/wait_obj.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/string.h>
@@ -204,11 +205,14 @@ static void serial_sink(int c, void* ctx) {
     arch_16550uart_send(g_arch_16550uart_default_uart, (char) c);
 }
 
+wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT(WAIT_OBJ_SYNCHRONIZATION);
+
 [[noreturn]] static void serial_rx_thread() {
+    sched_wait_single(&g_serial_wait_obj, UINT64_MAX);
     while(1) {
         int c = arch_16550uart_read(g_arch_16550uart_default_uart);
         if(c < 0) {
-            sched_yield(THREAD_STATE_BLOCKING);
+            sched_wait_single(&g_serial_wait_obj, UINT64_MAX);
             continue;
         }
         g_arch_16550uart_default_uart->on_recv(g_arch_16550uart_default_uart->recv_ctx, c);
@@ -376,10 +380,12 @@ void arch_16550uart_setup() {
 
         g_arch_16550uart_default_uart = uart;
 
-        uint8_t vector = arch_interrupt_alloc_allocate();
-
         thread_t* serial_thread = sched_arch_create_kernel_thread((virt_addr_t) serial_rx_thread);
-        interrupt_set_thread_handler(vector, serial_thread);
+
+        uint8_t vector = arch_interrupt_alloc_allocate();
+        interrupt_set_waitobj_handler(vector, &g_serial_wait_obj);
+
+        sched_thread_schedule(serial_thread);
 
         // @todo: lapic allocation
         arch_ioapic_map_legacy_irq(uart->irq, 0, uart->irq_low_polarity, uart->irq_edge_triggered, vector);

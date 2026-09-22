@@ -73,7 +73,7 @@ void process_kill(process_t* process) {
     }
 
     if(process == CPU_LOCAL_GET_CURRENT_THREAD()->common.process) {
-        sched_yield(THREAD_STATE_TERMINATED);
+        sched_terminate();
     }
 
     // @todo:

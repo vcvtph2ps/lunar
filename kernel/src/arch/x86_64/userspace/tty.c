@@ -1,14 +1,14 @@
 #include <common/fs/devfs.h>
 #include <common/fs/io.h>
+#include <common/fs/vfs.h>
 #include <common/log.h>
+#include <common/sched/sched.h>
 #include <common/sync/mutex.h>
-#include <common/sync/wait_queue.h>
+#include <common/sync/wait_obj.h>
 #include <common/userspace/tty.h>
+#include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
-
-#include "common/fs/vfs.h"
-#include "lib/helpers.h"
 
 // default input characters handled by the canonical mode
 // probably gonna forgot what these mean in like, a few days
@@ -36,7 +36,7 @@ static size_t ring_next(size_t index) {
 tty_t* tty_create() {
     tty_t* tty = heap_alloc(sizeof(tty_t));
     tty->mutex = MUTEX_INIT;
-    tty->queue = WAIT_QUEUE_INIT;
+    tty->wait_obj = WAIT_OBJ_INIT(WAIT_OBJ_SYNCHRONIZATION);
     tty->head = 0;
     tty->tail = 0;
     tty->commit = 0;
@@ -61,7 +61,7 @@ tty_t* tty_create() {
 }
 
 void tty_free(tty_t* tty) {
-    assert(tty->queue.list.count == 0 && "tty freed with waiting threads");
+    assert(tty->wait_obj.wait_blocks.count == 0 && "tty freed with waiting threads");
     heap_free(tty, sizeof(tty_t));
 }
 
@@ -269,7 +269,7 @@ static bool tty_put_canonical(tty_t* tty, uint8_t c) {
     }
 
     if(wake) {
-        wait_queue_wake_all(&tty->queue);
+        wait_obj_signal(&tty->wait_obj, 1);
     }
     return true;
 }
@@ -293,7 +293,7 @@ bool tty_put(tty_t* tty, uint8_t c) {
     mutex_release(&tty->mutex);
 
     if(ok) {
-        wait_queue_wake_all(&tty->queue);
+        wait_obj_signal(&tty->wait_obj, 1);
     }
     return ok;
 }
@@ -324,7 +324,7 @@ uint8_t tty_read_blocking(tty_t* tty) {
         if(tty_read(tty, &c)) {
             return c;
         }
-        wait_queue_join(&tty->queue);
+        sched_wait_single(&tty->wait_obj, UINT64_MAX);
     }
 }
 
@@ -348,7 +348,8 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
         if(request->no_block) {
             return VFS_RESULT_ERR_WOULD_BLOCK;
         }
-        wait_queue_join(&tty->queue);
+
+        sched_wait_single(&tty->wait_obj, UINT64_MAX);
         mutex_acquire(&tty->mutex);
     }
 

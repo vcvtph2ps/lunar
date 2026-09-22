@@ -7,6 +7,7 @@
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
+#include <common/sync/wait_obj.h>
 #include <memory/heap.h>
 
 [[nodiscard]] arch_interrupt_state_t arch_interrupt_get_state() {
@@ -65,12 +66,16 @@ void interrupt_set_softirq_handler(uint8_t vector, dw_item_t* dw_item) {
     spinlock_noint_unlock(&g_interrupt_handler_lock, state);
 }
 
-static void wake_thread_handler_dw(void* ctx) {
-    sched_thread_schedule(ctx);
+static void signal_wake_obj_handler_dw(void* ctx) {
+    wait_obj_signal(ctx, 1);
 }
 
-void interrupt_set_thread_handler(uint8_t vector, thread_t* thread) {
-    dw_item_t* item = dw_create(wake_thread_handler_dw, thread);
+void interrupt_set_waitobj_handler(uint8_t vector, wait_obj_t* wait_obj) {
+    if(wait_obj->type == WAIT_OBJ_SEMAPHORE) {
+        ASSERT_TODO();
+    }
+
+    dw_item_t* item = dw_create(signal_wake_obj_handler_dw, wait_obj);
     item->cleanup_fn = nullptr;
     interrupt_set_softirq_handler(vector, item);
 }
@@ -120,7 +125,6 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         CPU_LOCAL_WRITE(in_softirq, false);
         (void) arch_interrupt_enable();
         dw_status_enable();
-        (void) arch_interrupt_disable();
         CPU_LOCAL_WRITE(in_softirq, false);
 
         sched_preempt_enable();

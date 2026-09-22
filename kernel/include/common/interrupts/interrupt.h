@@ -1,4 +1,5 @@
 #pragma once
+
 #if defined(__ARCH_X86_64__)
 #include <arch/x86_64/interrupts/interrupt.h>
 #elif defined(__ARCH_RISCV64__)
@@ -13,6 +14,7 @@ typedef void (*interrupt_handler_fn_t)(arch_interrupt_frame_t* frame, void* ctx)
 
 typedef struct dw_item dw_item_t; // NOLINT
 typedef struct thread thread_t; // NOLINT
+typedef struct wait_obj wait_obj_t; // NOLINT
 
 /**
  * @brief Initialize the interrupt system for the current core
@@ -46,6 +48,6 @@ void interrupt_set_softirq_handler(uint8_t vector, dw_item_t* dw_item);
 
 /**
  * @brief Register an interrupt handler for the given interrupt vector.
- * @param thread The thread to awake on interrupt
+ * @param wait_obj The object to signal on interrupt
  */
-void interrupt_set_thread_handler(uint8_t vector, thread_t* thread);
+void interrupt_set_waitobj_handler(uint8_t vector, wait_obj_t* wait_obj);

@@ -10,8 +10,8 @@
 #include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
-#include <common/sched/sleep_queue.h>
 #include <common/sched/thread.h>
+#include <common/sched/timer_wait.h>
 #include <common/time/time.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
@@ -19,6 +19,8 @@
 #include <memory/heap.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
+
+#include "common/sync/spinlock.h"
 
 #define LAPIC_TIMER_VECTOR 0x20
 
@@ -43,19 +45,18 @@ typedef struct [[gnu::packed]] {
 extern x86_64_thread_t* x86_64_context_switch(x86_64_thread_t* t_current, x86_64_thread_t* t_next);
 extern void x86_64_userspace_init_sysexit();
 
-extern sleep_queue_t g_sched_sleep_queue;
-dw_item_t* g_sleep_queue_check_dw;
+dw_item_t* g_timer_check_dw;
 
-static void sleep_queue_check_dw(void* data) {
+static void timer_check_dw(void* data) {
     (void) data;
-    sleep_queue_check(&g_sched_sleep_queue);
+    timer_wait_check();
 }
 
 static void sched_timer_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
     (void) frame;
     CPU_LOCAL_WRITE(scheduler.yield_pending, true);
-    dw_queue(g_sleep_queue_check_dw);
+    dw_queue(g_timer_check_dw);
 }
 
 static void arch_thread_init_common(x86_64_thread_t* prev) {
@@ -84,9 +85,14 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
         thread->fpu_area = arch_fpu_alloc_area();
     }
 
-    ATOMIC_STORE(&thread->common.tid, tid, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&thread->common.sched.owner, sched, ATOMIC_SEQ_CST);
+    thread->common.tid = tid;
+
+    thread->common.sched.wait_entry.thread = &thread->common;
+    thread->common.sched.wait_entry.lock = SPINLOCK_INIT;
+
+    ATOMIC_STORE(&thread->common.sched.migratable, true, ATOMIC_RELAXED);
+    ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_RELAXED);
+    ATOMIC_STORE(&thread->common.sched.owner, sched, ATOMIC_RELAXED);
 
     LOG_INFO("Created thread with tid %lu\n", tid);
     return thread;
@@ -154,7 +160,11 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     arch_msr_write(ARCH_MSR_FS_BASE, next->fsbase);
 
     ATOMIC_STORE(&t_current->sched.state, yield_state, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&t_next->sched.state, THREAD_STATE_RUNNING, ATOMIC_SEQ_CST);
+    thread_state_t prev_state = ATOMIC_LOAD(&t_next->sched.state, ATOMIC_ACQUIRE);
+    // These are treated as "running" states
+    if(prev_state != THREAD_STATE_WAITING_IN_PROGRESS && prev_state != THREAD_STATE_WAITING_ABORTED) {
+        ATOMIC_STORE(&t_next->sched.state, THREAD_STATE_RUNNING, ATOMIC_SEQ_CST);
+    }
 
     x86_64_thread_t* prev = x86_64_context_switch(current, next);
     sched_thread_drop(&prev->common);
@@ -166,8 +176,8 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
 void sched_arch_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         interrupt_set_hardirq_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr);
-        g_sleep_queue_check_dw = dw_create(sleep_queue_check_dw, nullptr);
-        g_sleep_queue_check_dw->cleanup_fn = nullptr;
+        g_timer_check_dw = dw_create(timer_check_dw, nullptr);
+        g_timer_check_dw->cleanup_fn = nullptr;
     }
 }
 #pragma clang diagnostic pop

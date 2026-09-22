@@ -2,7 +2,6 @@
 #include <common/fs/vfs.h>
 #include <common/sync/mutex.h>
 #include <common/sync/rwlock.h>
-#include <common/sync/wait_queue.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
@@ -31,7 +30,9 @@ static size_t dcache_hash(const vfs_dentry_t* parent, const char* name) {
         hash = dcache_hash(parent->parent, parent->name);
     }
 
-    for(const unsigned char* c = (const unsigned char*) name; *c != '\0'; c++) { hash = ((hash << 5) + hash) ^ *c; }
+    for(const unsigned char* c = (const unsigned char*) name; *c != '\0'; c++) {
+        hash = ((hash << 5) + hash) ^ *c;
+    }
 
     return hash;
 }
@@ -55,7 +56,7 @@ void vfs_dcache_insert(vfs_dentry_t* dentry) {
 
         list_node_delete(&g_dcache.buckets[dcache_hash(candidate->parent, candidate->name) & (VFS_DCACHE_BUCKET_COUNT - 1)], &candidate->hash_node);
         list_node_delete(&g_dcache.lru, &candidate->lru_node);
-        
+
         g_dcache.count--;
         evicted = candidate;
         break;

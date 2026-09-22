@@ -1,10 +1,10 @@
 #pragma once
 
 #include <common/sync/spinlock.h>
-#include <common/sync/wait_queue.h>
+#include <common/sync/wait_obj.h>
 #include <lib/list.h>
 
-#define MUTEX_INIT ((mutex_t) { .state = MUTEX_STATE_UNLOCKED, .lock = SPINLOCK_NO_INT_INIT, .wait_queue = WAIT_QUEUE_INIT })
+#define MUTEX_INIT ((mutex_t) { .state = MUTEX_STATE_UNLOCKED, .lock = SPINLOCK_NO_INT_INIT, .wait_obj = WAIT_OBJ_INIT(WAIT_OBJ_SYNCHRONIZATION) })
 
 typedef enum {
     MUTEX_STATE_UNLOCKED,
@@ -15,7 +15,9 @@ typedef enum {
 typedef struct {
     spinlock_no_int_t lock;
     mutex_state_t state;
-    wait_queue_t wait_queue;
+
+    ATOMIC size_t waiters;
+    wait_obj_t wait_obj;
 } mutex_t;
 
 /**

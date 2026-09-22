@@ -5,7 +5,7 @@
 #include <common/sched/thread.h>
 #include <common/sync/mutex.h>
 #include <common/sync/spinlock.h>
-#include <common/sync/wait_queue.h>
+#include <common/sync/wait_obj.h>
 #include <lib/helpers.h>
 #include <lib/types.h>
 
@@ -32,7 +32,10 @@ void mutex_acquire(mutex_t* mutex) {
     if(EXPECT_LIKELY(ATOMIC_XCHG(&mutex->state, MUTEX_STATE_CONTESTED, ATOMIC_ACQ_REL) != MUTEX_STATE_UNLOCKED)) {
         spinlock_noint_unlock(&mutex->lock, previous_state);
         sched_preempt_enable();
-        wait_queue_join(&mutex->wait_queue);
+
+        ATOMIC_LOAD_ADD(&mutex->waiters, 1, ATOMIC_RELEASE);
+        sched_wait_single(&mutex->wait_obj, UINT64_MAX);
+
         previous_state = spinlock_noint_lock(&mutex->lock);
         sched_preempt_disable();
     } else {
@@ -52,21 +55,13 @@ void mutex_release(mutex_t* mutex) {
     }
 
     arch_interrupt_state_t previous_state = spinlock_noint_lock(&mutex->lock);
-
     assert(state == MUTEX_STATE_CONTESTED);
 
-    // if the mutex is contested but there are no threads in the wait queue
-    while(wait_queue_empty(&mutex->wait_queue)) {
-        spinlock_noint_unlock(&mutex->lock, previous_state);
-        sched_yield(THREAD_STATE_READY);
-        previous_state = spinlock_noint_lock(&mutex->lock);
+    if(ATOMIC_LOAD_SUB(&mutex->waiters, 1, ATOMIC_RELEASE) == 1) {
+        ATOMIC_STORE(&mutex->state, MUTEX_STATE_LOCKED, ATOMIC_RELEASE);
     }
 
-    assert(mutex->wait_queue.list.count != 0);
-
-    wait_queue_wake_one(&mutex->wait_queue);
-
-    if(mutex->wait_queue.list.count == 0) ATOMIC_STORE(&mutex->state, MUTEX_STATE_LOCKED, ATOMIC_RELEASE);
+    wait_obj_signal(&mutex->wait_obj, 1);
 
     spinlock_noint_unlock(&mutex->lock, previous_state);
     sched_preempt_enable();

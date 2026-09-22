@@ -2,7 +2,7 @@
 #include <common/sched/process.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
-#include <common/sync/wait_queue.h>
+#include <common/sync/wait_obj.h>
 #include <lib/list.h>
 
 typedef struct scheduler scheduler_t; // NOLINT
@@ -53,16 +53,25 @@ thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_sta
 void sched_thread_schedule(thread_t* thread);
 
 /**
- * @brief Yields the current thread's execution and transitions to the specified state
- * @param state The new state for the current thread
+ * @brief Yields the current thread
  */
-void sched_yield(thread_state_t state);
+void sched_yield();
+
+/**
+ * @brief Terminates the current thread
+ */
+void sched_terminate();
 
 /**
  * @brief Puts the current thread to sleep for the specified duration in milliseconds
  * @param msec The duration to sleep in milliseconds
  */
 void sched_sleep(uint64_t msec);
+
+void sched_wait_single(wait_obj_t* obj, uint64_t timeout_ms);
+void sched_wait_multiple(wait_obj_t** obj, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms);
+
+///
 
 /**
  * @brief Initializes the scheduler for the current core

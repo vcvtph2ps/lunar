@@ -3,7 +3,7 @@
 #include <common/fs/devfs.h>
 #include <common/fs/io.h>
 #include <common/sync/mutex.h>
-#include <common/sync/wait_queue.h>
+#include <common/sync/wait_obj.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -11,7 +11,7 @@
 
 typedef struct {
     mutex_t mutex;
-    wait_queue_t queue;
+    wait_obj_t wait_obj;
 
     uint8_t buf[TTY_RB_SIZE];
     /// @brief Where the next input byte is written
