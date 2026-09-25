@@ -107,9 +107,10 @@ void sched_yield_internal(thread_state_t yield_state) {
     }
 
     if(yield_state == THREAD_STATE_WAITING) {
-        spinlock_lock(&current->sched.wait_entry.lock);
+        assert(current->sched.wait_entry != nullptr);
+        spinlock_lock(&current->sched.wait_entry->lock);
         while(true) {
-            list_node_t* node = list_pop(&current->sched.wait_entry.wait_blocks_list);
+            list_node_t* node = list_pop(&current->sched.wait_entry->wait_blocks_list);
             if(node == nullptr) {
                 break;
             }
@@ -119,7 +120,7 @@ void sched_yield_internal(thread_state_t yield_state) {
             spinlock_nodw_unlock(&wb->obj->lock);
             heap_free(wb, sizeof(wait_block_t));
         }
-        spinlock_unlock(&current->sched.wait_entry.lock);
+        spinlock_unlock(&current->sched.wait_entry->lock);
     }
 
     sched_arch_reset_preempt_timer();

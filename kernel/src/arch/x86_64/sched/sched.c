@@ -20,8 +20,6 @@
 #include <memory/ptm.h>
 #include <memory/vm.h>
 
-#include "common/sync/spinlock.h"
-
 #define LAPIC_TIMER_VECTOR 0x20
 
 typedef struct [[gnu::packed]] {
@@ -86,9 +84,7 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     }
 
     thread->common.tid = tid;
-
-    thread->common.sched.wait_entry.thread = &thread->common;
-    thread->common.sched.wait_entry.lock = SPINLOCK_INIT;
+    thread->common.sched.wait_entry = nullptr;
 
     ATOMIC_STORE(&thread->common.sched.migratable, true, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_RELAXED);

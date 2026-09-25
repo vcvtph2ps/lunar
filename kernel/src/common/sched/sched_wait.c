@@ -14,9 +14,9 @@ void sched_wait_single(wait_obj_t* obj, uint64_t timeout_ms) {
 
 static void sched_wait_abort() {
     thread_t* thread = sched_arch_thread_current();
-    spinlock_lock(&thread->sched.wait_entry.lock);
+    spinlock_lock(&thread->sched.wait_entry->lock);
     while(true) {
-        list_node_t* node = list_pop(&thread->sched.wait_entry.wait_blocks_list);
+        list_node_t* node = list_pop(&thread->sched.wait_entry->wait_blocks_list);
         if(node == nullptr) {
             break;
         }
@@ -26,7 +26,8 @@ static void sched_wait_abort() {
         spinlock_nodw_unlock(&wb->obj->lock);
         heap_free(wb, sizeof(wait_block_t));
     }
-    spinlock_unlock(&thread->sched.wait_entry.lock);
+    spinlock_unlock(&thread->sched.wait_entry->lock);
+    thread->sched.wait_entry = nullptr;
 }
 
 static bool sched_wait_any(wait_obj_t** objects, size_t count) {
@@ -44,12 +45,12 @@ static bool sched_wait_any(wait_obj_t** objects, size_t count) {
 
         wait_block_t* wb = heap_alloc(sizeof(wait_block_t));
         wb->obj = obj;
-        wb->entry = &thread->sched.wait_entry;
+        wb->entry = thread->sched.wait_entry;
         ATOMIC_STORE(&wb->signaled, false, ATOMIC_RELAXED);
 
-        spinlock_lock(&thread->sched.wait_entry.lock);
-        list_push_back(&thread->sched.wait_entry.wait_blocks_list, &wb->thread_node);
-        spinlock_unlock(&thread->sched.wait_entry.lock);
+        spinlock_lock(&thread->sched.wait_entry->lock);
+        list_push_back(&thread->sched.wait_entry->wait_blocks_list, &wb->thread_node);
+        spinlock_unlock(&thread->sched.wait_entry->lock);
 
         list_push_back(&obj->wait_blocks, &wb->wait_object_node);
 
@@ -103,12 +104,12 @@ static bool sched_wait_all(wait_obj_t** objects, size_t count) {
         } else {
             wait_block_t* wb = heap_alloc(sizeof(wait_block_t));
             wb->obj = obj;
-            wb->entry = &thread->sched.wait_entry;
+            wb->entry = thread->sched.wait_entry;
             ATOMIC_STORE(&wb->signaled, false, ATOMIC_RELAXED);
 
-            spinlock_lock(&thread->sched.wait_entry.lock);
-            list_push_back(&thread->sched.wait_entry.wait_blocks_list, &wb->thread_node);
-            spinlock_unlock(&thread->sched.wait_entry.lock);
+            spinlock_lock(&thread->sched.wait_entry->lock);
+            list_push_back(&thread->sched.wait_entry->wait_blocks_list, &wb->thread_node);
+            spinlock_unlock(&thread->sched.wait_entry->lock);
 
             list_push_back(&obj->wait_blocks, &wb->wait_object_node);
         }
@@ -135,12 +136,12 @@ static bool sched_wait_on_timer(timer_wait_t* timer) {
 
     wait_block_t* wb = heap_alloc(sizeof(wait_block_t));
     wb->obj = &timer->obj;
-    wb->entry = &thread->sched.wait_entry;
+    wb->entry = thread->sched.wait_entry;
     ATOMIC_STORE(&wb->signaled, false, ATOMIC_RELAXED);
 
-    spinlock_lock(&thread->sched.wait_entry.lock);
-    list_push_back(&thread->sched.wait_entry.wait_blocks_list, &wb->thread_node);
-    spinlock_unlock(&thread->sched.wait_entry.lock);
+    spinlock_lock(&thread->sched.wait_entry->lock);
+    list_push_back(&thread->sched.wait_entry->wait_blocks_list, &wb->thread_node);
+    spinlock_unlock(&thread->sched.wait_entry->lock);
 
     list_push_back(&timer->obj.wait_blocks, &wb->wait_object_node);
 
@@ -152,20 +153,22 @@ void sched_yield_internal(thread_state_t yield_state);
 
 void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms) {
     thread_t* thread = sched_arch_thread_current();
-    wait_entry_t* entry = &thread->sched.wait_entry;
+    wait_entry_t entry = {};
 
-    entry->thread = thread;
+    thread->sched.wait_entry = &entry;
+    entry.thread = thread;
+    entry.lock = SPINLOCK_INIT;
 
-    ATOMIC_STORE(&entry->type, type, ATOMIC_RELAXED);
-    ATOMIC_STORE(&entry->waiting_on, type == WAIT_OBJ_WAIT_ALL ? count : 0, ATOMIC_RELAXED);
-    ATOMIC_STORE(&entry->signaled, 0, ATOMIC_RELAXED);
+    ATOMIC_STORE(&entry.type, type, ATOMIC_RELAXED);
+    ATOMIC_STORE(&entry.waiting_on, type == WAIT_OBJ_WAIT_ALL ? count : 0, ATOMIC_RELAXED);
+    ATOMIC_STORE(&entry.signaled, 0, ATOMIC_RELAXED);
 
     ATOMIC_STORE(&thread->sched.state, THREAD_STATE_WAITING_IN_PROGRESS, ATOMIC_RELEASE);
 
     timer_wait_t* timer = nullptr;
     if(timeout_ms != UINT64_MAX) {
         timer = timer_wait_create(timeout_ms);
-        entry->timeout_obj = &timer->obj;
+        entry.timeout_obj = &timer->obj;
     }
 
     /// wait logic
@@ -197,8 +200,6 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
             sched_wait_abort(); // clean up after wait
         }
     }
-
-    entry->timeout_obj = nullptr;
 
     if(timer) {
         timer_wait_free(timer);

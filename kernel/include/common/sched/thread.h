@@ -49,7 +49,7 @@ struct thread {
         ATOMIC bool in_run_queue;
         list_node_t run_queue_node;
 
-        wait_entry_t wait_entry;
+        wait_entry_t* wait_entry;
     } sched;
 
     bool in_interrupt_handler;
