@@ -13,6 +13,8 @@
 #include <memory/ptm.h>
 #include <memory/vm.h>
 
+#include "common/log.h"
+
 vm_address_space_t* g_vm_global_address_space;
 
 typedef enum {
@@ -651,9 +653,9 @@ static void vm_fault_dw(void* data) {
     assert(thread->process != nullptr);
 
     bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.address);
-    if(!ok) {
-        // @TODO: this should just kill the process
-        arch_panic("vm_fault_dw: page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
+    if(EXPECT_UNLIKELY(!ok)) {
+        LOG_WARN("vm_fault_dw: page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
+        process_kill(thread->process);
     }
 
     thread->vm_fault.in_process = false;
