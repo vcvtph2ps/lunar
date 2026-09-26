@@ -48,6 +48,8 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     process->process_id = process_allocate_id();
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
     process->address_space = process_address_space;
+    ATOMIC_STORE(&process->exiting, false, ATOMIC_RELAXED);
+    ATOMIC_STORE(&process->exit_code, 0, ATOMIC_RELAXED);
 
     // @note: nullptr is '/'
     if(process->current_working_dir != nullptr) {
@@ -68,14 +70,41 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
 }
 
 void process_kill(process_t* process) {
+    assert(process != nullptr);
+
     if(process->process_id == 1) {
         arch_panic("PID 1 was killed\n");
     }
 
-    if(process == CPU_LOCAL_GET_CURRENT_THREAD()->common.process) {
-        sched_terminate();
+    thread_t* current = sched_arch_thread_current();
+
+    /// The process is already on its way out
+    if(ATOMIC_LOAD(&process->exiting, ATOMIC_ACQUIRE)) {
+        if(current->process == process) {
+            sched_terminate_current_thread();
+        }
+        return;
     }
 
-    // @todo:
-    LOG_INFO("process %d was killed... unimplemented\n", process->process_id);
+    ATOMIC_STORE(&process->exiting, true, ATOMIC_SEQ_CST);
+    LOG_INFO("process %u was killed\n", process->process_id);
+
+    /// Kill every thread of this process
+    spinlock_nodw_lock(&process->thread_list_lock);
+    LIST_FOR_EACH(&process->thread_list, node) {
+        thread_t* thread = CONTAINER_OF(node, thread_t, list_node_process);
+
+        /// The current thread is killed once the list has been walked
+        if(thread == current) {
+            continue;
+        }
+
+        sched_thread_kill(thread);
+    }
+    spinlock_nodw_unlock(&process->thread_list_lock);
+
+    /// The current thread is owned by the process and must be killed now
+    if(current->process == process) {
+        sched_terminate_current_thread();
+    }
 }

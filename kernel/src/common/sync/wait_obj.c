@@ -30,6 +30,14 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count) {
         wait_block_t* wb = CONTAINER_OF(node, wait_block_t, wait_object_node);
         node = node->next;
 
+        /// The thread was killed while waiting
+        /// we just move on to the next thread, it'll back itself out
+        /// @see sched_thread_kill
+        thread_state_t state = ATOMIC_LOAD(&wb->entry->thread->sched.state, ATOMIC_ACQUIRE);
+        if(state == THREAD_STATE_DYING || state == THREAD_STATE_TERMINATED) {
+            continue;
+        }
+
         /// Claim the wait block so we don't end up signaling it twice
         if(ATOMIC_XCHG(&wb->signaled, true, ATOMIC_ACQ_REL)) {
             continue;
@@ -60,7 +68,7 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count) {
         }
 
         /// Check if the thread is aborted, if so it'll back itself out
-        thread_state_t state = ATOMIC_LOAD(&wb->entry->thread->sched.state, ATOMIC_ACQUIRE);
+        state = ATOMIC_LOAD(&wb->entry->thread->sched.state, ATOMIC_ACQUIRE);
         if(state == THREAD_STATE_WAITING_ABORTED) {
             continue;
         }

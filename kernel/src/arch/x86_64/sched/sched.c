@@ -89,6 +89,8 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     ATOMIC_STORE(&thread->common.sched.migratable, true, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.owner, sched, ATOMIC_RELAXED);
+    ATOMIC_STORE(&thread->common.exit_code, 0, ATOMIC_RELAXED);
+    ATOMIC_STORE(&thread->common.in_reap_queue, false, ATOMIC_RELAXED);
 
     LOG_INFO("Created thread with tid %lu\n", tid);
     return thread;

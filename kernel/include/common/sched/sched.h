@@ -53,6 +53,13 @@ thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_sta
 void sched_thread_schedule(thread_t* thread);
 
 /**
+ * @brief Kills a thread, the thread will never run again once this returns
+ * @param thread The thread to kill
+ * @note This never returns if the thread being killed is the current thread
+ */
+void sched_thread_kill(thread_t* thread);
+
+/**
  * @brief Yields the current thread
  */
 void sched_yield();
@@ -60,7 +67,7 @@ void sched_yield();
 /**
  * @brief Terminates the current thread
  */
-void sched_terminate();
+void sched_terminate_current_thread();
 
 /**
  * @brief Puts the current thread to sleep for the specified duration in milliseconds

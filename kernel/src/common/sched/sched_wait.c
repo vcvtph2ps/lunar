@@ -30,6 +30,27 @@ static void sched_wait_abort() {
     thread->sched.wait_entry = nullptr;
 }
 
+/// @brief Puts the current thread back into the running state after it backed out of a wait
+static void sched_wait_resume() {
+    thread_t* thread = sched_arch_thread_current();
+
+    while(true) {
+        thread_state_t state = ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE);
+        if(state == THREAD_STATE_RUNNING || state == THREAD_STATE_DYING) {
+            /// A thread that was killed while it was backing out of the wait stays dying,
+            /// @note whoever killed it must be the one that terminates it
+            return;
+        }
+
+        assert(state == THREAD_STATE_WAITING_IN_PROGRESS || state == THREAD_STATE_WAITING_ABORTED);
+
+        thread_state_t expected = state;
+        if(ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_RUNNING, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE)) {
+            return;
+        }
+    }
+}
+
 static bool sched_wait_any(wait_obj_t** objects, size_t count) {
     thread_t* thread = sched_arch_thread_current();
 
@@ -187,14 +208,14 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
     if(wait_aborted) {
         /// handle abort path
         sched_wait_abort();
-        ATOMIC_STORE(&thread->sched.state, THREAD_STATE_RUNNING, ATOMIC_RELEASE);
+        sched_wait_resume();
     } else {
         /// try commit
         thread_state_t expected = THREAD_STATE_WAITING_IN_PROGRESS;
         if(!ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_WAITING, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE)) {
             /// handle abort path
             sched_wait_abort();
-            ATOMIC_STORE(&thread->sched.state, THREAD_STATE_RUNNING, ATOMIC_RELEASE);
+            sched_wait_resume();
         } else {
             sched_yield_internal(THREAD_STATE_WAITING);
             sched_wait_abort(); // clean up after wait
@@ -203,5 +224,10 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
 
     if(timer) {
         timer_wait_free(timer);
+    }
+
+    /// The thread may have been killed while it was waiting or while it was backing out of the wait, it must never return to its caller
+    if(ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE) == THREAD_STATE_DYING) {
+        sched_terminate_current_thread();
     }
 }

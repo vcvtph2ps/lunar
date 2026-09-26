@@ -5,6 +5,7 @@
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
+#include <common/sched/reaper.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sched/timer_wait.h>
@@ -33,12 +34,49 @@ void sched_preempt_enable() {
     }
 }
 
+/// @brief Marks a thread the scheduler is done with as terminated and hands it to the reaper
+static void sched_thread_retire(thread_t* thread) {
+    /// A dying thread can still be sitting in a run queue, @see sched_thread_kill. It has to come back out of it here
+    scheduler_t* sched = ATOMIC_LOAD(&thread->sched.owner, ATOMIC_RELAXED);
+    if(sched != nullptr) {
+        spinlock_lock(&sched->lock);
+        if(ATOMIC_LOAD(&thread->sched.in_run_queue, ATOMIC_RELAXED)) {
+            list_node_delete(&sched->run_queue, &thread->sched.run_queue_node);
+            ATOMIC_STORE(&thread->sched.in_run_queue, false, ATOMIC_RELAXED);
+        }
+        spinlock_unlock(&sched->lock);
+    }
+
+    ATOMIC_STORE(&thread->sched.state, THREAD_STATE_TERMINATED, ATOMIC_RELEASE);
+    reaper_queue_thread(thread);
+}
+
 static thread_t* sched_next_thread(scheduler_t* sched) {
-    spinlock_lock(&sched->lock);
-    list_node_t* node = list_pop(&sched->run_queue);
-    thread_t* next = node ? CONTAINER_OF(node, thread_t, sched.run_queue_node) : nullptr;
-    spinlock_unlock(&sched->lock);
-    return next;
+    while(true) {
+        spinlock_lock(&sched->lock);
+        list_node_t* node = list_pop(&sched->run_queue);
+        thread_t* next = node != nullptr ? CONTAINER_OF(node, thread_t, sched.run_queue_node) : nullptr;
+
+        /// The node is out of the list, the flag has to follow it or the retire path would try
+        if(next != nullptr) {
+            ATOMIC_STORE(&next->sched.in_run_queue, false, ATOMIC_RELAXED);
+        }
+        spinlock_unlock(&sched->lock);
+
+        if(next == nullptr) {
+            return nullptr;
+        }
+
+        /// A thread that was killed while it sat in the run queue must never run again, it is retired from here instead. @see sched_thread_kill
+        thread_state_t state = ATOMIC_LOAD(&next->sched.state, ATOMIC_ACQUIRE);
+        if(state == THREAD_STATE_DYING || state == THREAD_STATE_TERMINATED) {
+            assert(next != sched->idle_thread);
+            sched_thread_retire(next);
+            continue;
+        }
+
+        return next;
+    }
 }
 
 void sched_thread_schedule(thread_t* thread) {
@@ -58,14 +96,54 @@ void sched_thread_schedule(thread_t* thread) {
         case THREAD_STATE_WAITING:             break;
     }
 
-    bool expected = false;
-    if(!ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.in_run_queue, &expected, true, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE)) {
+    if(ATOMIC_XCHG(&thread->sched.in_run_queue, true, ATOMIC_ACQ_REL)) {
         spinlock_unlock(&sched->lock);
         return;
     }
 
     list_push_back(&sched->run_queue, &thread->sched.run_queue_node);
     spinlock_unlock(&sched->lock);
+}
+
+/// @brief Puts a thread that is on its way out back onto the run queue, so that it gets to run
+/// one last time and can tear down whatever it was blocked on. @see sched_thread_kill
+static void sched_thread_schedule_dying(thread_t* thread) {
+    scheduler_t* sched = ATOMIC_LOAD(&thread->sched.owner, ATOMIC_RELAXED);
+    spinlock_lock(&sched->lock);
+
+    if(ATOMIC_XCHG(&thread->sched.in_run_queue, true, ATOMIC_ACQ_REL)) {
+        spinlock_unlock(&sched->lock);
+        return;
+    }
+
+    list_push_back(&sched->run_queue, &thread->sched.run_queue_node);
+    spinlock_unlock(&sched->lock);
+}
+
+void sched_thread_kill(thread_t* thread) {
+    if(thread == sched_arch_thread_current()) {
+        sched_terminate_current_thread();
+    }
+
+    while(true) {
+        thread_state_t state = ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE);
+        if(state == THREAD_STATE_DYING || state == THREAD_STATE_TERMINATED) {
+            return;
+        }
+
+        /// Once the state is dying the scheduler will not pick the thread up again and it will bail out of whatever it was doing on its next state transition
+        thread_state_t expected = state;
+        if(!ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_DYING, ATOMIC_SEQ_CST, ATOMIC_SEQ_CST)) {
+            continue;
+        }
+
+        /// A thread that committed its wait is off the cpu, it has to be woken so that it can take its wait blocks down before it dies. Nobody else will ever wake it, wait signals
+        if(state == THREAD_STATE_WAITING) {
+            sched_thread_schedule_dying(thread);
+        }
+
+        return;
+    }
 }
 
 void sched_arch_init(uint32_t core_id);
@@ -76,6 +154,10 @@ void sched_init(uint32_t core_id) {
     sched->lock = SPINLOCK_INIT;
     sched->idle_thread = sched_arch_create_kernel_thread((virt_addr_t) idle_thread_entry);
     sched_arch_init(core_id);
+
+    if(INIT_CORE_IS_BSP(core_id)) {
+        reaper_init();
+    }
 }
 
 void sched_sleep(uint64_t msec) {
@@ -95,6 +177,13 @@ void sched_yield_internal(thread_state_t yield_state) {
     assert(previous_state.enabled == true);
 
     thread_t* current = sched_arch_thread_current();
+
+    /// The wait blocks live on the kernel stack of the thread and point at the wait entry of the thread, they have to come down no matter which state the thread ends up in
+    bool wait_cleanup = yield_state == THREAD_STATE_WAITING;
+
+    /// Being killed takes priority whatever the thread wanted to do
+    if(ATOMIC_LOAD(&current->sched.state, ATOMIC_ACQUIRE) == THREAD_STATE_DYING) yield_state = THREAD_STATE_DYING;
+
     thread_t* next = sched_next_thread(&CPU_LOCAL_GET_SELF()->scheduler);
 
     // If we have no next thread, and the current thread is ready to run, we can just continue running the current thread
@@ -106,7 +195,7 @@ void sched_yield_internal(thread_state_t yield_state) {
         assert(yield_state == THREAD_STATE_READY);
     }
 
-    if(yield_state == THREAD_STATE_WAITING) {
+    if(wait_cleanup) {
         assert(current->sched.wait_entry != nullptr);
         spinlock_lock(&current->sched.wait_entry->lock);
         while(true) {
@@ -132,7 +221,7 @@ void sched_yield() {
     sched_yield_internal(THREAD_STATE_READY);
 }
 
-void sched_terminate() {
+void sched_terminate_current_thread() {
     sched_yield_internal(THREAD_STATE_DYING);
 }
 
@@ -141,21 +230,12 @@ void sched_thread_drop(thread_t* thread) {
 
     thread_state_t state = ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE);
     switch(state) {
-        case THREAD_STATE_READY:
-            ATOMIC_STORE(&thread->sched.in_run_queue, false, ATOMIC_RELEASE);
-            sched_thread_schedule(thread);
-            return;
+        case THREAD_STATE_READY: sched_thread_schedule(thread); return;
 
-        case THREAD_STATE_WAITING: {
-            ATOMIC_STORE(&thread->sched.in_run_queue, false, ATOMIC_RELEASE);
-            return;
-        }
+        case THREAD_STATE_WAITING: return;
 
         case THREAD_STATE_DYING:
-        case THREAD_STATE_TERMINATED:
-            LOG_INFO("Thread %u exited, dying\n", thread->tid);
-            ATOMIC_STORE(&thread->sched.state, THREAD_STATE_TERMINATED, ATOMIC_RELEASE);
-            return;
+        case THREAD_STATE_TERMINATED: sched_thread_retire(thread); return;
 
         default: assertf(false, "invalid state on drop %d", state);
     }
@@ -168,7 +248,7 @@ void sched_thread_init_common(thread_t* prev) {
 }
 
 [[noreturn]] void sched_thread_exit_kernel() {
-    sched_terminate();
+    sched_terminate_current_thread();
     while(1);
 }
 

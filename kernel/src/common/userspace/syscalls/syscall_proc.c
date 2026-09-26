@@ -9,9 +9,19 @@
 #include <memory/heap.h>
 
 [[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
-    (void) args;
     LOG_UTRC("exit_code=%d\n", (int) args->arg1);
-    process_kill(CPU_LOCAL_GET_CURRENT_THREAD()->common.process);
+
+    thread_t* thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
+    process_t* process = thread->process;
+
+    ATOMIC_STORE(&thread->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
+    ATOMIC_STORE(&process->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
+
+    /// Exiting from a thread is exiting from the process, the kernel has no notion of a
+    /// process outliving its last thread
+    process_kill(process);
+
+    /// process_kill never returns for a thread of the process it kills
     while(1);
 }
 

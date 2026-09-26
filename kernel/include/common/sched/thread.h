@@ -52,5 +52,11 @@ struct thread {
         wait_entry_t* wait_entry;
     } sched;
 
+    // The code the thread exited with
+    ATOMIC int32_t exit_code;
+
+    ATOMIC bool in_reap_queue;
+    list_node_t list_node_reap_queue;
+
     bool in_interrupt_handler;
 };

@@ -18,6 +18,12 @@ struct process {
     vm_address_space_t* address_space;
     vfs_node_t* current_working_dir;
     fd_store_t* fd_store;
+
+    /// Set as soon as the process is killed, no thread of the process runs after this
+    ATOMIC bool exiting;
+
+    /// The code the process exited with
+    ATOMIC int32_t exit_code;
 };
 
 /**
@@ -39,6 +45,7 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
 
 /**
  * @brief Kills the target process
- * @note This function is safe to call from a thread of the target process
+ * @param target The process to kill
+ * @note This function never returns if it is called from a thread of the target process
  */
 void process_kill(process_t* target);
