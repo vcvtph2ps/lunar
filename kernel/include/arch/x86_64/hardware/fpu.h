@@ -36,3 +36,5 @@ void* arch_fpu_alloc_area();
  * @param area Target buffer to free
  */
 void arch_fpu_free_area(void* area);
+
+size_t arch_fpu_area_size();

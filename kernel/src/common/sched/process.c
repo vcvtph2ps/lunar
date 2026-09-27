@@ -13,6 +13,8 @@
 #include <memory/ptm.h>
 #include <stdint.h>
 
+#include "common/userspace/fd_store.h"
+
 // @note: 0 is reserved, 1 is for the init process
 ATOMIC uint32_t g_next_task_id = 2;
 
@@ -24,6 +26,33 @@ uint32_t process_allocate_id() {
 void process_free_id(uint32_t id) {
     // @todo: don't bump allocate...
     (void) id;
+}
+
+process_t* process_fork(process_t* parent) {
+    (void) parent;
+    process_t* process = heap_zalloc(sizeof(process_t));
+    process->parent_process_id = parent->process_id;
+    process->current_working_dir = vfs_node_get(parent->current_working_dir);
+    process->thread_list_lock = SPINLOCK_NO_DW_INIT;
+    process->fd_store = fd_store_clone(parent->fd_store);
+    if(!process->fd_store) {
+        heap_free(process, sizeof(process_t));
+        return nullptr;
+    }
+
+    process->address_space = vm_fork(parent->address_space);
+    if(!process->address_space) {
+        heap_free(process, sizeof(process_t));
+        fd_store_free(process->fd_store);
+        return nullptr;
+    }
+
+    process->process_id = process_allocate_id();
+
+    ATOMIC_STORE(&process->exiting, false, ATOMIC_RELAXED);
+    ATOMIC_STORE(&process->exit_code, 0, ATOMIC_RELAXED);
+
+    return process;
 }
 
 process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread) {
@@ -46,6 +75,7 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
 
     process_t* process = heap_zalloc(sizeof(process_t));
     process->process_id = process_allocate_id();
+    process->parent_process_id = 0;
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
     process->address_space = process_address_space;
     ATOMIC_STORE(&process->exiting, false, ATOMIC_RELAXED);
@@ -63,7 +93,6 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     thread_t* thread = sched_arch_create_thread_user(process, user_stack_top, entry_point, true);
     assert(thread != nullptr);
     list_push(&process->thread_list, &thread->list_node_process);
-
 
     *out_thread = thread;
     return process;

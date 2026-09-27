@@ -79,6 +79,7 @@ void syscall_init() {
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_EXIT, syscall_sys_proc_exit);
     SYSCALL_DISPATCHER(SYSCALL_PROC_GETINFO, syscall_sys_proc_getinfo);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_FORK, syscall_sys_proc_fork);
 
     SYSCALL_DISPATCHER(SYSCALL_SYS_TCB_SET, syscall_sys_thread_set_tcb);
     SYSCALL_DISPATCHER(SYSCALL_SYS_DEBUG_LOG, syscall_sys_debug_log);

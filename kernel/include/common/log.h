@@ -103,9 +103,9 @@ void log_lock_release(arch_interrupt_state_t state);
     } while(0)
 
 // User TRaCe
-#define LOG_UTRC(fmt, ...)                                                                             \
-    do {                                                                                               \
-        log_print(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "%s: " fmt, __func__, ##__VA_ARGS__); \
+#define LOG_UTRC(fmt, ...)                                                                                                                                         \
+    do {                                                                                                                                                           \
+        log_print(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: " fmt, sched_arch_thread_current()->process->process_id, __func__, ##__VA_ARGS__); \
     } while(0)
 
 #else

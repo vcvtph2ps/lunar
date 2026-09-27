@@ -74,7 +74,23 @@ bool ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t*
 void ptm_flush_tlb(virt_addr_t vaddr, size_t length);
 
 /**
+ * @brief Flushes every TLB entry for the current address space.
+ * @note This does not dispatch TLB flushes across cores
+ */
+void ptm_flush_tlb_all(void);
+
+/**
  * @brief Loads the page tables for the specified address space into the CPU's mmu.
  * @param address_space The address space to load.
  */
 void ptm_load_address_space(vm_address_space_t* address_space);
+
+/**
+ *
+ */
+bool ptm_fork_user(vm_address_space_t* address_space, vm_address_space_t* parent_address_space);
+
+/**
+ *
+ */
+bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protection_t prot, vm_cache_t cache, bool global);

@@ -7,6 +7,7 @@
 
 typedef enum {
     IPI_TLB_FLUSH = 0,
+    IPI_TLB_FLUSH_ALL,
     IPI_HALT,
 } ipi_type_t;
 

@@ -65,6 +65,10 @@ static inline bool pte_is_large(arch_pte_entry_t e, uint32_t level) {
     return level > 1u && (e & (ARCH_PTE_R | ARCH_PTE_W | ARCH_PTE_X)) != 0u;
 }
 
+static inline bool pte_is_leaf(arch_pte_entry_t e, uint32_t level) {
+    return level == 1u || pte_is_large(e, level);
+}
+
 static inline phys_addr_t pte_get_table_phys(arch_pte_entry_t e) {
     return ARCH_PTE_TO_PHYS(e);
 }
@@ -97,6 +101,13 @@ static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protectio
     return ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(phys);
 }
 
+static inline arch_pte_entry_t pte_clone_table(phys_addr_t phys, arch_pte_entry_t other) {
+    (void) other;
+    // On riscv intermediate pt entries carry no protection or privilege bits.
+    // so there isn't anything to actually clone here
+    return ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(phys);
+}
+
 static inline arch_pte_entry_t pte_widen_table_entry(arch_pte_entry_t e, vm_protection_t prot, vm_privilege_t priv) {
     (void) prot;
     (void) priv;
@@ -112,6 +123,12 @@ static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protecti
     e |= pte_priv_flags(priv);
     if(global) e |= ARCH_PTE_G;
     e |= pte_cache_flags(cache, level);
+    return e;
+}
+
+static inline arch_pte_entry_t pte_clone_leaf_entry(phys_addr_t phys, arch_pte_entry_t other, uint32_t level) {
+    arch_pte_entry_t e = other & ~ARCH_PTE_PPN_MASK;
+    e |= ARCH_PTE_PHYS_TO_PTE(phys & ~((phys_addr_t) (pte_level_page_size(level) - 1u)));
     return e;
 }
 

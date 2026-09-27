@@ -3,18 +3,25 @@
 #include <arch/x86_64/internal/msr.h>
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/memory.h>
+#include <arch/x86_64/memory/pte.h>
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/init.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
+#include <common/sync/spinlock.h>
 #include <lib/helpers.h>
+#include <lib/math.h>
+#include <lib/string.h>
+#include <lib/types.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
 #include <memory/pt_radix.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
 #include <protocol/bootinfo.h>
+
+#include "common/userspace/userspace.h"
 
 bool g_arch_pte_la57_enabled = false;
 static bool g_pat_supported = false;
@@ -67,6 +74,10 @@ static bool internal_ptm_physical(arch_pte_entry_t* top_level_page_table, uintpt
 
 void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
     for(; length > 0; length -= ARCH_PAGE_SIZE_4K, vaddr += ARCH_PAGE_SIZE_4K) asm volatile("invlpg (%0)" ::"r"(vaddr) : "memory");
+}
+
+void ptm_flush_tlb_all(void) {
+    arch_cr_write_cr3(arch_cr_read_cr3());
 }
 
 bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
@@ -284,15 +295,19 @@ static void map_kernel() {
 
 static void page_fault_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
-    LOG_KTRC("addr=0x%016lx\n", frame->interrupt_data);
     if(!frame->is_user) {
         arch_panic_int(frame);
     }
     vm_fault_reason_t reason = VM_FAULT_UKKNOWN;
     if((frame->error & (1 << 0)) == 0) {
         reason = VM_FAULT_NOT_PRESENT;
+    } else if((frame->error & (1 << 1)) != 0) {
+        reason = VM_FAULT_WRITE_TO_RO;
     }
-    if(vm_fault(frame->interrupt_data, reason)) {
+    LOG_UTRC("addr=0x%016lx, type=%s\n", frame->interrupt_data, vm_fault_reason_to_string(reason));
+    if(!vm_fault(frame->interrupt_data, reason)) {
+        // @todo: SIGSEGV
+        user_assert(false && "SIGSEGV unimplemented");
         return;
     }
 }
@@ -358,6 +373,97 @@ bool ptm_init_user(vm_address_space_t* address_space) {
     arch_pte_entry_t* user_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     arch_pte_entry_t* kernel_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
     for(int i = 256; i < 512; i++) user_pml4[i] = kernel_pml4[i];
+
+    return true;
+}
+
+static bool ptm_make_cow_page_table(arch_pte_entry_t* new_page_table_base, arch_pte_entry_t* old_page_table_base, uint32_t level) {
+    int entry_count = level == pte_top_level() ? 256 : 512;
+    for(int i = 0; i < entry_count; i++) {
+        if(!pte_is_present(old_page_table_base[i])) {
+            continue;
+        }
+
+        if(pte_is_leaf(old_page_table_base[i], level)) {
+            uint64_t num_4k = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
+            uint64_t pfn_base = pte_get_leaf_phys(old_page_table_base[i], level) / ARCH_PAGE_SIZE_4K;
+
+            new_page_table_base[i] = old_page_table_base[i];
+            new_page_table_base[i] &= ~ARCH_PTE_RW;
+            old_page_table_base[i] &= ~ARCH_PTE_RW;
+
+            for(uint64_t j = 0; j < num_4k; j++) {
+                pagedb_page_map(pfn_base + j);
+            }
+            continue;
+        }
+
+        uintptr_t new_pt_level = pmm_alloc_page(PMM_FLAG_ZERO);
+        if(new_pt_level == 0) return false;
+        new_page_table_base[i] = pte_clone_table(new_pt_level, old_page_table_base[i]);
+        bool success = ptm_make_cow_page_table((arch_pte_entry_t*) PTM_TO_HHDM(new_pt_level), (arch_pte_entry_t*) PTM_TO_HHDM(pte_get_table_phys(old_page_table_base[i])), level - 1);
+        if(!success) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protection_t prot, vm_cache_t cache, bool global) {
+    virt_addr_t page_addr = ALIGN_DOWN(vaddr, ARCH_PAGE_SIZE_4K);
+
+    uintptr_t phys;
+    if(!ptm_physical(address_space, page_addr, &phys)) return false;
+
+    uint64_t pfn = phys / ARCH_PAGE_SIZE_4K;
+    pagedb_page_t* page = pagedb_get_page(pfn);
+    if(page == nullptr) return false;
+
+    uint32_t map_count = ATOMIC_LOAD(&page->map_count, ATOMIC_RELAXED);
+    vm_privilege_t priv = global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER;
+
+    if(map_count == 1) {
+        return ptm_rewrite(address_space, page_addr, ARCH_PAGE_SIZE_4K, prot, cache, priv, global);
+    }
+
+    uintptr_t new_phys = pmm_alloc_page(PMM_FLAG_NONE);
+    if(new_phys == 0) return false;
+
+    memory_copy((void*) PTM_TO_HHDM(new_phys), (void*) PTM_TO_HHDM(phys), ARCH_PAGE_SIZE_4K);
+
+    ptm_unmap(address_space, page_addr, ARCH_PAGE_SIZE_4K, false);
+
+    if(!ptm_map(address_space, page_addr, new_phys, ARCH_PAGE_SIZE_4K, prot, cache, priv, global, false)) {
+        pmm_free_page(new_phys);
+        return false;
+    }
+
+    return true;
+}
+
+bool ptm_fork_user(vm_address_space_t* new_as, vm_address_space_t* parent_as) {
+    new_as->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
+    if(new_as->ptm.top_level_page_table == 0) return false;
+
+    new_as->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
+
+    spinlock_nodw_lock(&parent_as->ptm.ptm_lock);
+    bool success = ptm_make_cow_page_table((arch_pte_entry_t*) PTM_TO_HHDM(new_as->ptm.top_level_page_table), (arch_pte_entry_t*) PTM_TO_HHDM(parent_as->ptm.top_level_page_table), pte_top_level());
+    if(!success) {
+        arch_panic("ptm: failed to fork page tables\n");
+    }
+    spinlock_nodw_unlock(&parent_as->ptm.ptm_lock);
+
+    arch_pte_entry_t* user_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(new_as->ptm.top_level_page_table);
+    arch_pte_entry_t* kernel_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
+    for(int i = 256; i < 512; i++) user_pml4[i] = kernel_pml4[i];
+
+    // @note: ugh this sucks
+    ptm_flush_tlb_all();
+    ipi_broadcast((ipi_message_t) {
+        .type = IPI_TLB_FLUSH_ALL,
+    });
 
     return true;
 }

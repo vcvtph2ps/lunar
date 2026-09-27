@@ -5,6 +5,8 @@
 #include <lib/types.h>
 #include <stddef.h>
 
+#include "common/assert.h"
+
 typedef enum {
     VM_REGION_TYPE_ANON,
     VM_REGION_TYPE_DIRECT
@@ -13,7 +15,17 @@ typedef enum {
 typedef enum {
     VM_FAULT_UKKNOWN = 0,
     VM_FAULT_NOT_PRESENT,
+    VM_FAULT_WRITE_TO_RO
 } vm_fault_reason_t;
+
+static inline const char* vm_fault_reason_to_string(vm_fault_reason_t reason) {
+    switch(reason) {
+        case VM_FAULT_UKKNOWN:     return "VM_FAULT_UKKNOWN";
+        case VM_FAULT_NOT_PRESENT: return "VM_FAULT_NOT_PRESENT";
+        case VM_FAULT_WRITE_TO_RO: return "VM_FAULT_WRITE_TO_RO";
+        default:                   ASSERT_UNREACHABLE();
+    }
+}
 
 typedef struct {
     bool read    : 1;
@@ -207,3 +219,8 @@ rb_tree_t vm_create_regions();
  * @brief Initializes kernel vm regions
  */
 void vm_init_kernel();
+
+/**
+ *
+ */
+vm_address_space_t* vm_fork(vm_address_space_t* parent_address_space);

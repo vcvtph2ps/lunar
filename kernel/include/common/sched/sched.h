@@ -45,6 +45,10 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry_point);
  */
 thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_stack_top, virt_addr_t entry, bool inherit_pid);
 
+/**
+ * @brief Creates a user thread with the register frame
+ */
+thread_t* sched_arch_fork_thread_user(process_t* process, thread_t* parent, virt_addr_t user_stack_top, virt_addr_t entry, arch_interrupt_regs_t* frame);
 
 /**
  * @brief Adds a thread to the scheduler's run queue

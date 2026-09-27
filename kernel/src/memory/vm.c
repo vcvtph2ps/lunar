@@ -2,6 +2,7 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
 #include <common/interrupts/dw.h>
+#include <common/log.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
@@ -9,11 +10,10 @@
 #include <lib/math.h>
 #include <lib/rb.h>
 #include <lib/string.h>
+#include <memory/heap.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
-
-#include "common/log.h"
 
 vm_address_space_t* g_vm_global_address_space;
 
@@ -301,10 +301,19 @@ static vm_region_t* addr_to_region(vm_address_space_t* address_space, uintptr_t 
     return region;
 }
 
-static bool address_space_fix_page(vm_address_space_t* address_space, uintptr_t vaddr) {
+static bool address_space_fix_page(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
     vm_region_t* region = addr_to_region(address_space, vaddr);
-    if(region == nullptr || !region->dynamically_backed) return false;
-    return region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT);
+    if(region == nullptr) return false;
+
+    if(reason == VM_FAULT_NOT_PRESENT) {
+        if(!region->dynamically_backed) return false;
+        return region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT);
+    } else if(reason == VM_FAULT_WRITE_TO_RO) {
+        if(!region->protection.write) return false;
+        return ptm_cow_fault(address_space, vaddr, region->protection, region->cache, region->address_space == g_vm_global_address_space);
+    }
+
+    ASSERT_UNREACHABLE();
 }
 
 static bool memory_exists(vm_address_space_t* address_space, uintptr_t address, size_t length) {
@@ -539,7 +548,7 @@ size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, void* src, s
         size_t offset = (dest_addr + i) % PAGE_SIZE_DEFAULT;
         uintptr_t phys;
         if(!ptm_physical(dest_as, dest_addr + i, &phys)) {
-            if(!address_space_fix_page(dest_as, dest_addr + i)) return i;
+            if(!address_space_fix_page(dest_as, VM_FAULT_NOT_PRESENT, dest_addr + i)) return i;
             bool success = ptm_physical(dest_as, dest_addr + i, &phys);
             assert(success);
         }
@@ -561,7 +570,7 @@ size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, 
         size_t offset = (src_addr + i) % PAGE_SIZE_DEFAULT;
         uintptr_t phys;
         if(!ptm_physical(src_as, src_addr + i, &phys)) {
-            if(!address_space_fix_page(src_as, src_addr + i)) return i;
+            if(!address_space_fix_page(src_as, VM_FAULT_NOT_PRESENT, src_addr + i)) return i;
             bool success = ptm_physical(src_as, src_addr + i, &phys);
             assert(success);
         }
@@ -582,7 +591,7 @@ bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t addr, size_t 
     for(virt_addr_t i = addr; i < addr + size; i += PAGE_SIZE_DEFAULT) {
         phys_addr_t phys;
         if(!ptm_physical(target_as, i, &phys)) {
-            if(!address_space_fix_page(target_as, i)) return false;
+            if(!address_space_fix_page(target_as, VM_FAULT_NOT_PRESENT, i)) return false;
             bool success = ptm_physical(target_as, i, &phys);
             assert(success);
         }
@@ -652,7 +661,7 @@ static void vm_fault_dw(void* data) {
     assert(thread->vm_fault.in_process);
     assert(thread->process != nullptr);
 
-    bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.address);
+    bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.reason, thread->vm_fault.address);
     if(EXPECT_UNLIKELY(!ok)) {
         LOG_WARN("vm_fault_dw: page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
         process_kill(thread->process);
@@ -662,7 +671,7 @@ static void vm_fault_dw(void* data) {
 }
 
 bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
-    if(fault != VM_FAULT_NOT_PRESENT) return false;
+    if(fault == VM_FAULT_UKKNOWN) return false;
     if(address_in_bounds(address, g_vm_global_address_space->start, g_vm_global_address_space->end)) return false;
 
     thread_t* current_thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
@@ -672,6 +681,7 @@ bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
     if(process == nullptr) return false;
 
     current_thread->vm_fault.in_process = true;
+    current_thread->vm_fault.reason = fault;
     current_thread->vm_fault.address = address;
     current_thread->vm_fault.dw_item.data = current_thread;
     current_thread->vm_fault.dw_item.fn = vm_fault_dw;
@@ -680,4 +690,40 @@ bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
     dw_queue(&current_thread->vm_fault.dw_item);
 
     return true;
+}
+
+vm_address_space_t* vm_fork(vm_address_space_t* parent_as) {
+    vm_address_space_t* new_as = heap_zalloc(sizeof(vm_address_space_t));
+    new_as->lock = SPINLOCK_NO_DW_INIT;
+
+    spinlock_nodw_lock(&parent_as->lock);
+
+    new_as->start = parent_as->start;
+    new_as->end = parent_as->end;
+    new_as->is_user = parent_as->is_user;
+    new_as->regions_tree = vm_create_regions();
+
+    rb_node_t* node = rb_find_first(&parent_as->regions_tree);
+    while(true) {
+        if(node == nullptr) {
+            break;
+        }
+        vm_region_t* parent_region = CONTAINER_OF(node, vm_region_t, region_tree_node);
+        vm_region_t* new_region = region_alloc(false);
+
+        memory_copy(new_region, parent_region, sizeof(vm_region_t));
+
+        new_region->address_space = new_as;
+        memory_zero(&new_region->region_tree_node, sizeof(rb_node_t));
+        memory_zero(&new_region->region_cache_node, sizeof(list_node_t));
+
+        rb_insert(&new_as->regions_tree, &new_region->region_tree_node);
+
+        node = rb_find_next(&parent_as->regions_tree, node);
+    }
+
+    ptm_fork_user(new_as, parent_as);
+
+    spinlock_nodw_unlock(&parent_as->lock);
+    return new_as;
 }

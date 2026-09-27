@@ -68,3 +68,7 @@ void* arch_fpu_alloc_area() {
 void arch_fpu_free_area(void* area) {
     heap_free(area, g_fpu_area_size);
 }
+
+size_t arch_fpu_area_size() {
+    return g_fpu_area_size;
+}

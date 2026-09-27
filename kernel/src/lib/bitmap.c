@@ -14,6 +14,14 @@ bitmap_t* bitmap_create(size_t bit_count) {
     return bitmap;
 }
 
+bitmap_t* bitmap_clone(bitmap_t* other) {
+    bitmap_t* bitmap = heap_alloc(sizeof(bitmap_t));
+    bitmap->words = heap_zalloc(other->word_count * sizeof(uint64_t));
+    bitmap->word_count = other->word_count;
+    memory_copy(bitmap->words, other->words, other->word_count * sizeof(uint64_t));
+    return bitmap;
+}
+
 void bitmap_resize(bitmap_t* bitmap, size_t new_bit_count) {
     size_t new_word_count = (new_bit_count + 63) / 64;
 

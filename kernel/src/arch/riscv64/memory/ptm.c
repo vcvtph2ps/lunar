@@ -66,6 +66,10 @@ void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
     for(; length > 0; length -= ARCH_PAGE_SIZE_4K, vaddr += ARCH_PAGE_SIZE_4K) asm volatile("sfence.vma %0, zero" ::"r"(vaddr) : "memory");
 }
 
+void ptm_flush_tlb_all(void) {
+    asm volatile("sfence.vma" ::: "memory");
+}
+
 bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(paddr % ARCH_PAGE_SIZE_4K == 0);

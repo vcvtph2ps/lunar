@@ -6,6 +6,8 @@
 #include <lib/list.h>
 #include <lib/types.h>
 
+#include "memory/vm.h"
+
 typedef enum thread_state thread_state_t;
 typedef struct thread thread_t;
 
@@ -33,6 +35,7 @@ struct thread {
 
     struct {
         bool in_process;
+        vm_fault_reason_t reason;
         virt_addr_t address;
         dw_item_t dw_item;
     } vm_fault;

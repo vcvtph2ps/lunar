@@ -6,6 +6,7 @@
 
 syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args);
 syscall_ret_t syscall_sys_proc_getinfo(syscall_args_t* args);
+syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args);
 
 syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args);
 syscall_ret_t syscall_sys_debug_log(syscall_args_t* args);

@@ -40,8 +40,18 @@ typedef struct [[gnu::packed]] {
     virt_addr_t user_stack;
 } init_stack_user_t;
 
+typedef struct [[gnu::packed]] {
+    uint64_t r12, r13, r14, r15, rbp, rbx;
+    virt_addr_t thread_init;
+    virt_addr_t thread_init_user;
+    uint64_t rsi, rdi, r8, r9, r10;
+    virt_addr_t entry;
+    virt_addr_t user_stack;
+} fork_stack_user_t;
+
 extern x86_64_thread_t* x86_64_context_switch(x86_64_thread_t* t_current, x86_64_thread_t* t_next);
 extern void x86_64_userspace_init_sysexit();
+extern void x86_64_userspace_fork_sysexit();
 
 dw_item_t* g_timer_check_dw;
 
@@ -123,6 +133,40 @@ thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_sta
 
     uint32_t tid = inherit_pid ? process->process_id : process_allocate_id();
     return &sched_arch_create_thread_common(tid, process, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack)->common;
+}
+
+thread_t* sched_arch_fork_thread_user(process_t* process, thread_t* parent, virt_addr_t user_stack, virt_addr_t entry, arch_interrupt_regs_t* frame) {
+    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
+
+    fork_stack_user_t* init_stack = (fork_stack_user_t*) (kernel_stack_top - sizeof(fork_stack_user_t));
+    memory_zero(init_stack, sizeof(fork_stack_user_t));
+    init_stack->thread_init = (virt_addr_t) arch_thread_init_common;
+    init_stack->thread_init_user = (virt_addr_t) x86_64_userspace_fork_sysexit;
+    init_stack->entry = entry;
+    init_stack->user_stack = user_stack;
+
+    init_stack->r12 = frame->r12;
+    init_stack->r13 = frame->r13;
+    init_stack->r14 = frame->r14;
+    init_stack->r15 = frame->r15;
+    init_stack->rbp = frame->rbp;
+    init_stack->rbx = frame->rbx;
+    init_stack->rsi = frame->rsi;
+    init_stack->rdi = frame->rdi;
+    init_stack->r8 = frame->r8;
+    init_stack->r9 = frame->r9;
+    init_stack->r10 = frame->r10;
+
+    uint32_t tid = process->process_id;
+    x86_64_thread_t* thread = sched_arch_create_thread_common(tid, process, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack);
+
+    x86_64_thread_t* n_parent_thread = CONTAINER_OF(parent, x86_64_thread_t, common);
+    thread->fsbase = n_parent_thread->fsbase;
+    thread->gsbase = n_parent_thread->gsbase;
+    memory_copy(thread->fpu_area, n_parent_thread->fpu_area, arch_fpu_area_size());
+
+    return &thread->common;
 }
 
 thread_t* sched_arch_thread_current() {

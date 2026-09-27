@@ -73,3 +73,28 @@ x86_64_userspace_init_sysexit:
 
     swapgs
     o64 sysret
+
+
+; void x86_64_userspace_init_sysexit();
+global x86_64_userspace_fork_sysexit
+x86_64_userspace_fork_sysexit:
+    cli
+
+    ; setup registers
+    ; @note: we don't bother setting up rbx, rbp, r12, r13, r14, r15
+    ; because they should be setup by the context switch
+    xor rax, rax
+    xor rdx, rdx
+   	pop rsi
+   	pop rdi
+   	pop r8
+   	pop r9
+   	pop r10
+
+    ; setup sysret
+    pop rcx ; address to sysret to
+    pop rsp ; userspace stack pointer
+    mov r11, 0x202 ; interrupts enabled
+
+    swapgs
+    o64 sysret

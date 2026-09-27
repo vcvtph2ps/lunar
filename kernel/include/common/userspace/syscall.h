@@ -8,6 +8,7 @@
 typedef enum : uint64_t {
     SYSCALL_PROC_EXIT = 0,
     SYSCALL_PROC_GETINFO = 1,
+    SYSCALL_PROC_FORK = 2,
 
     SYSCALL_SYS_DEBUG_LOG = 10,
     SYSCALL_SYS_TCB_SET = 11,
@@ -61,7 +62,8 @@ typedef struct {
     uint64_t arg4;
     uint64_t arg5;
     uint64_t arg6;
-    void* arch_frame;
+    uint64_t user_rsp;
+    arch_interrupt_regs_t* regs;
 } syscall_args_t;
 
 /**

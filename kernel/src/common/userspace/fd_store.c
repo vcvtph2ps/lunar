@@ -3,6 +3,7 @@
 #include <common/userspace/fd_store.h>
 #include <common/userspace/userspace.h>
 #include <lib/helpers.h>
+#include <lib/string.h>
 #include <memory/heap.h>
 
 fd_store_t* fd_store_create() {
@@ -10,7 +11,7 @@ fd_store_t* fd_store_create() {
     store->lock = SPINLOCK_INIT;
     store->fds_elements_count = 64;
     store->fds = heap_reallocarray(nullptr, sizeof(fd_store_entry_t), 0, store->fds_elements_count);
-    store->bitmap = bitmap_create(64);
+    store->bitmap = bitmap_create(store->fds_elements_count);
     return store;
 }
 
@@ -20,6 +21,30 @@ void fd_store_free(fd_store_t* store) {
         heap_free(store->fds, store->fds_elements_count * sizeof(fd_store_entry_t));
     }
     heap_free(store, sizeof(fd_store_t));
+}
+
+fd_store_t* fd_store_clone(fd_store_t* parent_store) {
+    spinlock_lock(&parent_store->lock);
+
+    fd_store_t* store = heap_alloc(sizeof(fd_store_t));
+    store->lock = SPINLOCK_INIT;
+    store->fds_elements_count = parent_store->fds_elements_count;
+    store->fds = heap_reallocarray(nullptr, sizeof(fd_store_entry_t), 0, parent_store->fds_elements_count);
+    store->bitmap = bitmap_clone(parent_store->bitmap);
+
+    for(size_t i = 0; i < parent_store->fds_elements_count; i++) {
+        bool valid = bitmap_get(parent_store->bitmap, i);
+        if(!valid) {
+            continue;
+        }
+
+        /// Bump node refcount
+        vfs_node_get(parent_store->fds[i].node);
+        memory_copy(&store->fds[i], &parent_store->fds[i], sizeof(fd_store_entry_t));
+    }
+
+    spinlock_unlock(&parent_store->lock);
+    return store;
 }
 
 uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_t** out_entry) {

@@ -86,6 +86,10 @@ static inline bool pte_is_large(arch_pte_entry_t e, uint32_t level) {
     return level > 1u && (e & ARCH_PTE_LARGE) != 0u;
 }
 
+static inline bool pte_is_leaf(arch_pte_entry_t e, uint32_t level) {
+    return level == 1u || pte_is_large(e, level);
+}
+
 static inline phys_addr_t pte_get_table_phys(arch_pte_entry_t e) {
     return e & ARCH_PTE_ADDR_MASK;
 }
@@ -97,6 +101,12 @@ static inline phys_addr_t pte_get_leaf_phys(arch_pte_entry_t e, uint32_t level) 
 static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protection_t prot, vm_privilege_t priv) {
     arch_pte_entry_t e = ARCH_PTE_PRESENT | (phys & ARCH_PTE_ADDR_MASK) | pte_priv_flags(priv);
     if(!prot.execute) e |= ARCH_PTE_NX;
+    return e;
+}
+
+static inline arch_pte_entry_t pte_clone_table(phys_addr_t phys, arch_pte_entry_t other) {
+    arch_pte_entry_t e = other & ~ARCH_PTE_ADDR_MASK;
+    e |= (phys & ARCH_PTE_ADDR_MASK);
     return e;
 }
 
@@ -113,6 +123,12 @@ static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protecti
     if(prot.write) e |= ARCH_PTE_RW;
     if(!prot.execute) e |= ARCH_PTE_NX;
     if(global) e |= ARCH_PTE_GLOBAL;
+    return e;
+}
+
+static inline arch_pte_entry_t pte_clone_leaf_entry(phys_addr_t phys, arch_pte_entry_t other, uint32_t level) {
+    arch_pte_entry_t e = other & ~pte_addr_mask(level);
+    e |= (phys & pte_addr_mask(level));
     return e;
 }
 

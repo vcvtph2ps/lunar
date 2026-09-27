@@ -18,7 +18,6 @@ void arch_syscall_init() {
     arch_msr_write(ARCH_MSR_SFMASK, ~0x2);
 }
 
-
 // @note: user rip is in rcx, user rflags is in r11
 typedef struct {
     uint64_t user_rsp;
@@ -36,7 +35,8 @@ syscall_ret_t x86_64_dispatch_syscall(x86_64_syscall_frame_t* frame) {
     args.arg4 = frame->regs.r10;
     args.arg5 = frame->regs.r8;
     args.arg6 = frame->regs.r9;
-    args.arch_frame = frame;
+    args.user_rsp = frame->user_rsp;
+    args.regs = &frame->regs;
 
     return syscall_dispatch(&args);
 }
