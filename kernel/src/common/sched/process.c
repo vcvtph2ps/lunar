@@ -7,13 +7,15 @@
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
+#include <common/userspace/fd_store.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
+#include <lib/string.h>
 #include <memory/heap.h>
 #include <memory/ptm.h>
 #include <stdint.h>
 
-#include "common/userspace/fd_store.h"
+#include "common/sync/wait_obj.h"
 
 // @note: 0 is reserved, 1 is for the init process
 ATOMIC uint32_t g_next_task_id = 2;
@@ -29,11 +31,15 @@ void process_free_id(uint32_t id) {
 }
 
 process_t* process_fork(process_t* parent) {
-    (void) parent;
     process_t* process = heap_zalloc(sizeof(process_t));
+    process->parent = parent;
     process->parent_process_id = parent->process_id;
+    process->children_lock = SPINLOCK_NO_DW_INIT;
+    process->children_list = LIST_INIT;
+    process->child_exit_event = WAIT_OBJ_INIT(WAIT_OBJ_NOTIFICATION);
     process->current_working_dir = vfs_node_get(parent->current_working_dir);
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
+    process->thread_list = LIST_INIT;
     process->fd_store = fd_store_clone(parent->fd_store);
     if(!process->fd_store) {
         heap_free(process, sizeof(process_t));
@@ -49,8 +55,14 @@ process_t* process_fork(process_t* parent) {
 
     process->process_id = process_allocate_id();
 
-    ATOMIC_STORE(&process->exiting, false, ATOMIC_RELAXED);
-    ATOMIC_STORE(&process->exit_code, 0, ATOMIC_RELAXED);
+    memory_zero(&process->status, sizeof(process_status_t));
+    process->status.lock = SPINLOCK_NO_DW_INIT;
+    process->status.state = PROCESS_RUNNING;
+
+    /// Register with the parent so that it can wait on us
+    spinlock_nodw_lock(&parent->children_lock);
+    list_push_back(&parent->children_list, &process->list_node_sibling);
+    spinlock_nodw_unlock(&parent->children_lock);
 
     return process;
 }
@@ -76,10 +88,18 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     process_t* process = heap_zalloc(sizeof(process_t));
     process->process_id = process_allocate_id();
     process->parent_process_id = 0;
+    process->parent = nullptr;
+    process->children_lock = SPINLOCK_NO_DW_INIT;
+    process->children_list = LIST_INIT;
+    process->child_exit_event = WAIT_OBJ_INIT(WAIT_OBJ_NOTIFICATION);
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
+    process->thread_list = LIST_INIT;
     process->address_space = process_address_space;
-    ATOMIC_STORE(&process->exiting, false, ATOMIC_RELAXED);
-    ATOMIC_STORE(&process->exit_code, 0, ATOMIC_RELAXED);
+
+    memory_zero(&process->status, sizeof(process_status_t));
+    process->status.lock = SPINLOCK_NO_DW_INIT;
+    process->status.state = PROCESS_RUNNING;
+
 
     // @note: nullptr is '/'
     if(process->current_working_dir != nullptr) {
@@ -98,7 +118,7 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     return process;
 }
 
-void process_kill(process_t* process) {
+void process_kill(process_t* process, process_status_state_t state, int32_t exit_code) {
     assert(process != nullptr);
 
     if(process->process_id == 1) {
@@ -107,16 +127,25 @@ void process_kill(process_t* process) {
 
     thread_t* current = sched_arch_thread_current();
 
+    spinlock_nodw_lock(&process->status.lock);
+
     /// The process is already on its way out
-    if(ATOMIC_LOAD(&process->exiting, ATOMIC_ACQUIRE)) {
+    if(process->status.state != PROCESS_RUNNING) {
+        spinlock_nodw_unlock(&process->status.lock);
         if(current->process == process) {
             sched_terminate_current_thread();
         }
         return;
     }
 
-    ATOMIC_STORE(&process->exiting, true, ATOMIC_SEQ_CST);
+    process->status.state = state;
+    switch(state) {
+        case PROCESS_EXITED:     process->status.exited.exit_code = exit_code; break;
+        case PROCESS_TERMINATED: process->status.terminated.signal_number = exit_code; break;
+        default:                 ASSERT_UNREACHABLE();
+    }
     LOG_INFO("process %u was killed\n", process->process_id);
+    spinlock_nodw_unlock(&process->status.lock);
 
     /// Kill every thread of this process
     spinlock_nodw_lock(&process->thread_list_lock);

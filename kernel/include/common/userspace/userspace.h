@@ -8,7 +8,7 @@
     do {                                                                                                                                                                         \
         if(EXPECT_UNLIKELY(!(expr))) {                                                                                                                                           \
             LOG_FAIL("Userspace Assertion failed in process %d: %s, file %s, line %d\n", CPU_LOCAL_GET_CURRENT_THREAD()->common.process->process_id, #expr, __FILE__, __LINE__); \
-            process_kill(CPU_LOCAL_GET_CURRENT_THREAD()->common.process);                                                                                                        \
+            process_kill(CPU_LOCAL_GET_CURRENT_THREAD()->common.process, PROCESS_TERMINATED, 0);                                                                                 \
         }                                                                                                                                                                        \
     } while(0)
 // NOLINTEND

@@ -7,6 +7,8 @@
 #include <lib/types.h>
 #include <memory/vm.h>
 
+#include "uapi/signal.h"
+
 typedef enum thread_state thread_state_t;
 typedef struct thread thread_t;
 
@@ -61,4 +63,9 @@ struct thread {
     list_node_t list_node_reap_queue;
 
     bool in_interrupt_handler;
+
+    struct {
+        spinlock_t lock;
+        uapi_signal_set_t masked_signal_set;
+    } signal;
 };

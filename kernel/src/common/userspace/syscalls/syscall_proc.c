@@ -2,13 +2,17 @@
 #include <common/cpu_local.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
+#include <common/sched/process.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
+#include <common/sync/spinlock.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userspace.h>
 #include <lib/helpers.h>
 #include <memory/heap.h>
+#include <memory/vm.h>
+#include <uapi/types.h>
 
 [[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
     LOG_UTRC("exit_code=%d\n", (int) args->arg1);
@@ -17,10 +21,8 @@
     process_t* process = thread->process;
 
     ATOMIC_STORE(&thread->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
-    ATOMIC_STORE(&process->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
 
-    /// Exiting from a thread is exiting from the process, the kernel has no notion of a process outliving its last thread
-    process_kill(process);
+    process_kill(process, PROCESS_EXITED, (int32_t) args->arg1);
     while(1);
 }
 
@@ -61,4 +63,90 @@ syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
     sched_thread_schedule(thread);
 
     return SYSCALL_RET_VALUE(new_process->process_id);
+}
+
+/// Return immediately if no child has exited yet
+#define SYSCALL_WAITPID_NOHANG 1
+
+syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
+    int32_t pid = (int32_t) args->arg1;
+    uintptr_t status_ptr = args->arg2; // int*
+    int flags = (int) args->arg3;
+    // uintptr_t ru = args->arg4; // struct rusage*, unimplemented
+
+    LOG_UTRC("pid=%d, flags=%d\n", pid, flags);
+
+    process_t* parent = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    if(pid == 0 || pid < -1) {
+        user_assert("unimplemented");
+    }
+
+    while(true) {
+        process_t* child = nullptr;
+
+        spinlock_nodw_lock(&parent->children_lock);
+        LIST_FOR_EACH(&parent->children_list, node) {
+            process_t* candidate = CONTAINER_OF(node, process_t, list_node_sibling);
+
+            if(pid > 0 && candidate->process_id != (uint32_t) pid) {
+                continue;
+            }
+
+            spinlock_nodw_lock(&candidate->status.lock);
+            if(candidate->status.state != PROCESS_RUNNING) {
+                spinlock_nodw_unlock(&candidate->status.lock);
+                list_node_delete(&parent->children_list, &candidate->list_node_sibling);
+                child = candidate;
+                break;
+            }
+            spinlock_nodw_unlock(&candidate->status.lock);
+        }
+
+        /// Determine whether any child matching the request is still alive so we know whether to wait or to fail with ECHILD
+        bool child_exists = child != nullptr;
+        if(!child_exists) {
+            LIST_FOR_EACH(&parent->children_list, node) {
+                process_t* candidate = CONTAINER_OF(node, process_t, list_node_sibling);
+                if(pid == -1 || candidate->process_id == (uint32_t) pid) {
+                    child_exists = true;
+                    break;
+                }
+            }
+        }
+        spinlock_nodw_unlock(&parent->children_lock);
+
+        if(child != nullptr) {
+            uint32_t status = 0;
+
+            spinlock_nodw_lock(&child->status.lock);
+
+            switch(child->status.state) {
+                case PROCESS_EXITED:     status = ((uint32_t) child->status.exited.exit_code & 0xffu) << 8; break;
+                case PROCESS_TERMINATED: status = (uint32_t) child->status.terminated.signal_number & 0x7fu; break;
+                default:                 ASSERT_UNREACHABLE();
+            }
+
+            child->status.state = PROCESS_PENDING_REAP;
+            spinlock_nodw_unlock(&child->status.lock);
+
+            if(status_ptr != 0) {
+                if(vm_copy_to(parent->address_space, status_ptr, &status, sizeof(status)) != sizeof(status)) {
+                    return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+                }
+            }
+            return SYSCALL_RET_VALUE(child->process_id);
+        }
+
+        /// No child (left) matches the request
+        if(!child_exists) {
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_CHILD);
+        }
+
+        if(flags & SYSCALL_WAITPID_NOHANG) {
+            return SYSCALL_RET_VALUE(0);
+        }
+
+        sched_wait_single(&parent->child_exit_event, UINT64_MAX);
+    }
 }

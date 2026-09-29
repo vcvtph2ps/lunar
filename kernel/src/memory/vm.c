@@ -14,6 +14,8 @@
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
+#include <common/sched/process.h>
+#include <uapi/signal.h>
 
 vm_address_space_t* g_vm_global_address_space;
 
@@ -664,7 +666,7 @@ static void vm_fault_dw(void* data) {
     bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.reason, thread->vm_fault.address);
     if(EXPECT_UNLIKELY(!ok)) {
         LOG_WARN("vm_fault_dw: page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
-        process_kill(thread->process);
+        process_kill(thread->process, PROCESS_TERMINATED, UAPI_SIGNAL_SEGV);
     }
 
     thread->vm_fault.in_process = false;

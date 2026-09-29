@@ -28,17 +28,21 @@ static void reaper_process_thread(thread_t* thread) {
         return;
     }
 
-    bool last_thread = false;
-
     spinlock_nodw_lock(&process->thread_list_lock);
     list_node_delete(&process->thread_list, &thread->list_node_process);
-    last_thread = process->thread_list.count == 0;
+    bool last_thread = process->thread_list.count == 0;
     spinlock_nodw_unlock(&process->thread_list_lock);
 
     LOG_OKAY("reaper: processed thread %u of process %u (exit code %d, %zu threads left)\n", tid, process->process_id, exit_code, process->thread_list.count);
 
     if(last_thread) {
-        LOG_OKAY("reaper: process %u has no threads left (exit code %d)\n", process->process_id, ATOMIC_LOAD(&process->exit_code, ATOMIC_RELAXED));
+        LOG_OKAY("reaper: process %u has no threads left\n", process->process_id);
+
+        /// The process has fully exited, wake its parent in case it is blocked in waitpid
+        process_t* parent = process->parent;
+        if(parent != nullptr) {
+            wait_obj_signal(&parent->child_exit_event, 1);
+        }
     }
 }
 
