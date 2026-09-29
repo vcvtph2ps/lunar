@@ -14,6 +14,16 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_PROC_EXIT:    return "SYSCALL_PROC_EXIT";
         case SYSCALL_PROC_GETINFO: return "SYSCALL_PROC_GETINFO";
 
+        case SYSCALL_PROC_SIG_SEND_SIMPLE: return "SYSCALL_PROC_SIG_SEND_SIMPLE";
+        case SYSCALL_PROC_SIG_QUEUE:       return "SYSCALL_PROC_SIG_QUEUE";
+        case SYSCALL_PROC_SIG_ACTION:      return "SYSCALL_PROC_SIG_ACTION";
+        case SYSCALL_PROC_SIG_MASK:        return "SYSCALL_PROC_SIG_MASK";
+        case SYSCALL_PROC_SIG_ALT_STACK:   return "SYSCALL_PROC_SIG_ALT_STACK";
+        case SYSCALL_PROC_SIG_RETURN:      return "SYSCALL_PROC_SIG_RETURN";
+        case SYSCALL_PROC_SIG_SUSPEND:     return "SYSCALL_PROC_SIG_SUSPEND";
+        case SYSCALL_PROC_SIG_WAIT:        return "SYSCALL_PROC_SIG_WAIT";
+        case SYSCALL_PROC_SIG_PENDING:     return "SYSCALL_PROC_SIG_PENDING";
+
         case SYSCALL_SYS_TCB_SET:   return "SYSCALL_SYS_TCB_SET";
         case SYSCALL_SYS_DEBUG_LOG: return "SYSCALL_SYS_DEBUG_LOG";
 
@@ -33,9 +43,7 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
 }
 
 static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLINT
-    if(!ret.is_error) {
-        return "SUCCESS";
-    }
+    if(!ret.is_error) { return "SUCCESS"; }
     switch(ret.err) {
         case SYSCALL_ERROR_NOENT: return "ERROR_NOENT";
         case SYSCALL_ERROR_NOMEM: return "ERROR_NOMEM";
@@ -73,9 +81,7 @@ void arch_syscall_init();
 void syscall_init() {
     arch_syscall_init();
 
-    for(size_t i = 0; i < SYSCALL_HIGHEST_NR; i++) {
-        g_syscall_table[i] = syscall_sys_invalid;
-    }
+    for(size_t i = 0; i < SYSCALL_HIGHEST_NR; i++) { g_syscall_table[i] = syscall_sys_invalid; }
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_EXIT, syscall_sys_proc_exit);
     SYSCALL_DISPATCHER(SYSCALL_PROC_GETINFO, syscall_sys_proc_getinfo);

@@ -38,6 +38,6 @@ CheckOptions:
     value: '^(__cyg_profile_func_(enter|exit))|__ubsan.*$'
 
   - key: elysium-header-namespace.SpecialDirectoryPrefixes
-    value: include/arch:arch_;include/x86_64:x86_64_
+    value: include/arch:arch_;include/x86_64:x86_64_;include/uapi:uapi_
   - key: elysium-header-namespace.SpecialGlobalPrefixes
     value: internal_

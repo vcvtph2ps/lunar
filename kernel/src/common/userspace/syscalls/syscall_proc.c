@@ -7,13 +7,8 @@
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userspace.h>
+#include <lib/helpers.h>
 #include <memory/heap.h>
-
-#include "arch/x86_64/cpu_local.h"
-#include "arch/x86_64/hardware/fpu.h"
-#include "arch/x86_64/sched/thread.h"
-#include "lib/helpers.h"
-#include "lib/string.h"
 
 [[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
     LOG_UTRC("exit_code=%d\n", (int) args->arg1);
@@ -24,11 +19,8 @@
     ATOMIC_STORE(&thread->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
     ATOMIC_STORE(&process->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
 
-    /// Exiting from a thread is exiting from the process, the kernel has no notion of a
-    /// process outliving its last thread
+    /// Exiting from a thread is exiting from the process, the kernel has no notion of a process outliving its last thread
     process_kill(process);
-
-    /// process_kill never returns for a thread of the process it kills
     while(1);
 }
 
