@@ -189,7 +189,7 @@ bool vm_fault(uintptr_t address, vm_fault_reason_t fault);
  * @param count The number of bytes to copy. Must be greater than 0 and page-aligned, and the region specified by dest_addr and count must be fully contained within an existing mapping in dest_as.
  * @return The number of bytes successfully copied. This may be less than count if a page fault occurred during the copy and was not handled successfully by vm_fault.
  */
-size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, void* src, size_t count);
+size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* src, size_t count);
 
 /**
  * @brief Copies data to the global address space from the specified address space, handling any necessary page faults that may occur during the copy.

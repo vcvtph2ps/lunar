@@ -541,7 +541,7 @@ void vm_rewrite_cache(vm_address_space_t* address_space, void* address, size_t l
     rewrite_common(address_space, address, length, REWRITE_TYPE_CACHE, (vm_protection_t) {}, cache);
 }
 
-size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, void* src, size_t count) {
+size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* src, size_t count) {
     if(!memory_exists(dest_as, dest_addr, count)) return 0;
     size_t i = 0;
 

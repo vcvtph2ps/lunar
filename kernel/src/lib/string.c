@@ -153,6 +153,17 @@ int string_length(const char* str) {
     return length;
 }
 
+int string_find_first_instance(const char* s, char c, size_t size) {
+    int index = -1;
+    for(size_t i = 0; i < size; i++) {
+        if(s[i] == c) {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+
 int string_compare(const char* s1, const char* s2) {
     while(*s1 && (*s1 == *s2)) {
         s1++;
