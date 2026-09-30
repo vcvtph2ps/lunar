@@ -5,7 +5,7 @@
 #define UAPI_O_WRONLY (1 << 1)
 #define UAPI_O_RDWR (UAPI_O_RDONLY | UAPI_O_WRONLY)
 
-#define UAPI_O_CREAT (1 << 6)
+#define UAPI_O_CREATE (1 << 6)
 #define UAPI_O_EXCL (1 << 7)
 #define UAPI_O_NOCTTY (1 << 8)
 #define UAPI_O_TRUNC (1 << 9)

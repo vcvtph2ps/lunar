@@ -12,6 +12,7 @@
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sched/timer_wait.h>
+#include <common/sync/wait_obj.h>
 #include <common/time/time.h>
 #include <lib/helpers.h>
 #include <lib/string.h>

@@ -22,7 +22,7 @@ userptr_t* userptr_create(uintptr_t user_pointer, size_t size) {
 
 #define USERPTR_SCAN_CHUNK 128
 
-static size_t userptr_measure_string(vm_address_space_t* as, uintptr_t addr) {
+static size_t userptr_measure_string(vm_address_space_t* as, uintptr_t addr, size_t max_size) {
     char buffer[USERPTR_SCAN_CHUNK];
     size_t length = 0;
 
@@ -30,8 +30,8 @@ static size_t userptr_measure_string(vm_address_space_t* as, uintptr_t addr) {
         return SIZE_MAX;
 
     size_t max = MEMORY_USERSPACE_END - addr;
-    if(max > UAPI_LIMITS_ARG_MAX)
-        max = UAPI_LIMITS_ARG_MAX;
+    if(max > max_size)
+        max = max_size;
 
 
     while(length < max) {
@@ -55,8 +55,10 @@ static size_t userptr_measure_string(vm_address_space_t* as, uintptr_t addr) {
     return length;
 }
 
-userptr_t* userptr_create_string(uintptr_t user_pointer) {
-    size_t size = userptr_measure_string(sched_arch_thread_current()->process->address_space, user_pointer);
+userptr_t* userptr_create_string(uintptr_t user_pointer, size_t max_size) {
+    assert(max_size < UAPI_LIMITS_ARG_MAX);
+
+    size_t size = userptr_measure_string(sched_arch_thread_current()->process->address_space, user_pointer, max_size - 1);
     if(size == SIZE_MAX)
         return nullptr;
 

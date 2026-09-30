@@ -1,5 +1,6 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
+#include <common/fs/vfs.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/process.h>
@@ -8,10 +9,12 @@
 #include <common/sync/spinlock.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
+#include <common/userspace/userptr.h>
 #include <common/userspace/userspace.h>
 #include <lib/helpers.h>
 #include <memory/heap.h>
 #include <memory/vm.h>
+#include <uapi/limits.h>
 #include <uapi/types.h>
 
 [[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {

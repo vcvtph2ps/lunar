@@ -1,18 +1,21 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
 #include <common/fs/vfs.h>
+#include <common/interrupts/interrupt.h>
 #include <common/ldr/ldr.h>
 #include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
+#include <common/sync/wait_obj.h>
 #include <common/userspace/fd_store.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/string.h>
 #include <memory/heap.h>
 #include <memory/ptm.h>
+#include <memory/vm.h>
 #include <stdint.h>
 
 #include "common/sync/wait_obj.h"

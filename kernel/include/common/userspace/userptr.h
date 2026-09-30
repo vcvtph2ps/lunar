@@ -13,8 +13,9 @@ typedef struct {
 /// @note: all of these functions use the current process for the address space
 userptr_t* userptr_create(uintptr_t user_pointer, size_t size);
 
-/// @note: string must be null terimated and be smaller than UAPI_LIMITS_ARG_MAX - 1
-userptr_t* userptr_create_string(uintptr_t user_pointer);
+/// @note: string must be null terimated and be smaller than max_size
+/// @note: max_size includes '\0'
+userptr_t* userptr_create_string(uintptr_t user_pointer, size_t max_size);
 
 /// @note: array must end in a 0 value
 /// @note: element_size must be 1, 2, 4 or 8
