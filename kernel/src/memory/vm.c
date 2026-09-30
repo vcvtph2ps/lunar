@@ -11,6 +11,7 @@
 #include <lib/rb.h>
 #include <lib/string.h>
 #include <memory/heap.h>
+#include <memory/pagedb.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
@@ -150,7 +151,10 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
         case VM_REGION_TYPE_ANON:
             for(size_t i = 0; i < length; i += PAGE_SIZE_DEFAULT) {
                 uintptr_t phys;
-                if(ptm_physical(region->address_space, address + i, &phys)) {
+                if(!ptm_physical(region->address_space, address + i, &phys)) continue;
+
+                pagedb_page_t* page = pagedb_get_page(phys / ARCH_PAGE_SIZE_4K);
+                if(page != nullptr && ATOMIC_LOAD(&page->map_count, ATOMIC_RELAXED) == 1) {
                     pmm_free_page(phys);
                 }
             }
@@ -728,4 +732,26 @@ vm_address_space_t* vm_fork(vm_address_space_t* parent_as) {
 
     spinlock_nodw_unlock(&parent_as->lock);
     return new_as;
+}
+
+void vm_address_space_destroy(vm_address_space_t* address_space) {
+    assert(address_space != nullptr);
+    assert(address_space != g_vm_global_address_space);
+
+    spinlock_nodw_lock(&address_space->lock);
+
+    rb_node_t* node;
+    while((node = rb_find_first(&address_space->regions_tree)) != nullptr) {
+        vm_region_t* region = CONTAINER_OF(node, vm_region_t, region_tree_node);
+        rb_remove(&address_space->regions_tree, &region->region_tree_node);
+        region_unmap(region, region->base, region->length);
+        region_free(region);
+    }
+
+    spinlock_nodw_unlock(&address_space->lock);
+
+    /// @note: we **shouldn't** leak any memory from the page tables here since it *should* all be freed when we free the regions
+    // I fucking hope
+    pmm_free_page(address_space->ptm.top_level_page_table);
+    heap_free(address_space, sizeof(vm_address_space_t));
 }

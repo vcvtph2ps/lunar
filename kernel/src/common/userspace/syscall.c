@@ -15,6 +15,8 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_PROC_GETINFO: return "SYSCALL_PROC_GETINFO";
         case SYSCALL_PROC_FORK:    return "SYSCALL_PROC_FORK";
         case SYSCALL_PROC_WAITPID: return "SYSCALL_PROC_WAITPID";
+        case SYSCALL_PROC_EXECVE:  return "SYSCALL_PROC_EXECVE";
+        case SYSCALL_PROC_FEXECVE: return "SYSCALL_PROC_FEXECVE";
 
         case SYSCALL_PROC_SIG_SEND_SIMPLE: return "SYSCALL_PROC_SIG_SEND_SIMPLE";
         case SYSCALL_PROC_SIG_QUEUE:       return "SYSCALL_PROC_SIG_QUEUE";
@@ -94,6 +96,9 @@ void syscall_init() {
     SYSCALL_DISPATCHER(SYSCALL_PROC_GETINFO, syscall_sys_proc_getinfo);
     SYSCALL_DISPATCHER(SYSCALL_PROC_FORK, syscall_sys_proc_fork);
     SYSCALL_DISPATCHER(SYSCALL_PROC_WAITPID, syscall_sys_proc_waitpid);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_EXECVE, syscall_sys_proc_execve);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_FEXECVE, syscall_sys_proc_fexecve);
+
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_ACTION, syscall_sys_proc_sig_action);
     SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_MASK, syscall_sys_proc_sig_mask);

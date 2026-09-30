@@ -31,6 +31,9 @@ enum thread_state {
 struct thread {
     uint32_t tid;
 
+    /// Reference count of the thread. The thread is destroyed once it reaches zero
+    ATOMIC uint32_t ref_count;
+
     process_t* process;
     list_node_t list_node_process;
 
@@ -58,6 +61,7 @@ struct thread {
 
     // The code the thread exited with
     ATOMIC int32_t exit_code;
+    wait_obj_t thread_termination_object;
 
     ATOMIC bool in_reap_queue;
     list_node_t list_node_reap_queue;
@@ -69,3 +73,16 @@ struct thread {
         uapi_signal_set_t masked_signal_set;
     } signal;
 };
+
+/**
+ * @brief Acquires a new reference to a thread.
+ * @param thread The thread to reference
+ * @return The same thread
+ */
+thread_t* thread_ref(thread_t* thread);
+
+/**
+ * @brief Releases a reference to a thread, destroying it once the last reference is dropped.
+ * @param thread The thread to dereference
+ */
+void thread_deref(thread_t* thread);

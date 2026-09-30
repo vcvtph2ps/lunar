@@ -16,10 +16,16 @@ fd_store_t* fd_store_create() {
 }
 
 void fd_store_free(fd_store_t* store) {
-    bitmap_free(store->bitmap);
     if(store->fds != nullptr) {
+        /// Release every node the store referenced
+        for(size_t i = 0; i < store->fds_elements_count; i++) {
+            if(bitmap_get(store->bitmap, i) && store->fds[i].node != nullptr) {
+                vfs_node_put(store->fds[i].node);
+            }
+        }
         heap_free(store->fds, store->fds_elements_count * sizeof(fd_store_entry_t));
     }
+    bitmap_free(store->bitmap);
     heap_free(store, sizeof(fd_store_t));
 }
 

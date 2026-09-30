@@ -72,7 +72,6 @@ static void arch_thread_init_common(x86_64_thread_t* prev) {
     sched_thread_init_common(&prev->common);
 }
 
-
 void sched_arch_reset_preempt_timer() {
     arch_lapic_timer_oneshot_ms(10);
 }
@@ -95,8 +94,9 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     }
 
     thread->common.tid = tid;
+    ATOMIC_STORE(&thread->common.ref_count, 1, ATOMIC_RELAXED);
     thread->common.sched.wait_entry = nullptr;
-
+    thread->common.thread_termination_object = WAIT_OBJ_INIT(WAIT_OBJ_NOTIFICATION);
     ATOMIC_STORE(&thread->common.sched.migratable, true, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.owner, sched, ATOMIC_RELAXED);
@@ -107,9 +107,11 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     return thread;
 }
 
+#define KERNEL_STACK_SIZE (16 * PAGE_SIZE_DEFAULT)
+
 thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
-    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
-    virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
+    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, KERNEL_STACK_SIZE, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    virt_addr_t kernel_stack_top = kernel_stack_base + KERNEL_STACK_SIZE;
 
     init_stack_kernel_t* init_stack = (init_stack_kernel_t*) (kernel_stack_top - sizeof(init_stack_kernel_t));
     memory_zero(init_stack, sizeof(init_stack_kernel_t));
@@ -121,8 +123,8 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
 }
 
 thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_stack_top, virt_addr_t entry, bool inherit_pid) {
-    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
-    virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
+    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, KERNEL_STACK_SIZE, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    virt_addr_t kernel_stack_top = kernel_stack_base + KERNEL_STACK_SIZE;
 
     init_stack_user_t* init_stack = (init_stack_user_t*) (kernel_stack_top - sizeof(init_stack_user_t));
     memory_zero(init_stack, sizeof(init_stack_user_t));
@@ -137,8 +139,8 @@ thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_sta
 }
 
 thread_t* sched_arch_fork_thread_user(process_t* process, thread_t* parent, virt_addr_t user_stack, virt_addr_t entry, arch_interrupt_regs_t* frame) {
-    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, 16 * PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
-    virt_addr_t kernel_stack_top = kernel_stack_base + 16 * PAGE_SIZE_DEFAULT;
+    virt_addr_t kernel_stack_base = (virt_addr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, KERNEL_STACK_SIZE, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    virt_addr_t kernel_stack_top = kernel_stack_base + KERNEL_STACK_SIZE;
 
     fork_stack_user_t* init_stack = (fork_stack_user_t*) (kernel_stack_top - sizeof(fork_stack_user_t));
     memory_zero(init_stack, sizeof(fork_stack_user_t));
@@ -176,6 +178,21 @@ thread_t* sched_arch_thread_current() {
     return &thread->common;
 }
 
+void sched_arch_thread_destroy(thread_t* thread) {
+    x86_64_thread_t* arch_thread = CONTAINER_OF(thread, x86_64_thread_t, common);
+
+    if(arch_thread->fpu_area != nullptr) {
+        arch_fpu_free_area(arch_thread->fpu_area);
+    }
+
+    if(arch_thread->kernel_stack_top != 0) {
+        virt_addr_t kernel_stack_base = arch_thread->kernel_stack_top - (KERNEL_STACK_SIZE);
+        vm_unmap(g_vm_global_address_space, (void*) kernel_stack_base, KERNEL_STACK_SIZE);
+    }
+
+    heap_free(arch_thread, sizeof(x86_64_thread_t));
+}
+
 void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_state_t yield_state) {
     LOG_KTRC("core %d, current=%u, next=%u, state=%u\n", CPU_LOCAL_READ(core_id), t_current->tid, t_next->tid, yield_state);
     x86_64_thread_t* current = CONTAINER_OF(t_current, x86_64_thread_t, common);
@@ -190,11 +207,10 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     if(next->common.process) {
         arch_fpu_load(next->fpu_area);
     }
-    if(current->common.process && next->common.process && current->common.process != next->common.process) {
-        ptm_load_address_space(next->common.process->address_space);
-    } else if(next->common.process) {
-        ptm_load_address_space(next->common.process->address_space);
-    }
+
+    /// Kernel threads always run on the global address space so that a process' page tables are never left loaded once it dies
+    vm_address_space_t* next_address_space = next->common.process != nullptr ? next->common.process->address_space : g_vm_global_address_space;
+    ptm_load_address_space(next_address_space);
 
     current->gsbase = arch_msr_read(ARCH_MSR_OTHER_GS_BASE);
     current->fsbase = arch_msr_read(ARCH_MSR_FS_BASE);

@@ -27,7 +27,6 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     vfs_node_t* out_result_node;
     vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, pathname), &out_result_node);
     heap_free(pathname, pathname_ubuffer_size + 1);
-    LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", pathname, flags, mode, result);
 
     LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", pathname, flags, mode, result);
     if(flags & UAPI_O_CREATE) {

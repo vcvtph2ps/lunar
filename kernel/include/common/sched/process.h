@@ -36,6 +36,9 @@ struct process {
     uint32_t process_id;
     uint32_t parent_process_id;
 
+    /// Reference count of the process. The process is destroyed once it reaches zero
+    ATOMIC uint32_t ref_count;
+
     process_status_t status;
 
     /// The process that forked this one, nullptr for the init process
@@ -81,7 +84,12 @@ void process_free_id(uint32_t id);
 process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread);
 
 /**
- * @brief Creates a process from the file and arguments
+ *
+ */
+bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_process_load_info_t* load_info, thread_t** out_thread);
+
+/**
+ * @brief Creates a process from the parent process
  */
 process_t* process_fork(process_t* parent);
 
@@ -91,3 +99,16 @@ process_t* process_fork(process_t* parent);
  * @note This function never returns if it is called from a thread of the target process
  */
 void process_kill(process_t* target, process_status_state_t state, int32_t exit_code);
+
+/**
+ * @brief Acquires a new reference to a process.
+ * @param process The process to reference
+ * @return The same process
+ */
+process_t* process_ref(process_t* process);
+
+/**
+ * @brief Releases a reference to a process, destroying it once the last reference is dropped.
+ * @param process The process to dereference
+ */
+void process_deref(process_t* process);

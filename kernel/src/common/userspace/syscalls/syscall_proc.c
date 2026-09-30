@@ -12,6 +12,7 @@
 #include <common/userspace/userptr.h>
 #include <common/userspace/userspace.h>
 #include <lib/helpers.h>
+#include <lib/string.h>
 #include <memory/heap.h>
 #include <memory/vm.h>
 #include <uapi/limits.h>
@@ -62,6 +63,8 @@ syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
     process_t* new_process = process_fork(sched_arch_thread_current()->process);
     thread_t* thread = sched_arch_fork_thread_user(new_process, sched_arch_thread_current(), args->user_rsp, entry, frame);
 
+    /// The thread references its process for as long as it lives
+    process_ref(new_process);
     list_push(&new_process->thread_list, &thread->list_node_process);
     sched_thread_schedule(thread);
 
@@ -121,6 +124,7 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
 
         if(child != nullptr) {
             uint32_t status = 0;
+            uint32_t child_pid = child->process_id;
 
             spinlock_nodw_lock(&child->status.lock);
 
@@ -133,12 +137,15 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
             child->status.state = PROCESS_PENDING_REAP;
             spinlock_nodw_unlock(&child->status.lock);
 
+            /// The parent's children list held a reference, it was taken off the list above
+            process_deref(child);
+
             if(status_ptr != 0) {
                 if(vm_copy_to(parent->address_space, status_ptr, &status, sizeof(status)) != sizeof(status)) {
                     return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
                 }
             }
-            return SYSCALL_RET_VALUE(child->process_id);
+            return SYSCALL_RET_VALUE(child_pid);
         }
 
         /// No child (left) matches the request
@@ -152,4 +159,203 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
 
         sched_wait_single(&parent->child_exit_event, UINT64_MAX);
     }
+}
+
+static void free_string_array(char** strings, int count) {
+    if(strings == nullptr) {
+        return;
+    }
+
+    for(int i = 0; i < count; i++) {
+        if(strings[i] != nullptr) {
+            heap_free(strings[i], string_length(strings[i]) + 1);
+        }
+    }
+
+    heap_free(strings, sizeof(char*) * count);
+}
+
+static syscall_ret_t read_user_string_array(userptr_t* u_array, size_t* byte_counter, char*** out_strings, int* out_count) {
+    int count = (int) (u_array->size / sizeof(uintptr_t));
+
+    if(count == 0) {
+        *out_strings = nullptr;
+        *out_count = 0;
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    uintptr_t* user_strings = heap_alloc(u_array->size);
+    if(user_strings == nullptr) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(!userptr_read(u_array, user_strings)) {
+        heap_free(user_strings, u_array->size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    char** strings = heap_zalloc(sizeof(char*) * count);
+    if(strings == nullptr) {
+        heap_free(user_strings, u_array->size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    for(int i = 0; i < count; i++) {
+        userptr_t* u_string = userptr_create_string(user_strings[i], UAPI_LIMITS_ARG_MAX - 1);
+        if(u_string == nullptr) {
+            free_string_array(strings, count);
+            heap_free(user_strings, u_array->size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+        }
+
+        size_t string_size = u_string->size + 1;
+        if(*byte_counter + string_size > UAPI_LIMITS_ARG_MAX) {
+            heap_free(u_string, sizeof(userptr_t));
+            free_string_array(strings, count);
+            heap_free(user_strings, u_array->size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+        }
+        *byte_counter += string_size;
+
+        char* string = heap_alloc(string_size);
+        if(string == nullptr) {
+            heap_free(u_string, sizeof(userptr_t));
+            free_string_array(strings, count);
+            heap_free(user_strings, u_array->size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+        }
+
+        if(u_string->size != 0 && !userptr_read(u_string, string)) {
+            heap_free(string, string_size);
+            heap_free(u_string, sizeof(userptr_t));
+            free_string_array(strings, count);
+            heap_free(user_strings, u_array->size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+        }
+
+        string[u_string->size] = '\0';
+        strings[i] = string;
+
+        heap_free(u_string, sizeof(userptr_t));
+    }
+
+    heap_free(user_strings, u_array->size);
+
+    *out_strings = strings;
+    *out_count = count;
+    return SYSCALL_RET_VALUE(0);
+}
+
+static syscall_ret_t execve_internal(vfs_node_t* node, uintptr_t argv_ptr, uintptr_t envp_ptr) {
+    userptr_t* u_argv = userptr_create_array(argv_ptr, sizeof(char*));
+    if(u_argv == nullptr) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    userptr_t* u_envp = userptr_create_array(envp_ptr, sizeof(char*));
+    if(u_envp == nullptr) {
+        heap_free(u_argv, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t argument_bytes = 0;
+
+    char** argv;
+    char** envp;
+    int argc;
+    int envc;
+
+    syscall_ret_t ret = read_user_string_array(u_argv, &argument_bytes, &argv, &argc);
+    heap_free(u_argv, sizeof(userptr_t));
+    if(ret.is_error) {
+        heap_free(u_envp, sizeof(userptr_t));
+        return ret;
+    }
+
+    ret = read_user_string_array(u_envp, &argument_bytes, &envp, &envc);
+    heap_free(u_envp, sizeof(userptr_t));
+    if(ret.is_error) {
+        free_string_array(argv, argc);
+        return ret;
+    }
+
+    LOG_UTRC("argc=%d, envc=%d, argument_bytes=%zu\n", argc, envc, argument_bytes);
+
+    for(int i = 0; i < argc; i++) {
+        LOG_UTRC("argv[%d] = \"%s\"\n", i, argv[i]);
+    }
+    for(int i = 0; i < envc; i++) {
+        LOG_UTRC("envp[%d] = \"%s\"\n", i, envp[i]);
+    }
+
+    ldr_process_load_info_t load_info;
+    load_info.argv = (const char**) argv;
+    load_info.envp = (const char**) envp;
+    load_info.argc = argc;
+    load_info.envc = envc;
+
+    LOG_UTRC("process exec'd\n");
+
+    thread_t* thread;
+    if(process_exec_from_file(sched_arch_thread_current()->process, node, &load_info, &thread)) {
+        sched_thread_schedule(thread);
+        sched_terminate_current_thread();
+    }
+
+    free_string_array(argv, argc);
+    free_string_array(envp, envc);
+
+    return SYSCALL_RET_ERROR(SYSCALL_ERROR_NO_EXEC);
+}
+
+syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
+    userptr_t* upath = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t path_size = upath->size + 1;
+    char* path = heap_alloc(path_size);
+    if(path == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read(upath, path)) {
+        heap_free(path, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    path[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
+    LOG_UTRC("exec'ing %s\n", path);
+
+    vfs_node_t* node;
+    // @todo: this probably shouldn't be VFS_MAKE_ABS_PATH
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(path), &node);
+    heap_free(path, path_size);
+
+    if(result != VFS_RESULT_OK) {
+        LOG_UTRC("failed with vfs result %d\n", result);
+    }
+
+    switch(result) {
+        case VFS_RESULT_OK:              break;
+        case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
+        default:                         user_assert("Invalid return value");
+    }
+
+    syscall_ret_t ret = execve_internal(node, args->arg2, args->arg3);
+    vfs_node_put(node);
+    return ret;
+}
+
+syscall_ret_t syscall_sys_proc_fexecve(syscall_args_t* args) {
+    (void) args;
+    ASSERT_TODO();
+    // int fd = args->arg1;
+
+    // return execve_internal(node, args->arg2, args->arg3);
 }

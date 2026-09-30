@@ -120,6 +120,13 @@ void sched_arch_reset_preempt_timer();
 void sched_thread_drop(thread_t* thread);
 
 /**
+ * @brief Frees the arch specific resources of a thread and the thread object itself.
+ * @param thread The thread to destroy. It must not be running nor referenced by the scheduler.
+ * @note This is called once the last reference to the thread is dropped. @see thread_put
+ */
+void sched_arch_thread_destroy(thread_t* thread);
+
+/**
  * @brief Common thread init routine called after first context switch.
  */
 void sched_thread_init_common(thread_t* prev);

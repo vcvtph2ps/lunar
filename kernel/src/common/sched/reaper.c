@@ -25,6 +25,7 @@ static void reaper_process_thread(thread_t* thread) {
 
     if(process == nullptr) {
         LOG_OKAY("reaper: processed thread %u (exit code %d)\n", tid, exit_code);
+        thread_deref(thread);
         return;
     }
 
@@ -44,6 +45,9 @@ static void reaper_process_thread(thread_t* thread) {
             wait_obj_signal(&parent->child_exit_event, 1);
         }
     }
+
+    /// Release the reference the process' thread list held on the thread
+    thread_deref(thread);
 }
 
 [[noreturn]] static void reaper_entry() {
@@ -81,6 +85,7 @@ void reaper_queue_thread(thread_t* thread) {
     list_push_back(&g_reap_queue, &thread->list_node_reap_queue);
     spinlock_nodw_unlock(&g_reap_lock);
 
+    wait_obj_signal(&thread->thread_termination_object, 1);
     wait_obj_signal(&g_reap_event, 1);
 }
 

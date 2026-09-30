@@ -34,6 +34,11 @@ thread_t* sched_arch_thread_current() {
     return nullptr;
 }
 
+void sched_arch_thread_destroy(thread_t* thread) {
+    (void) thread;
+    assert(false && "Not implemented");
+}
+
 [[noreturn]] void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_state_t yield_state) {
     (void) t_current;
     (void) t_next;

@@ -224,3 +224,9 @@ void vm_init_kernel();
  *
  */
 vm_address_space_t* vm_fork(vm_address_space_t* parent_address_space);
+
+/**
+ * @brief Tears down an address space, unmapping every region, freeing the underlying physical memory and page tables, and finally the address space object itself.
+ * @param address_space The address space to destroy. It must not be the global kernel address space and must not be in use by any thread.
+ */
+void vm_address_space_destroy(vm_address_space_t* address_space);
