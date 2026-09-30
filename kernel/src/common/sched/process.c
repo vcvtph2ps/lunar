@@ -67,7 +67,7 @@ process_t* process_fork(process_t* parent) {
     return process;
 }
 
-process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread) {
+process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread) {
     vm_address_space_t* process_address_space = heap_zalloc(sizeof(vm_address_space_t));
     ptm_init_user(process_address_space);
 
@@ -78,7 +78,7 @@ process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_lo
     uintptr_t entry_point;
 
     uintptr_t user_stack_top = user_stack + stack_virt_size;
-    bool success = ldr_setup_process(process_address_space, path, load_info, &user_stack_top, &entry_point);
+    bool success = ldr_setup_process(process_address_space, node, load_info, &user_stack_top, &entry_point);
     if(!success) {
         LOG_FAIL("process: failed to load process\n");
         // @todo: ptm_cleanup_address_space

@@ -22,7 +22,7 @@ typedef struct {
     /// @brief Loads the file into the given address space.
     /// @param out_image generic information about the loaded image, used by the process setup code
     /// @param out_format_info format specific information required by load_abi.
-    bool (*load)(vm_address_space_t* address_space, const vfs_path_t* path, ldr_image_info_t* out_image, void* out_format_info);
+    bool (*load)(vm_address_space_t* address_space, vfs_node_t* node, ldr_image_info_t* out_image, void* out_format_info);
 
     /// @brief Builds the ABI specific stack frame (argv/envp/auxv) on top of *inout_user_stack.
     /// @param format_info The value written to *out_format_info by load().
@@ -32,9 +32,9 @@ typedef struct {
 /**
  * @brief Loads an executable into the given address space and sets up its ABI stack frame.
  * @param address_space The target address space.
- * @param path Path to the executable to load.
+ * @param node VFS Node of to the executable to load.
  * @param load_info Command line / environment arguments for the process.
  * @param inout_user_stack On entry, the top of the userspace stack. On return, the final stack pointer for the new process.
  * @param entry_point Receives the address the process should start executing at.
  */
-bool ldr_setup_process(vm_address_space_t* address_space, const vfs_path_t* path, const ldr_process_load_info_t* load_info, uintptr_t* inout_user_stack, uintptr_t* entry_point);
+bool ldr_setup_process(vm_address_space_t* address_space, vfs_node_t* node, const ldr_process_load_info_t* load_info, uintptr_t* inout_user_stack, uintptr_t* entry_point);

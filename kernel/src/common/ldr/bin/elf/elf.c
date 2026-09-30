@@ -107,7 +107,7 @@ static bool internal_allocate_for_image(vm_address_space_t* address_space, const
     return true;
 }
 
-static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, const vfs_path_t* path, size_t phdr_index, elf64_program_header_t* phdr, elf_image_allocation_t* allocation) {
+static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, vfs_node_t* node, size_t phdr_index, elf64_program_header_t* phdr, elf_image_allocation_t* allocation) {
     vm_protection_t flags = VM_PROT_NO_ACCESS;
     flags.read = (phdr->flags & ELF_PROG_FLAGS_READ) != 0;
     flags.write = (phdr->flags & ELF_PROG_FLAGS_WRITE) != 0;
@@ -127,7 +127,7 @@ static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, const
     io_req.read.bytes_read = 0;
     io_req.no_block = false;
 
-    vfs_result_t result = vfs_perform_io(path, &io_req);
+    vfs_result_t result = vfs_perform_io_node(node, &io_req);
     if(result != VFS_RESULT_OK) {
         LOG_FAIL("elf: failed to read phdr data %zu, (%d)\n", phdr_index, result);
         heap_free(phdr_data, phdr->file_size);
@@ -139,7 +139,7 @@ static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, const
     return true;
 }
 
-static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, const vfs_path_t* path, elf64_program_header_t* phdr, elf_loader_info_t* out_loader_info) {
+static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, vfs_node_t* node, elf64_program_header_t* phdr, elf_loader_info_t* out_loader_info) {
     void* phdr_data = heap_alloc(phdr->file_size);
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
@@ -149,7 +149,7 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, con
     io_req.read.bytes_read = 0;
     io_req.no_block = false;
 
-    vfs_result_t result = vfs_perform_io(path, &io_req);
+    vfs_result_t result = vfs_perform_io_node(node, &io_req);
     if(result != VFS_RESULT_OK) {
         LOG_FAIL("elf: failed to read interp, (%d)\n", result);
         heap_free(phdr_data, phdr->file_size);
@@ -157,8 +157,17 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, con
     }
 
     LOG_KTRC("interpreter: %s\n", (const char*) phdr_data);
+
+    vfs_node_t* vfs_result_node;
+    result = vfs_lookup(&VFS_MAKE_ABS_PATH((const char*) phdr_data), &vfs_result_node);
+    if(result != VFS_RESULT_OK) {
+        LOG_FAIL("elf: failed to look up interp path \"%s\", (%d)\n", (const char*) phdr_data, result);
+        heap_free(phdr_data, phdr->file_size);
+        return false;
+    }
+
     elf_loader_info_t interp_loader_info;
-    if(!elf_load_file(address_space, &VFS_MAKE_ABS_PATH((const char*) phdr_data), &interp_loader_info)) {
+    if(!elf_load_file(address_space, vfs_result_node, &interp_loader_info)) {
         heap_free((void*) phdr_data, phdr->file_size);
         return false;
     }
@@ -170,7 +179,7 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, con
     return true;
 }
 
-static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf_header_t* elf_header, const vfs_path_t* path, elf_loader_info_t* out_loader_info) {
+static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf_header_t* elf_header, vfs_node_t* node, elf_loader_info_t* out_loader_info) {
     elf_image_allocation_t allocation = {};
 
     elf64_program_header_t* phdr_cache = heap_alloc(sizeof(elf64_program_header_t) * elf_header->program_header_count);
@@ -183,7 +192,7 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
         io_req.read.bytes_read = 0;
         io_req.no_block = false;
 
-        vfs_result_t result = vfs_perform_io(path, &io_req);
+        vfs_result_t result = vfs_perform_io_node(node, &io_req);
         if(result != VFS_RESULT_OK) {
             LOG_FAIL("elf: failed to load phdr %zu, (%d)\n", i, result);
             heap_free(phdr_cache, sizeof(elf64_program_header_t) * elf_header->program_header_count);
@@ -231,9 +240,9 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
         bool success;
 
         if(phdr_cache[i].type == ELF_PROG_TYPE_LOAD) {
-            success = internal_elf_handle_pt_load(address_space, path, i, &phdr_cache[i], &allocation);
+            success = internal_elf_handle_pt_load(address_space, node, i, &phdr_cache[i], &allocation);
         } else if(phdr_cache[i].type == ELF_PROG_TYPE_INTERP) {
-            success = internal_elf_handle_pt_interp(address_space, path, &phdr_cache[i], out_loader_info);
+            success = internal_elf_handle_pt_interp(address_space, node, &phdr_cache[i], out_loader_info);
         } else {
             ASSERT_UNREACHABLE();
         }
@@ -250,9 +259,9 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
     return true;
 }
 
-bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, elf_loader_info_t* out_elf_loader_info) {
+bool elf_load_file(vm_address_space_t* address_space, vfs_node_t* node, elf_loader_info_t* out_elf_loader_info) {
     vfs_node_attr_t attributes;
-    if(vfs_get_attributes(path, &attributes) != VFS_RESULT_OK) {
+    if(vfs_get_attributes_node(node, &attributes) != VFS_RESULT_OK) {
         LOG_FAIL("elf: failed to get attributes of elf file");
         return false;
     }
@@ -269,7 +278,7 @@ bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, el
     io_req.read.bytes_read = 0;
     io_req.no_block = false;
 
-    vfs_result_t result = vfs_perform_io(path, &io_req);
+    vfs_result_t result = vfs_perform_io_node(node, &io_req);
     if(result != VFS_RESULT_OK) {
         // @todo: print path
         LOG_FAIL("elf: failed to load elf file %d\n", result);
@@ -285,7 +294,7 @@ bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, el
         return false;
     }
 
-    if(!internal_elf_load_image(address_space, elf_header, path, out_elf_loader_info)) {
+    if(!internal_elf_load_image(address_space, elf_header, node, out_elf_loader_info)) {
         LOG_FAIL("elf: failed to load elf image\n");
         heap_free(elf_header, sizeof(elf64_elf_header_t));
         return false;
@@ -294,14 +303,14 @@ bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, el
     return true;
 }
 
-static bool elf_load_file_ldr(vm_address_space_t* address_space, const vfs_path_t* path, ldr_image_info_t* out_image, void* out_format_info) {
+static bool elf_load_file_ldr(vm_address_space_t* address_space, vfs_node_t* node, ldr_image_info_t* out_image, void* out_format_info) {
     elf_loader_info_t* loader_info = heap_alloc(sizeof(elf_loader_info_t));
     if(loader_info == nullptr) {
         LOG_FAIL("elf: failed to allocate loader info\n");
         return false;
     }
 
-    if(!elf_load_file(address_space, path, loader_info)) {
+    if(!elf_load_file(address_space, node, loader_info)) {
         heap_free(loader_info, sizeof(elf_loader_info_t));
         return false;
     }

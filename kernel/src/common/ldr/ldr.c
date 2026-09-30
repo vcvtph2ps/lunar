@@ -6,11 +6,13 @@
 #include <lib/string.h>
 #include <memory/heap.h>
 
+#include "common/fs/vfs.h"
+
 #define LDR_MAGIC_SNIFF_SIZE 64
 
 ldr_loader_t* g_loaders[] = { &g_elf_loader };
 
-static bool ldr_read(const vfs_path_t* path, size_t offset, void* buffer, size_t size, size_t* out_read) {
+static bool ldr_read(vfs_node_t* node, size_t offset, void* buffer, size_t size, size_t* out_read) {
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
     io_req.read.buffer = buffer;
@@ -18,7 +20,7 @@ static bool ldr_read(const vfs_path_t* path, size_t offset, void* buffer, size_t
     io_req.read.offset = offset;
     io_req.read.bytes_read = 0;
 
-    vfs_result_t result = vfs_perform_io(path, &io_req);
+    vfs_result_t result = vfs_perform_io_node(node, &io_req);
     if(result != VFS_RESULT_OK) {
         return false;
     }
@@ -29,9 +31,9 @@ static bool ldr_read(const vfs_path_t* path, size_t offset, void* buffer, size_t
     return true;
 }
 
-bool ldr_setup_process(vm_address_space_t* address_space, const vfs_path_t* path, const ldr_process_load_info_t* load_info, uintptr_t* inout_user_stack, uintptr_t* entry_point) {
+bool ldr_setup_process(vm_address_space_t* address_space, vfs_node_t* node, const ldr_process_load_info_t* load_info, uintptr_t* inout_user_stack, uintptr_t* entry_point) {
     vfs_node_attr_t attributes;
-    if(vfs_get_attributes(path, &attributes) != VFS_RESULT_OK) {
+    if(vfs_get_attributes_node(node, &attributes) != VFS_RESULT_OK) {
         LOG_FAIL("ldr: failed to get attributes of file\n");
         return false;
     }
@@ -47,7 +49,7 @@ bool ldr_setup_process(vm_address_space_t* address_space, const vfs_path_t* path
     uint8_t* buffer = heap_alloc(sniff_size);
 
     size_t read_size = 0;
-    if(!ldr_read(path, 0, buffer, sniff_size, &read_size)) {
+    if(!ldr_read(node, 0, buffer, sniff_size, &read_size)) {
         LOG_FAIL("ldr: failed to read file beginning\n");
         heap_free(buffer, sniff_size);
         return false;
@@ -71,7 +73,7 @@ bool ldr_setup_process(vm_address_space_t* address_space, const vfs_path_t* path
 
     ldr_image_info_t image;
     void* format_info = nullptr;
-    if(!loader->load(address_space, path, &image, &format_info)) {
+    if(!loader->load(address_space, node, &image, &format_info)) {
         LOG_FAIL("ldr: loader failed\n");
         return false;
     }

@@ -232,14 +232,26 @@ vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request) {
     return res;
 }
 
-vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* attr) {
+vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_attr) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);
     if(res != VFS_RESULT_OK) return res;
 
     // @todo: read/write mutex
     mutex_acquire(&node->lock);
-    res = node->ops->get_attributes(node, attr);
+    res = node->ops->get_attributes(node, out_attr);
+    mutex_release(&node->lock);
+
+    vfs_node_put(node);
+    return res;
+}
+
+vfs_result_t vfs_get_attributes_node(vfs_node_t* node, vfs_node_attr_t* out_attr) {
+    vfs_node_get(node);
+
+    // @todo: read/write mutex
+    mutex_acquire(&node->lock);
+    vfs_result_t res = node->ops->get_attributes(node, out_attr);
     mutex_release(&node->lock);
 
     vfs_node_put(node);

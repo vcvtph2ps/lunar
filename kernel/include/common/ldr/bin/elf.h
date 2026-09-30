@@ -29,11 +29,11 @@ typedef struct {
 /**
  * @brief Load elf file into memory
  * @param address_space target user address space
- * @param path Path to elf file
+ * @param node vfs node of elf file
  * @param out_elf_loader_info information about the loaded elf file
  * @returns true if the file was loaded successfully, else false
  */
-bool elf_load_file(vm_address_space_t* address_space, const vfs_path_t* path, elf_loader_info_t* out_elf_loader_info);
+bool elf_load_file(vm_address_space_t* address_space, vfs_node_t* node, elf_loader_info_t* out_elf_loader_info);
 
 bool elf_is_elf_file(void* buffer, size_t size);
 

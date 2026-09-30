@@ -6,19 +6,30 @@
 #include <common/sched/sched.h>
 #include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
+#include <lib/string.h>
 #include <lib/types.h>
+#include <memory/heap.h>
 #include <memory/ptm.h>
 #include <stdint.h>
 
-void init_stage_userspace(uint32_t core_id) {
-    if(!INIT_CORE_IS_BSP(core_id)) {
-        return;
-    }
-    syscall_init();
 
+#define INIT_SEARCH_LOCATIONS _("/usr/bin/init") _("/usr/bin/bash")
+
+#define _(x) x,
+
+static const char* g_init_search_locations[] = { INIT_SEARCH_LOCATIONS };
+
+#undef _
+#define _(x) "    " #x "\n"
+
+static const char* g_init_search_locations_string = INIT_SEARCH_LOCATIONS;
+
+#undef _
+
+static bool try_load(size_t search_location, vfs_node_t* node, process_t** out_process, thread_t** out_thread) {
     ldr_process_load_info_t load_info;
 
-    char* argv[] = { "/usr/bin/bash" };
+    char* argv[] = { (char*) g_init_search_locations[search_location] };
     char* envp[] = {};
 
     load_info.argv = (const char**) argv;
@@ -27,11 +38,45 @@ void init_stage_userspace(uint32_t core_id) {
     load_info.argc = sizeof(argv) / sizeof(argv[0]);
     load_info.envc = sizeof(envp) / sizeof(envp[0]);
 
-    thread_t* thread = nullptr;
-    process_t* process = process_create_from_file(&VFS_MAKE_ABS_PATH("/usr/bin/bash"), &load_info, nullptr, &thread);
+    thread_t* thread;
+
+    process_t* process = process_create_from_file(node, &load_info, nullptr, &thread);
     if(process == nullptr) {
-        arch_panic("init: failed to load /usr/bin/bash\n");
+        return false;
     }
+
+    *out_process = process;
+    *out_thread = thread;
+
+    return true;
+}
+
+void init_stage_userspace(uint32_t core_id) {
+    if(!INIT_CORE_IS_BSP(core_id)) {
+        return;
+    }
+    syscall_init();
+
+    size_t num_init_locations = sizeof(g_init_search_locations) / sizeof(g_init_search_locations[0]);
+
+    process_t* process = nullptr;
+    thread_t* thread = nullptr;
+
+    for(size_t i = 0; i < num_init_locations; i++) {
+        vfs_node_t* node;
+        vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(g_init_search_locations[i]), &node);
+        if(result != VFS_RESULT_OK)
+            continue;
+
+        if(!try_load(i, node, &process, &thread)) {
+            break;
+        }
+    }
+
+    if(process == nullptr) {
+        arch_panic("init: failed to find init process\nsearched the following paths:\n%s\n", g_init_search_locations_string);
+    }
+
 
     vfs_node_t* tty_node;
     vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH("/dev/tty"), &tty_node);

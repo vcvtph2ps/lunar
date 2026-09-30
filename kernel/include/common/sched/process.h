@@ -78,7 +78,7 @@ void process_free_id(uint32_t id);
 /**
  * @brief Creates a process from the file and arguments
  */
-process_t* process_create_from_file(const vfs_path_t* path, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread);
+process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread);
 
 /**
  * @brief Creates a process from the file and arguments

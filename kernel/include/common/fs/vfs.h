@@ -200,6 +200,13 @@ vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request);
 vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_attr);
 
 /**
+ * @brief Gets the attributes of the given node
+ * @param node The node to perform the IO on
+ * @param out_attr A pointer to a vfs_node_attr_t variable to receive the node attributes
+ */
+vfs_result_t vfs_get_attributes_node(vfs_node_t* node, vfs_node_attr_t* out_attr);
+
+/**
  * @brief Constructs a path representing the absolute path to the given node
  * @param node The vfs_node_t to construct the absolute path for
  * @param out_buf A pointer to a char* variable to receive the path. The caller is responsible for freeing this buffer using heap_free().
