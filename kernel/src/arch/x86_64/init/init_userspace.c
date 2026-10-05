@@ -3,6 +3,7 @@
 #include <common/init.h>
 #include <common/ldr/ldr.h>
 #include <common/log.h>
+#include <common/sched/process_group.h>
 #include <common/sched/sched.h>
 #include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
@@ -86,6 +87,9 @@ void init_stage_userspace(uint32_t core_id) {
 
     // @note: this is safe since we make sure pid/tid 1 is free
     process->process_id = 1;
+
+    /// The process was created in a group named after its original id
+    process_group_join(process, process->process_id);
 
     // Assign stdin=0, stdout=1, stderr=2 pointing at /dev/tty
     fd_store_entry_t* stdin;

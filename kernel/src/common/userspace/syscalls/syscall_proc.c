@@ -4,6 +4,7 @@
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/process.h>
+#include <common/sched/process_group.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
@@ -30,25 +31,106 @@
     while(1);
 }
 
-#define SYSCALL_PROC_GETINFO_GROUP_ID 0
-#define SYSCALL_PROC_GETINFO_EGROUP_ID 1
-#define SYSCALL_PROC_GETINFO_USER_ID 2
-#define SYSCALL_PROC_GETINFO_EUSER_ID 3
-#define SYSCALL_PROC_GETINFO_PROCESS_ID 4
-#define SYSCALL_PROC_GETINFO_PARENT_PROCESS 5
-#define SYSCALL_PROC_GETINFO_THREAD_ID 6
+/// @brief Resolves a pid to a referenced process, accepting UINT32_MAX or a direct child of `parent`
+static process_t* find_self_or_child(process_t* parent, uint32_t pid) {
+    if(pid == UINT32_MAX || pid == parent->process_id) {
+        return process_ref(parent);
+    }
+
+    process_t* found = nullptr;
+    spinlock_nodw_lock(&parent->children_lock);
+    LIST_FOR_EACH(&parent->children_list, node) {
+        process_t* candidate = CONTAINER_OF(node, process_t, list_node_sibling);
+        if(candidate->process_id == pid) {
+            found = process_ref(candidate);
+            break;
+        }
+    }
+    spinlock_nodw_unlock(&parent->children_lock);
+    return found;
+}
+
+#define SYSCALL_PROC_INFO_GROUP_ID 0
+#define SYSCALL_PROC_INFO_EGROUP_ID 1
+#define SYSCALL_PROC_INFO_USER_ID 2
+#define SYSCALL_PROC_INFO_EUSER_ID 3
+#define SYSCALL_PROC_INFO_PROCESS_ID 4
+#define SYSCALL_PROC_INFO_PARENT_PROCESS 5
+#define SYSCALL_PROC_INFO_THREAD_ID 6
+#define SYSCALL_PROC_INFO_PROCESS_GROUP_ID 7
+
+static syscall_ret_t internal_setpgid(process_t* target, int32_t pgid) {
+    if(sched_arch_thread_current()->process == target) {
+        LOG_UTRC("pid=%d, pgid=%d\n", target->process_id, pgid);
+    } else {
+        LOG_UTRC("pid=%d (from %d), pgid=%d\n", target->process_id, sched_arch_thread_current()->process->process_id, pgid);
+    }
+
+    if(pgid < 0) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    uint32_t new_pgid = pgid == 0 ? target->process_id : (uint32_t) pgid;
+    bool joined = process_group_join(target, new_pgid);
+    process_deref(target);
+
+    if(!joined) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t syscall_sys_proc_setinfo(syscall_args_t* args) {
+    process_t* process;
+    if(args->arg1 == UINT64_MAX) {
+        process = sched_arch_thread_current()->process;
+        process_ref(process);
+    } else {
+        process = find_self_or_child(sched_arch_thread_current()->process, (uint32_t) args->arg1);
+        if(process == nullptr) {
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_SEARCH);
+        }
+    }
+
+    switch(args->arg2) {
+        case SYSCALL_PROC_INFO_GROUP_ID:         user_assert("SYSCALL_PROC_INFO_GROUP_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_EGROUP_ID:        user_assert("SYSCALL_PROC_INFO_EGROUP_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_USER_ID:          user_assert("SYSCALL_PROC_INFO_USER_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_EUSER_ID:         user_assert("SYSCALL_PROC_INFO_EUSER_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_PROCESS_ID:       user_assert("SYSCALL_PROC_INFO_PROCESS_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_PARENT_PROCESS:   user_assert("SYSCALL_PROC_INFO_PARENT_PROCESS unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_THREAD_ID:        user_assert("SYSCALL_PROC_INFO_THREAD_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_PROCESS_GROUP_ID: return internal_setpgid(process, args->arg3);
+        default:                                 user_assert(false && "unreachable"); break;
+    }
+
+    ASSERT_UNREACHABLE();
+}
 
 syscall_ret_t syscall_sys_proc_getinfo(syscall_args_t* args) {
+    process_t* process;
+    if(args->arg1 == UINT64_MAX) {
+        process = sched_arch_thread_current()->process;
+        process_ref(process);
+    } else {
+        process = find_self_or_child(sched_arch_thread_current()->process, (uint32_t) args->arg1);
+        if(process == nullptr) {
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_SEARCH);
+        }
+    }
+
     process_t* current_process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    switch(args->arg1) {
-        case SYSCALL_PROC_GETINFO_GROUP_ID:       LOG_UTRC("SYSCALL_PROC_GETINFO_GROUP_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
-        case SYSCALL_PROC_GETINFO_EGROUP_ID:      LOG_UTRC("SYSCALL_PROC_GETINFO_EGROUP_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
-        case SYSCALL_PROC_GETINFO_USER_ID:        LOG_UTRC("SYSCALL_PROC_GETINFO_USER_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
-        case SYSCALL_PROC_GETINFO_EUSER_ID:       LOG_UTRC("SYSCALL_PROC_GETINFO_EUSER_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
-        case SYSCALL_PROC_GETINFO_PROCESS_ID:     return SYSCALL_RET_VALUE(current_process->process_id);
-        case SYSCALL_PROC_GETINFO_PARENT_PROCESS: return SYSCALL_RET_VALUE(current_process->parent_process_id);
-        case SYSCALL_PROC_GETINFO_THREAD_ID:      return SYSCALL_RET_VALUE(CPU_LOCAL_GET_CURRENT_THREAD()->common.tid);
-        default:                                  user_assert(false && "unreachable"); break;
+    switch(args->arg2) {
+        case SYSCALL_PROC_INFO_GROUP_ID:         LOG_UTRC("SYSCALL_PROC_INFO_GROUP_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
+        case SYSCALL_PROC_INFO_EGROUP_ID:        LOG_UTRC("SYSCALL_PROC_INFO_EGROUP_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
+        case SYSCALL_PROC_INFO_USER_ID:          LOG_UTRC("SYSCALL_PROC_INFO_USER_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
+        case SYSCALL_PROC_INFO_EUSER_ID:         LOG_UTRC("SYSCALL_PROC_INFO_EUSER_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
+        case SYSCALL_PROC_INFO_PROCESS_ID:       return SYSCALL_RET_VALUE(current_process->process_id);
+        case SYSCALL_PROC_INFO_PARENT_PROCESS:   return SYSCALL_RET_VALUE(current_process->parent_process_id);
+        case SYSCALL_PROC_INFO_THREAD_ID:        return SYSCALL_RET_VALUE(CPU_LOCAL_GET_CURRENT_THREAD()->common.tid);
+        case SYSCALL_PROC_INFO_PROCESS_GROUP_ID: return SYSCALL_RET_VALUE(process_group_id(current_process));
+        default:                                 user_assert(false && "unreachable"); break;
     }
 
     ASSERT_UNREACHABLE();
@@ -61,6 +143,10 @@ syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
     uintptr_t entry = frame->rcx;
 
     process_t* new_process = process_fork(sched_arch_thread_current()->process);
+    if(new_process == nullptr) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
     thread_t* thread = sched_arch_fork_thread_user(new_process, sched_arch_thread_current(), args->user_rsp, entry, frame);
 
     /// The thread references its process for as long as it lives

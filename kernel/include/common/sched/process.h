@@ -10,6 +10,7 @@
 
 typedef struct process process_t;
 typedef struct thread thread_t; // NOLINT
+typedef struct process_group process_group_t; // NOLINT
 
 typedef enum {
     PROCESS_RUNNING,
@@ -43,6 +44,11 @@ struct process {
 
     /// The process that forked this one, nullptr for the init process
     process_t* parent;
+
+    /// The process group this process belongs to, nullptr until it is placed in one
+    process_group_t* group;
+    /// Node of this process in its group's members list
+    list_node_t list_node_group;
 
     /// Node of this process in its parent's children_list
     list_node_t list_node_sibling;

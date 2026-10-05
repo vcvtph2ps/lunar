@@ -5,6 +5,7 @@
 #include <common/ldr/ldr.h>
 #include <common/log.h>
 #include <common/sched/process.h>
+#include <common/sched/process_group.h>
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
@@ -96,6 +97,13 @@ process_t* process_fork(process_t* parent) {
 
     process->process_id = process_allocate_id();
 
+    /// The child inherits its parent's process group, leading a new one if the parent has none
+    uint32_t pgid = process_group_id(parent);
+    if(!process_group_join(process, pgid != 0 ? pgid : process->process_id)) {
+        process_deref(process);
+        return nullptr;
+    }
+
     /// Register with the parent so that it can wait on us. The parent's children list holds a reference
     process_ref(process);
     spinlock_nodw_lock(&parent->children_lock);
@@ -141,6 +149,12 @@ process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_inf
     }
 
     process->fd_store = fd_store_create();
+
+    /// A process that is not forked (ie. the init process) leads its own process group
+    if(!process_group_join(process, process->process_id)) {
+        process_deref(process);
+        return nullptr;
+    }
 
     thread_t* thread = sched_arch_create_thread_user(process, user_stack_top, entry_point, true);
     assert(thread != nullptr);
@@ -266,6 +280,9 @@ void process_kill(process_t* process, process_status_state_t state, int32_t exit
         sched_thread_kill(thread);
     }
     spinlock_nodw_unlock(&process->thread_list_lock);
+
+    /// A killed process leaves its process group, destroying the group once it is the last member
+    process_group_leave(process);
 
     /// The process itself no longer holds a reference. Its remaining threads, and its parent while it is a zombie, keep it alive
     process_deref(process);

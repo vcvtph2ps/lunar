@@ -13,6 +13,7 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
     switch(nr) {
         case SYSCALL_PROC_EXIT:    return "SYSCALL_PROC_EXIT";
         case SYSCALL_PROC_GETINFO: return "SYSCALL_PROC_GETINFO";
+        case SYSCALL_PROC_SETINFO: return "SYSCALL_PROC_SETINFO";
         case SYSCALL_PROC_FORK:    return "SYSCALL_PROC_FORK";
         case SYSCALL_PROC_WAITPID: return "SYSCALL_PROC_WAITPID";
         case SYSCALL_PROC_EXECVE:  return "SYSCALL_PROC_EXECVE";
@@ -51,17 +52,18 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         return "SUCCESS";
     }
     switch(ret.err) {
-        case SYSCALL_ERROR_NOENT: return "ERROR_NOENT";
-        case SYSCALL_ERROR_CHILD: return "ERROR_CHILD";
-        case SYSCALL_ERROR_NOMEM: return "ERROR_NOMEM";
-        case SYSCALL_ERROR_FAULT: return "ERROR_FAULT";
-        case SYSCALL_ERROR_INVAL: return "ERROR_INVAL";
-        case SYSCALL_ERROR_SPIPE: return "ERROR_SPIPE";
-        case SYSCALL_ERROR_ROFS:  return "ERROR_ROFS";
-        case SYSCALL_ERROR_RANGE: return "ERROR_RANGE";
-        case SYSCALL_ERROR_BADFD: return "ERROR_BADFD";
-        case SYSCALL_ERROR_AGAIN: return "ERROR_AGAIN";
-        default:                  arch_panic("Unknown syscall error code: %lu", ret.err);
+        case SYSCALL_ERROR_NOENT:  return "ERROR_NOENT";
+        case SYSCALL_ERROR_SEARCH: return "ERROR_SEARCH";
+        case SYSCALL_ERROR_CHILD:  return "ERROR_CHILD";
+        case SYSCALL_ERROR_NOMEM:  return "ERROR_NOMEM";
+        case SYSCALL_ERROR_FAULT:  return "ERROR_FAULT";
+        case SYSCALL_ERROR_INVAL:  return "ERROR_INVAL";
+        case SYSCALL_ERROR_SPIPE:  return "ERROR_SPIPE";
+        case SYSCALL_ERROR_ROFS:   return "ERROR_ROFS";
+        case SYSCALL_ERROR_RANGE:  return "ERROR_RANGE";
+        case SYSCALL_ERROR_BADFD:  return "ERROR_BADFD";
+        case SYSCALL_ERROR_AGAIN:  return "ERROR_AGAIN";
+        default:                   arch_panic("Unknown syscall error code: %lu", ret.err);
     }
 }
 
@@ -94,11 +96,11 @@ void syscall_init() {
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_EXIT, syscall_sys_proc_exit);
     SYSCALL_DISPATCHER(SYSCALL_PROC_GETINFO, syscall_sys_proc_getinfo);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_SETINFO, syscall_sys_proc_setinfo);
     SYSCALL_DISPATCHER(SYSCALL_PROC_FORK, syscall_sys_proc_fork);
     SYSCALL_DISPATCHER(SYSCALL_PROC_WAITPID, syscall_sys_proc_waitpid);
     SYSCALL_DISPATCHER(SYSCALL_PROC_EXECVE, syscall_sys_proc_execve);
     SYSCALL_DISPATCHER(SYSCALL_PROC_FEXECVE, syscall_sys_proc_fexecve);
-
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_ACTION, syscall_sys_proc_sig_action);
     SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_MASK, syscall_sys_proc_sig_mask);
