@@ -140,7 +140,7 @@ syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
     LOG_UTRC("process forked\n");
     arch_interrupt_regs_t* frame = args->regs;
 
-    uintptr_t entry = frame->rcx;
+    uintptr_t entry = arch_interrupt_regs_syscall_get_user_ip(frame);
 
     process_t* new_process = process_fork(sched_arch_thread_current()->process);
     if(new_process == nullptr) {

@@ -29,12 +29,22 @@ thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_sta
     return nullptr;
 }
 
+thread_t* sched_arch_fork_thread_user(process_t* process, thread_t* parent, virt_addr_t user_stack_top, virt_addr_t entry, arch_interrupt_regs_t* frame) {
+    (void) process;
+    (void) parent;
+    (void) user_stack_top;
+    (void) entry;
+    (void) frame;
+    assert(false && "Not implemented");
+    return nullptr;
+}
+
 thread_t* sched_arch_thread_current() {
     assert(false && "Not implemented");
     return nullptr;
 }
 
-void sched_arch_thread_destroy(thread_t* thread) {
+[[noreturn]] void sched_arch_thread_destroy(thread_t* thread) {
     (void) thread;
     assert(false && "Not implemented");
 }

@@ -285,6 +285,21 @@ static bool detect_svpbmt(void) {
     return false;
 }
 
+[[noreturn]] bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protection_t prot, vm_cache_t cache, bool global) {
+    (void) address_space;
+    (void) vaddr;
+    (void) prot;
+    (void) cache;
+    (void) global;
+    assert(false && "Unimplemented");
+}
+
+[[noreturn]] bool ptm_fork_user(vm_address_space_t* address_space, vm_address_space_t* parent_address_space) {
+    (void) address_space;
+    (void) parent_address_space;
+    assert(false && "Unimplemented");
+}
+
 void ptm_init_kernel(uint32_t core_id) {
     if(!INIT_CORE_IS_BSP(core_id)) {
         ptm_load_address_space(g_vm_global_address_space);

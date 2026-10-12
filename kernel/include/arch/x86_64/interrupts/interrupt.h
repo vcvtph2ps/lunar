@@ -22,6 +22,15 @@ typedef struct {
 } arch_interrupt_state_t;
 
 /**
+ * @brief Gets the userspace instruction pointer from an interrupt register frame
+ * @return The userspace instruction pointer
+ * @note only valid on syscall frames
+ */
+[[nodiscard]] static inline uint64_t arch_interrupt_regs_syscall_get_user_ip(arch_interrupt_regs_t* regs) {
+    return regs->rcx;
+}
+
+/**
  * @brief Gets the current interrupt state
  * @return The current interrupt state.
  */

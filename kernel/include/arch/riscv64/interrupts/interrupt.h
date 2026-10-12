@@ -3,12 +3,25 @@
 
 typedef struct {
     // @todo:
-    void* unused;
+} arch_interrupt_regs_t;
+
+typedef struct {
+    // @todo:
 } arch_interrupt_frame_t;
 
 typedef struct {
     bool enabled;
 } arch_interrupt_state_t;
+
+/**
+ * @brief Gets the userspace instruction pointer from an interrupt register frame
+ * @param regs The register frame to extract the instruction pointer from
+ * @return The userspace instruction pointer
+ */
+[[nodiscard]] static inline uint64_t arch_interrupt_regs_syscall_get_user_ip(arch_interrupt_regs_t* regs) {
+    (void) regs;
+    return 0;
+}
 
 /**
  * @brief Gets the current interrupt state
