@@ -2,13 +2,17 @@
 #include <common/fs/io.h>
 #include <common/fs/vfs.h>
 #include <common/log.h>
+#include <common/sched/process.h>
+#include <common/sched/process_group.h>
 #include <common/sched/sched.h>
 #include <common/sync/mutex.h>
 #include <common/sync/wait_obj.h>
+#include <common/userspace/signal.h>
 #include <common/userspace/tty.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
+#include <uapi/signal.h>
 
 // default input characters handled by the canonical mode
 // probably gonna forgot what these mean in like, a few days
@@ -33,6 +37,16 @@ static size_t ring_next(size_t index) {
     return (index + 1) % TTY_RB_SIZE;
 }
 
+static tty_t* g_default_tty = nullptr;
+
+void tty_set_default(tty_t* tty) {
+    g_default_tty = tty;
+}
+
+tty_t* tty_get_default() {
+    return g_default_tty;
+}
+
 tty_t* tty_create() {
     tty_t* tty = heap_alloc(sizeof(tty_t));
     tty->mutex = MUTEX_INIT;
@@ -41,6 +55,7 @@ tty_t* tty_create() {
     tty->tail = 0;
     tty->commit = 0;
     tty->eof = false;
+    ATOMIC_STORE(&tty->foreground_pgid, 0, ATOMIC_RELAXED);
 
     tty->mode.canonical = true;
     tty->mode.echo = true;
@@ -228,7 +243,7 @@ static void tty_handle_intr(tty_t* tty) {
     tty_kill_line(tty);
     tty_echo_ctrl(tty, CHAR_INTR);
     tty_echo_newline(tty);
-    // @todo: send SIGINT to the fg pgrp
+    tty_signal_foreground(tty, UAPI_SIGNAL_INT);
 }
 
 static bool tty_put_canonical(tty_t* tty, uint8_t c) {
@@ -326,6 +341,35 @@ uint8_t tty_read_blocking(tty_t* tty) {
         }
         sched_wait_single(&tty->wait_obj, UINT64_MAX);
     }
+}
+
+void tty_set_foreground_pgid(tty_t* tty, uint32_t pgid) {
+    ATOMIC_STORE(&tty->foreground_pgid, pgid, ATOMIC_RELEASE);
+}
+
+uint32_t tty_get_foreground_pgid(tty_t* tty) {
+    return ATOMIC_LOAD(&tty->foreground_pgid, ATOMIC_ACQUIRE);
+}
+
+void tty_signal_foreground(tty_t* tty, int signal_number) {
+    uint32_t pgid = tty_get_foreground_pgid(tty);
+    if(pgid == 0) {
+        return;
+    }
+
+    size_t count = 0;
+    process_t** processes = process_group_find_processes(pgid, &count);
+    if(processes == nullptr) {
+        return;
+    }
+
+    uapi_signal_info_t info = { .signal_number = signal_number, .code = UAPI_SIGNAL_KERNEL, .pid = 0 };
+    for(size_t i = 0; i < count; i++) {
+        signal_queue_enqueue(&processes[i]->signal_queue, signal_number, &info);
+        process_deref(processes[i]);
+    }
+
+    heap_free(processes, sizeof(process_t*) * count);
 }
 
 static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {

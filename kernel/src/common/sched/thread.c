@@ -19,7 +19,7 @@ void thread_deref(thread_t* thread) {
     /// The thread holds a reference to its process, it has to be released once the thread is gone
     process_t* process = thread->process;
 
-    LOG_KTRC("thread %u was destroyed", thread->tid);
+    LOG_KTRC("thread %u was destroyed\n", thread->tid);
     sched_arch_thread_destroy(thread);
 
     if(process != nullptr)

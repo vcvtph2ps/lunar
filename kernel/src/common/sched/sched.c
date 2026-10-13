@@ -13,6 +13,7 @@
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <memory/heap.h>
+#include "arch/x86_64/interrupts/interrupt.h"
 
 void sched_preempt_disable() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) < UINT32_MAX);
@@ -168,13 +169,6 @@ void sched_sleep(uint64_t msec) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 void sched_yield_internal(thread_state_t yield_state) {
-    arch_interrupt_state_t previous_state = arch_interrupt_disable();
-
-    // @todo: figure out a cleaner way to do this, because this sucks
-    assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
-    assert(CPU_LOCAL_READ(defered_work.counter) == 0);
-    assert(previous_state.enabled == true);
-
     thread_t* current = sched_arch_thread_current();
 
     /// The wait blocks live on the kernel stack of the thread and point at the wait entry of the thread, they have to come down no matter which state the thread ends up in
@@ -212,16 +206,28 @@ void sched_yield_internal(thread_state_t yield_state) {
     }
 
     sched_arch_reset_preempt_timer();
-    arch_interrupt_restore(previous_state);
+    (void)arch_interrupt_enable();
 }
 #pragma clang diagnostic pop
 
 void sched_yield() {
+    arch_interrupt_state_t previous_state = arch_interrupt_disable();
+
+    // @todo: figure out a cleaner way to do this, because this sucks
+    assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
+    assert(CPU_LOCAL_READ(defered_work.counter) == 0);
+    assert(previous_state.enabled == true);
+    
     sched_yield_internal(THREAD_STATE_READY);
 }
 
-void sched_terminate_current_thread() {
+[[noreturn]] void sched_terminate_current_thread() {
+    (void)arch_interrupt_disable();
+
+    CPU_LOCAL_WRITE(scheduler.preempt_counter, 0u);
+    CPU_LOCAL_WRITE(defered_work.counter, 0u);
     sched_yield_internal(THREAD_STATE_DYING);
+    while(1);
 }
 
 void sched_thread_drop(thread_t* thread) {

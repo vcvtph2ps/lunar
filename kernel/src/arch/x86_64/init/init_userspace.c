@@ -7,6 +7,7 @@
 #include <common/sched/sched.h>
 #include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
+#include <common/userspace/tty.h>
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/heap.h>
@@ -90,6 +91,12 @@ void init_stage_userspace(uint32_t core_id) {
 
     /// The process was created in a group named after its original id
     process_group_join(process, process->process_id);
+
+    /// The init process leads the foreground process group of the console
+    tty_t* tty = tty_get_default();
+    if(tty != nullptr) {
+        tty_set_foreground_pgid(tty, process_group_id(process));
+    }
 
     // Assign stdin=0, stdout=1, stderr=2 pointing at /dev/tty
     fd_store_entry_t* stdin;

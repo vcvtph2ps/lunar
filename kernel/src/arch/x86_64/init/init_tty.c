@@ -17,6 +17,7 @@ void init_stage_tty(uint32_t core_id) {
     }
 
     tty_t* tty = tty_create();
+    tty_set_default(tty);
 
     g_arch_16550uart_default_uart->recv_ctx = tty;
     g_arch_16550uart_default_uart->on_recv = tty_recv_generic;
