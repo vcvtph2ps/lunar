@@ -18,6 +18,12 @@ typedef struct {
 } arch_interrupt_frame_t;
 
 typedef struct {
+    arch_interrupt_regs_t regs;
+    uint64_t vector, error;
+    arch_interrupt_sregs_t state;
+} arch_interrupt_idt_frame_t;
+
+typedef struct {
     bool enabled;
 } arch_interrupt_state_t;
 

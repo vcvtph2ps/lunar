@@ -13,7 +13,6 @@
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <memory/heap.h>
-#include "arch/x86_64/interrupts/interrupt.h"
 
 void sched_preempt_disable() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) < UINT32_MAX);
@@ -146,6 +145,47 @@ void sched_thread_kill(thread_t* thread) {
     }
 }
 
+void sched_thread_interrupt(thread_t* thread) {
+    /// The current thread is running, it will notice the signal on its way back to userspace
+    if(thread == sched_arch_thread_current()) {
+        return;
+    }
+
+    ATOMIC_STORE(&thread->interrupted, true, ATOMIC_RELEASE);
+
+    while(true) {
+        thread_state_t state = ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE);
+
+        /// The thread is not blocked, it will notice the signal on its way back to userspace
+        if(state != THREAD_STATE_WAITING && state != THREAD_STATE_WAITING_IN_PROGRESS) {
+            return;
+        }
+
+        /// Only userspace facing waits may be aborted by a signal. Kernel internal waits (mutexes and the like) must run to completion, the signal is delivered once the thread returns.
+        wait_entry_t* entry = thread->sched.wait_entry;
+        if(entry == nullptr || !ATOMIC_LOAD(&entry->interruptible, ATOMIC_ACQUIRE)) {
+            return;
+        }
+
+        /// The thread has committed its wait and is off the cpu, wake it so it can back out
+        if(state == THREAD_STATE_WAITING) {
+            sched_thread_schedule(thread);
+            return;
+        }
+
+        /// The thread is still committing its wait, abort it so it backs out
+        thread_state_t expected = state;
+        if(ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_WAITING_ABORTED, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE)) {
+            return;
+        }
+    }
+}
+
+bool sched_thread_interrupted() {
+    thread_t* thread = sched_arch_thread_current();
+    return ATOMIC_XCHG(&thread->interrupted, false, ATOMIC_ACQ_REL);
+}
+
 void sched_arch_init(uint32_t core_id);
 
 void sched_init(uint32_t core_id) {
@@ -175,12 +215,14 @@ void sched_yield_internal(thread_state_t yield_state) {
     bool wait_cleanup = yield_state == THREAD_STATE_WAITING;
 
     /// Being killed takes priority whatever the thread wanted to do
-    if(ATOMIC_LOAD(&current->sched.state, ATOMIC_ACQUIRE) == THREAD_STATE_DYING) yield_state = THREAD_STATE_DYING;
+    if(ATOMIC_LOAD(&current->sched.state, ATOMIC_ACQUIRE) == THREAD_STATE_DYING)
+        yield_state = THREAD_STATE_DYING;
 
     thread_t* next = sched_next_thread(&CPU_LOCAL_GET_SELF()->scheduler);
 
     // If we have no next thread, and the current thread is ready to run, we can just continue running the current thread
-    if(next == nullptr && current != CPU_LOCAL_READ(scheduler.idle_thread) && yield_state != THREAD_STATE_READY) next = CPU_LOCAL_READ(scheduler.idle_thread);
+    if(next == nullptr && current != CPU_LOCAL_READ(scheduler.idle_thread) && yield_state != THREAD_STATE_READY)
+        next = CPU_LOCAL_READ(scheduler.idle_thread);
     if(next != nullptr) {
         assert(current != next);
         sched_arch_context_switch(current, next, yield_state);
@@ -206,7 +248,7 @@ void sched_yield_internal(thread_state_t yield_state) {
     }
 
     sched_arch_reset_preempt_timer();
-    (void)arch_interrupt_enable();
+    (void) arch_interrupt_enable();
 }
 #pragma clang diagnostic pop
 
@@ -217,12 +259,12 @@ void sched_yield() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
     assert(CPU_LOCAL_READ(defered_work.counter) == 0);
     assert(previous_state.enabled == true);
-    
+
     sched_yield_internal(THREAD_STATE_READY);
 }
 
 [[noreturn]] void sched_terminate_current_thread() {
-    (void)arch_interrupt_disable();
+    (void) arch_interrupt_disable();
 
     CPU_LOCAL_WRITE(scheduler.preempt_counter, 0u);
     CPU_LOCAL_WRITE(defered_work.counter, 0u);
@@ -231,7 +273,8 @@ void sched_yield() {
 }
 
 void sched_thread_drop(thread_t* thread) {
-    if(thread == ATOMIC_LOAD(&thread->sched.owner, ATOMIC_RELAXED)->idle_thread) return;
+    if(thread == ATOMIC_LOAD(&thread->sched.owner, ATOMIC_RELAXED)->idle_thread)
+        return;
 
     thread_state_t state = ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE);
     switch(state) {

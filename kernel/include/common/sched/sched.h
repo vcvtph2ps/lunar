@@ -79,8 +79,40 @@ void sched_terminate_current_thread();
  */
 void sched_sleep(uint64_t msec);
 
+/**
+ * @brief Blocks the current thread on an uninterruptible wait
+ * @param obj The object to wait on
+ * @param timeout_ms The timeout in milliseconds, or UINT64_MAX for no timeout
+ */
 void sched_wait_single(wait_obj_t* obj, uint64_t timeout_ms);
-void sched_wait_multiple(wait_obj_t** obj, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms);
+
+/**
+ * @brief Blocks the current thread on an uninterruptible wait
+ * @param objects The object list to wait on
+ * @param type The type of wait to issue, ALL or ANY
+ * @param timeout_ms The timeout in milliseconds, or UINT64_MAX for no timeout
+ */
+void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms);
+
+/**
+ * @brief Blocks the current thread on an interruptible wait, i.e. one a signal may abort
+ * @param obj The object to wait on
+ * @param timeout_ms The timeout in milliseconds, or UINT64_MAX for no timeout
+ * @note Callers must check sched_thread_interrupted() afterwards to detect an aborted wait
+ */
+void sched_wait_single_interruptible(wait_obj_t* obj, uint64_t timeout_ms);
+
+/**
+ * @brief Wakes a thread that is blocked in an interruptible wait so it can notice a pending signal
+ * @param thread The thread to interrupt
+ */
+void sched_thread_interrupt(thread_t* thread);
+
+/**
+ * @brief Checks and clears the current thread's interrupted flag
+ * @return true if the current thread was interrupted since the last check
+ */
+bool sched_thread_interrupted();
 
 ///
 

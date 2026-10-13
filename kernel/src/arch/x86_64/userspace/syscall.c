@@ -1,4 +1,6 @@
 #include <arch/x86_64/internal/msr.h>
+#include <common/interrupts/interrupt.h>
+#include <common/userspace/signal.h>
 #include <common/userspace/syscall.h>
 
 void x86_64_handle_syscall();
@@ -38,6 +40,30 @@ syscall_ret_t x86_64_dispatch_syscall(x86_64_syscall_frame_t* frame) {
     args.user_rsp = frame->user_rsp;
     args.regs = &frame->regs;
 
-    return syscall_dispatch(&args);
+    syscall_ret_t ret = syscall_dispatch(&args);
+
+    /// Preserve the return value so that a signal delivered on the way out restores it
+    frame->regs.rax = ret.value;
+    frame->regs.rdx = ret.is_error;
+
+    arch_interrupt_sregs_t state = {
+        .rip = frame->regs.rcx,
+        .cs = 0x2b, // lmode user code
+        .rflags = frame->regs.r11,
+        .rsp = frame->user_rsp,
+        .ss = 0x23, // lmode user data
+    };
+    arch_interrupt_frame_t interrupt_frame = {
+        .regs = &frame->regs,
+        .state = &state,
+        .is_user = true,
+    };
+
+    /// If a signal is pending set up its handler and return to it via iretq instead of sysret
+    if(signal_deliver_pending(&interrupt_frame)) {
+        signal_arch_enter_handler(&interrupt_frame);
+    }
+
+    return ret;
 }
 #pragma clang diagnostic pop

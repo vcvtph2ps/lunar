@@ -1,12 +1,18 @@
 #pragma once
 
 #include <common/assert.h>
+#include <stddef.h>
 #include <uapi/types.h>
 
 typedef union {
     int sival_int;
     void* sival_ptr;
 } uapi_signal_val_t;
+
+#define UAPI_SIGNAL_USER 0
+#define UAPI_SIGNAL_KERNEL 128
+
+typedef uint64_t uapi_signal_set_t;
 
 typedef struct {
     int signal_number;
@@ -19,10 +25,27 @@ typedef struct {
     uapi_signal_val_t value;
 } uapi_signal_info_t;
 
-typedef uint64_t uapi_signal_set_t;
+typedef struct {
+    uint64_t gregs[16];
+    uint64_t pc;
+    uint64_t flags;
+} uapi_signal_mcontext_t;
 
 typedef struct {
-    /// handler address: UAPI_SIG_DEFAULT, UAPI_SIG_IGNORE, or user function pointer
+    void* sp;
+    size_t size;
+    int flags;
+} uapi_signal_stack_t;
+
+typedef struct {
+    uint64_t link;
+    uapi_signal_stack_t stack;
+    uapi_signal_mcontext_t mcontext;
+    uapi_signal_set_t sigmask;
+} uapi_signal_ucontext_t;
+
+typedef struct {
+    /// handler address: UAPI_SIGNAL_DEFAULT, UAPI_SIGNAL_IGNORE, or user function pointer
     uintptr_t handler;
 
     /// restorer function address for sigreturn
@@ -35,6 +58,14 @@ typedef struct {
     int flags;
 } uapi_signal_handler_t;
 
+/// SA_* flags
+#define UAPI_SIGNAL_FLAG_NOCLDSTOP (1 << 0)
+#define UAPI_SIGNAL_FLAG_ONSTACK (1 << 1)
+#define UAPI_SIGNAL_FLAG_RESETHAND (1 << 2)
+#define UAPI_SIGNAL_FLAG_RESTART (1 << 3)
+#define UAPI_SIGNAL_FLAG_SIGINFO (1 << 4)
+#define UAPI_SIGNAL_FLAG_NOCLDWAIT (1 << 5)
+#define UAPI_SIGNAL_FLAG_NODEFER (1 << 6)
 
 #define UAPI_SIGNAL_ERROR (-1)
 #define UAPI_SIGNAL_DEFAULT (-2)

@@ -172,7 +172,7 @@ static bool sched_wait_on_timer(timer_wait_t* timer) {
 
 void sched_yield_internal(thread_state_t yield_state);
 
-void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms) {
+static void sched_wait_multiple_common(wait_obj_t** objects, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms, bool interruptible) {
     thread_t* thread = sched_arch_thread_current();
     wait_entry_t entry = {};
 
@@ -181,6 +181,7 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
     entry.lock = SPINLOCK_INIT;
 
     ATOMIC_STORE(&entry.type, type, ATOMIC_RELAXED);
+    ATOMIC_STORE(&entry.interruptible, interruptible, ATOMIC_RELAXED);
     ATOMIC_STORE(&entry.waiting_on, type == WAIT_OBJ_WAIT_ALL ? count : 0, ATOMIC_RELAXED);
     ATOMIC_STORE(&entry.signaled, 0, ATOMIC_RELAXED);
 
@@ -203,6 +204,11 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
 
     if(!wait_aborted && timer != nullptr) {
         wait_aborted = sched_wait_on_timer(timer);
+    }
+
+    /// A signal may have arrived before we committed; an interruptible wait must not block
+    if(!wait_aborted && interruptible && ATOMIC_LOAD(&thread->interrupted, ATOMIC_ACQUIRE)) {
+        wait_aborted = true;
     }
 
     if(wait_aborted) {
@@ -230,4 +236,12 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
     if(ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE) == THREAD_STATE_DYING) {
         sched_terminate_current_thread();
     }
+}
+
+void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_t type, uint64_t timeout_ms) {
+    sched_wait_multiple_common(objects, count, type, timeout_ms, false);
+}
+
+void sched_wait_single_interruptible(wait_obj_t* obj, uint64_t timeout_ms) {
+    sched_wait_multiple_common(&obj, 1, WAIT_OBJ_WAIT_ANY, timeout_ms, true);
 }

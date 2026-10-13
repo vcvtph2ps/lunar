@@ -3,6 +3,7 @@
 #include <common/sync/spinlock.h>
 #include <common/sync/wait_obj.h>
 #include <common/userspace/fd_store.h>
+#include <common/userspace/signal.h>
 #include <lib/list.h>
 #include <memory/vm.h>
 #include <stdint.h>
@@ -45,6 +46,9 @@ struct process {
     /// The process that forked this one, nullptr for the init process
     process_t* parent;
 
+    /// The list node for the global process list
+    list_node_t list_node_global;
+
     /// The process group this process belongs to, nullptr until it is placed in one
     process_group_t* group;
     /// Node of this process in its group's members list
@@ -70,6 +74,8 @@ struct process {
         spinlock_t lock;
         uapi_signal_handler_t handlers[UAPI_SIGNAL_MAX_SIGNAL + 1];
     } signal_handler;
+
+    signal_queue_t signal_queue;
 };
 
 /**
@@ -83,6 +89,18 @@ uint32_t process_allocate_id();
  * @param id The process ID to free.
  */
 void process_free_id(uint32_t id);
+
+/**
+ * @note: bumps process refcount
+ */
+process_t* process_find_by_id(uint32_t id);
+
+/**
+ * @brief Looks up a thread of a process by its tid.
+ * @return A referenced thread, or nullptr
+ * @note The caller owns the returned reference and must release it with thread_deref()
+ */
+thread_t* process_find_thread_by_id(process_t* process, uint32_t tid);
 
 /**
  * @brief Creates a process from the file and arguments

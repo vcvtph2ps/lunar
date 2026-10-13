@@ -129,9 +129,9 @@ userptr_t* userptr_create_array(uintptr_t user_pointer, size_t element_size) {
 }
 
 bool userptr_write(userptr_t* userptr, const void* buffer) {
-    return vm_copy_to(userptr->address_space, userptr->user_ptr, buffer, userptr->size);
+    return vm_copy_to(userptr->address_space, userptr->user_ptr, buffer, userptr->size) == userptr->size;
 }
 
 bool userptr_read(userptr_t* userptr, void* buffer) {
-    return vm_copy_from(buffer, userptr->address_space, userptr->user_ptr, userptr->size);
+    return vm_copy_from(buffer, userptr->address_space, userptr->user_ptr, userptr->size) == userptr->size;
 }

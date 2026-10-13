@@ -36,12 +36,14 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_VM_UNMAP:   return "SYSCALL_VM_UNMAP";
         case SYSCALL_VM_PROTECT: return "SYSCALL_VM_PROTECT";
 
-        case SYSCALL_FS_OPEN:   return "SYSCALL_FS_OPEN";
-        case SYSCALL_FS_CLOSE:  return "SYSCALL_FS_CLOSE";
-        case SYSCALL_FS_READ:   return "SYSCALL_FS_READ";
-        case SYSCALL_FS_WRITE:  return "SYSCALL_FS_WRITE";
-        case SYSCALL_FS_SEEK:   return "SYSCALL_FS_SEEK";
-        case SYSCALL_FS_ISATTY: return "SYSCALL_FS_ISATTY";
+        case SYSCALL_FS_OPEN:    return "SYSCALL_FS_OPEN";
+        case SYSCALL_FS_CLOSE:   return "SYSCALL_FS_CLOSE";
+        case SYSCALL_FS_READ:    return "SYSCALL_FS_READ";
+        case SYSCALL_FS_WRITE:   return "SYSCALL_FS_WRITE";
+        case SYSCALL_FS_SEEK:    return "SYSCALL_FS_SEEK";
+        case SYSCALL_FS_ISATTY:  return "SYSCALL_FS_ISATTY";
+        case SYSCALL_FS_MOUNT:   return "SYSCALL_FS_MOUNT";
+        case SYSCALL_FS_UNMOUNT: return "SYSCALL_FS_UNMOUNT";
 
         default: return "Unknown syscall";
     }
@@ -104,6 +106,8 @@ void syscall_init() {
 
     SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_ACTION, syscall_sys_proc_sig_action);
     SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_MASK, syscall_sys_proc_sig_mask);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_SEND_SIMPLE, syscall_sys_proc_sig_send_simple);
+    SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_RETURN, syscall_sys_proc_sig_send_return);
 
     SYSCALL_DISPATCHER(SYSCALL_SYS_TCB_SET, syscall_sys_thread_set_tcb);
     SYSCALL_DISPATCHER(SYSCALL_SYS_DEBUG_LOG, syscall_sys_debug_log);

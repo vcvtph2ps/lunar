@@ -2,12 +2,12 @@
 #include <common/interrupts/dw.h>
 #include <common/sync/spinlock.h>
 #include <common/sync/wait_obj.h>
+#include <common/userspace/signal.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/types.h>
 #include <memory/vm.h>
-
-#include "uapi/signal.h"
+#include <uapi/signal.h>
 
 typedef enum thread_state thread_state_t;
 typedef struct thread thread_t;
@@ -68,10 +68,15 @@ struct thread {
 
     bool in_interrupt_handler;
 
+    /// @brief Set when a signal arrives so a thread blocked in an interruptible wait bails out
+    ATOMIC bool interrupted;
+
     struct {
         spinlock_t lock;
         uapi_signal_set_t masked_signal_set;
     } signal;
+
+    signal_queue_t signal_queue;
 };
 
 /**

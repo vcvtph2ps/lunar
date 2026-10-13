@@ -22,6 +22,9 @@
 // @note: 0 is reserved, 1 is for the init process
 ATOMIC uint32_t g_next_task_id = 2;
 
+spinlock_t g_process_list_lock = SPINLOCK_INIT;
+list_t g_process_list = LIST_INIT;
+
 uint32_t process_allocate_id() {
     // @todo: don't bump allocate...
     return ATOMIC_LOAD_ADD(&g_next_task_id, 1, ATOMIC_SEQ_CST);
@@ -30,6 +33,36 @@ uint32_t process_allocate_id() {
 void process_free_id(uint32_t id) {
     // @todo: don't bump allocate...
     (void) id;
+}
+
+process_t* process_find_by_id(uint32_t id) {
+    spinlock_lock(&g_process_list_lock);
+    LIST_FOR_EACH(&g_process_list, node) {
+        process_t* process = CONTAINER_OF(node, process_t, list_node_global);
+        if(process->process_id == id) {
+            process_ref(process);
+            spinlock_unlock(&g_process_list_lock);
+            return process;
+        }
+    }
+    spinlock_unlock(&g_process_list_lock);
+    return nullptr;
+}
+
+thread_t* process_find_thread_by_id(process_t* process, uint32_t tid) {
+    thread_t* found = nullptr;
+
+    spinlock_nodw_lock(&process->thread_list_lock);
+    LIST_FOR_EACH(&process->thread_list, node) {
+        thread_t* thread = CONTAINER_OF(node, thread_t, list_node_process);
+        if(thread->tid == tid) {
+            found = thread_ref(thread);
+            break;
+        }
+    }
+    spinlock_nodw_unlock(&process->thread_list_lock);
+
+    return found;
 }
 
 /// @brief Frees every resource owned by a process. Only called once its reference count reaches zero.
@@ -110,6 +143,10 @@ process_t* process_fork(process_t* parent) {
     list_push_back(&parent->children_list, &process->list_node_sibling);
     spinlock_nodw_unlock(&parent->children_lock);
 
+    spinlock_lock(&g_process_list_lock);
+    list_push(&g_process_list, &process->list_node_global);
+    spinlock_unlock(&g_process_list_lock);
+
     return process;
 }
 
@@ -162,6 +199,10 @@ process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_inf
     /// The thread references its process for as long as it lives
     process_ref(process);
     list_push(&process->thread_list, &thread->list_node_process);
+
+    spinlock_lock(&g_process_list_lock);
+    list_push(&g_process_list, &process->list_node_global);
+    spinlock_unlock(&g_process_list_lock);
 
     *out_thread = thread;
     return process;
@@ -234,6 +275,10 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
     process_ref(current);
     list_push(&current->thread_list, &thread->list_node_process);
     *out_thread = thread;
+
+    spinlock_lock(&g_process_list_lock);
+    list_push(&g_process_list, &current->list_node_global);
+    spinlock_unlock(&g_process_list_lock);
 
     return true;
 }

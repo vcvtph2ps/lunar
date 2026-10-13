@@ -19,6 +19,8 @@ typedef enum : uint8_t {
     VFS_RESULT_ERR_WOULD_BLOCK,
     VFS_RESULT_ERR_NO_SPACE,
 
+    VFS_RESULT_ERR_INTERRUPTED,
+
     VFS_RESULT_ERR_UNSUPPORTED
 } vfs_result_t;
 

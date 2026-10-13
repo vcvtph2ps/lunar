@@ -365,7 +365,7 @@ void tty_signal_foreground(tty_t* tty, int signal_number) {
 
     uapi_signal_info_t info = { .signal_number = signal_number, .code = UAPI_SIGNAL_KERNEL, .pid = 0 };
     for(size_t i = 0; i < count; i++) {
-        signal_queue_enqueue(&processes[i]->signal_queue, signal_number, &info);
+        signal_process(processes[i], signal_number, &info);
         process_deref(processes[i]);
     }
 
@@ -393,8 +393,15 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
             return VFS_RESULT_ERR_WOULD_BLOCK;
         }
 
-        sched_wait_single(&tty->wait_obj, UINT64_MAX);
+        sched_wait_single_interruptible(&tty->wait_obj, UINT64_MAX);
+        bool interrupted = sched_thread_interrupted();
         mutex_acquire(&tty->mutex);
+
+        /// a signal arrived while we were blocked, report EINTR if there is still nothing to read
+        if(!tty_readable(tty) && interrupted) {
+            mutex_release(&tty->mutex);
+            return VFS_RESULT_ERR_INTERRUPTED;
+        }
     }
 
     // consume committed bytes until the line ends

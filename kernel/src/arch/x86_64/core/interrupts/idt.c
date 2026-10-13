@@ -23,12 +23,6 @@ typedef struct [[gnu::packed]] {
     uint32_t zero;
 } idt_entry_t;
 
-typedef struct {
-    arch_interrupt_regs_t regs;
-    uint64_t vector, error;
-    arch_interrupt_sregs_t state;
-} arch_interrupt_idt_frame_t;
-
 extern void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame);
 extern void x86_64_load_idt(idtr_t* idtr);
 

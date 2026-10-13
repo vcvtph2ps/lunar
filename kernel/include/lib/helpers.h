@@ -19,6 +19,14 @@
 #define ATOMIC_COMPARE_EXCHANGE_WEAK(OBJ, EXPECTED, DESIRED, SUCCESS_ORDER, FAILURE_ORDER) __atomic_compare_exchange_n((OBJ), (EXPECTED), (DESIRED), true, (SUCCESS_ORDER), (FAILURE_ORDER))
 #define ATOMIC_COMPARE_EXCHANGE_STRONG(OBJ, EXPECTED, DESIRED, SUCCESS_ORDER, FAILURE_ORDER) __atomic_compare_exchange_n((OBJ), (EXPECTED), (DESIRED), false, (SUCCESS_ORDER), (FAILURE_ORDER))
 
+/// @brief Count leading zeros
+/// @note: passing 0 is undefined behaviour
+#define COUNT_LEADING_ZEROS(x) __builtin_clzll((x))
+
+/// @brief Count trailing zeros
+/// @note: passing 0 is undefined behaviour
+#define COUNT_TRAILING_ZEROS(x) __builtin_ctzll((x))
+
 /**
  * @brief Get the container of a child struct.
  * @param PTR Pointer to the child struct

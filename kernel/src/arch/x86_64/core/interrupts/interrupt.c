@@ -132,6 +132,10 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         if(is_outmost_handler) {
             CPU_LOCAL_GET_CURRENT_THREAD()->common.in_interrupt_handler = false;
         }
+
+        if(frame->is_user) {
+            signal_deliver_pending(frame);
+        }
     }
 }
 

@@ -20,6 +20,9 @@ typedef struct {
     thread_t* thread;
     ATOMIC wait_obj_wait_type_t type;
 
+    /// @brief Whether a pending signal may abort this wait, userspace facing waits only
+    ATOMIC bool interruptible;
+
     ATOMIC size_t waiting_on;
     ATOMIC size_t signaled;
 

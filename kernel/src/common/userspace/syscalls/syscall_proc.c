@@ -243,7 +243,12 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
             return SYSCALL_RET_VALUE(0);
         }
 
-        sched_wait_single(&parent->child_exit_event, UINT64_MAX);
+        sched_wait_single_interruptible(&parent->child_exit_event, UINT64_MAX);
+
+        /// a signal interrupted the wait, let userspace handle it and retry if needed
+        if(sched_thread_interrupted()) {
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
+        }
     }
 }
 
