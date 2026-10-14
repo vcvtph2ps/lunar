@@ -33,7 +33,7 @@ static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, ui
 
     arch_pte_entry_t prev = table[index];
     arch_pte_entry_t entry = pte_make_leaf_entry(paddr, prot, cache, privilege, level, global);
-    __atomic_store_n(&table[index], entry, __ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&table[index], entry, ATOMIC_SEQ_CST);
 
     if(!pte_is_present(prev)) {
         ATOMIC_LOAD_ADD(&pagedb_get_page(pt_radix_table_pfn(table))->allocated.page_level_mapping_count, 1, ATOMIC_SEQ_CST);
@@ -63,6 +63,11 @@ static bool internal_ptm_physical(arch_pte_entry_t* top_level_page_table, uintpt
 }
 
 void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
+    if(length >= 64 * ARCH_PAGE_SIZE_4K) {
+        ptm_flush_tlb_all();
+        return;
+    }
+    
     for(; length > 0; length -= ARCH_PAGE_SIZE_4K, vaddr += ARCH_PAGE_SIZE_4K) asm volatile("sfence.vma %0, zero" ::"r"(vaddr) : "memory");
 }
 
@@ -131,7 +136,7 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
         }
 
         arch_pte_entry_t new_entry = pte_rewrite_leaf_entry(entry, prot, cache, privilege, level, global);
-        __atomic_store_n(&table[index], new_entry, __ATOMIC_SEQ_CST);
+        ATOMIC_STORE(&table[index], new_entry, ATOMIC_SEQ_CST);
 
         i += pte_level_page_size(level);
     }
@@ -180,7 +185,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
             }
         }
 
-        __atomic_store_n(&table[index], 0, __ATOMIC_SEQ_CST);
+        ATOMIC_STORE(&table[index], 0, ATOMIC_SEQ_CST);
 
         if(!no_pagedb) {
             uint64_t num_4k_pages = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
@@ -195,7 +200,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
 
             if(old_count != 1) break;
 
-            __atomic_store_n(&step->table[step->index], 0, __ATOMIC_SEQ_CST);
+            ATOMIC_STORE(&step->table[step->index], 0, ATOMIC_SEQ_CST);
             pmm_free_page((uintptr_t) PTM_FROM_HHDM(child->table));
         }
 

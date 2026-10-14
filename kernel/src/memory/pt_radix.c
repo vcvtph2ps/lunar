@@ -26,7 +26,7 @@ arch_pte_entry_t pt_radix_break_large(arch_pte_entry_t* table, uint32_t index, u
     ATOMIC_STORE(&pagedb_get_page(child_table_phys / ARCH_PAGE_SIZE_4K)->allocated.page_level_mapping_count, 512, ATOMIC_RELAXED);
 
     arch_pte_entry_t parent_entry = pte_make_table_from_large(entry, child_table_phys);
-    __atomic_store_n(&table[index], parent_entry, __ATOMIC_SEQ_CST);
+    ATOMIC_STORE(&table[index], parent_entry, ATOMIC_RELEASE);
 
     return parent_entry;
 }
@@ -44,6 +44,7 @@ pt_radix_walk_result_t pt_radix_walk(arch_pte_entry_t* top_level_table, virt_add
         };
 
         arch_pte_entry_t entry = current_table[index];
+        bool dirty = false;
 
         if(!pte_is_present(entry)) {
             if(!allocate) return PT_RADIX_WALK_NOT_FOUND;
@@ -53,6 +54,7 @@ pt_radix_walk_result_t pt_radix_walk(arch_pte_entry_t* top_level_table, virt_add
             if(page == 0) return PT_RADIX_WALK_NOMEM;
 
             entry = pte_make_new_table((phys_addr_t) page, prot, privilege);
+            dirty = true;
 
             ATOMIC_LOAD_ADD(&pagedb_get_page(pt_radix_table_pfn(current_table))->allocated.page_level_mapping_count, 1, ATOMIC_SEQ_CST);
         } else if(pte_is_large(entry, level)) {
@@ -62,8 +64,11 @@ pt_radix_walk_result_t pt_radix_walk(arch_pte_entry_t* top_level_table, virt_add
         }
 
         if(allocate) {
-            entry = pte_widen_table_entry(entry, prot, privilege);
-            __atomic_store_n(&current_table[index], entry, __ATOMIC_SEQ_CST);
+            arch_pte_entry_t widened = pte_widen_table_entry(entry, prot, privilege);
+            if(dirty || widened != entry) {
+                ATOMIC_STORE(&current_table[index], widened, ATOMIC_RELEASE);
+            }
+            entry = widened;
         }
 
         current_table = (arch_pte_entry_t*) PTM_TO_HHDM(pte_get_table_phys(entry));
