@@ -3,6 +3,7 @@
 #include <common/cpu_local.h>
 #include <common/interrupts/dw.h>
 #include <common/log.h>
+#include <common/sched/process.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
@@ -15,7 +16,6 @@
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
-#include <common/sched/process.h>
 #include <uapi/signal.h>
 
 vm_address_space_t* g_vm_global_address_space;
@@ -154,7 +154,7 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
                 if(!ptm_physical(region->address_space, address + i, &phys)) continue;
 
                 pagedb_page_t* page = pagedb_get_page(phys / ARCH_PAGE_SIZE_4K);
-                if(page != nullptr && ATOMIC_LOAD(&page->map_count, ATOMIC_RELAXED) == 1) {
+                if(page != nullptr && ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED) == 1) {
                     pmm_free_page(phys);
                 }
             }

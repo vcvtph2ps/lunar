@@ -9,13 +9,9 @@
 
 typedef uint8_t pmm_flag_t;
 
-typedef struct pmm_entry {
-    struct pmm_entry* next;
-} pmm_entry_t;
-
 typedef struct {
     size_t num_pages;
-    pmm_entry_t* free_list;
+    uint64_t free_list_pfn;
     spinlock_no_dw_t pmm_lock;
 } pmm_t;
 

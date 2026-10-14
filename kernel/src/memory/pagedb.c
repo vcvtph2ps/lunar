@@ -33,23 +33,45 @@ pagedb_page_t* pagedb_get_page(uint64_t pfn) {
 uint32_t pagedb_page_ref(uint64_t pfn) {
     pagedb_page_t* page = pagedb_get_page(pfn);
     assert(page != nullptr);
-    return ATOMIC_LOAD_ADD(&page->ref_count, 1, ATOMIC_ACQUIRE) + 1;
+    assert(ATOMIC_LOAD(&page->type, ATOMIC_ACQUIRE) == PAGEDB_ENTRY_TYPE_ALLOCATED);
+    return ATOMIC_LOAD_ADD(&page->allocated.ref_count, 1, ATOMIC_ACQUIRE) + 1;
 }
 
 uint32_t pagedb_page_deref(uint64_t pfn) {
     pagedb_page_t* page = pagedb_get_page(pfn);
     assert(page != nullptr);
-    return ATOMIC_LOAD_SUB(&page->ref_count, 1, ATOMIC_RELEASE) - 1;
+    assert(ATOMIC_LOAD(&page->type, ATOMIC_ACQUIRE) == PAGEDB_ENTRY_TYPE_ALLOCATED);
+    return ATOMIC_LOAD_SUB(&page->allocated.ref_count, 1, ATOMIC_RELEASE) - 1;
 }
 
 uint32_t pagedb_page_map(uint64_t pfn) {
     pagedb_page_t* page = pagedb_get_page(pfn);
     assert(page != nullptr);
-    return ATOMIC_LOAD_ADD(&page->map_count, 1, ATOMIC_ACQUIRE) + 1;
+    assert(ATOMIC_LOAD(&page->type, ATOMIC_ACQUIRE) == PAGEDB_ENTRY_TYPE_ALLOCATED);
+    return ATOMIC_LOAD_ADD(&page->allocated.map_count, 1, ATOMIC_ACQUIRE) + 1;
 }
 
 uint32_t pagedb_page_unmap(uint64_t pfn) {
     pagedb_page_t* page = pagedb_get_page(pfn);
     assert(page != nullptr);
-    return ATOMIC_LOAD_SUB(&page->map_count, 1, ATOMIC_RELEASE) - 1;
+    assert(ATOMIC_LOAD(&page->type, ATOMIC_ACQUIRE) == PAGEDB_ENTRY_TYPE_ALLOCATED);
+    return ATOMIC_LOAD_SUB(&page->allocated.map_count, 1, ATOMIC_RELEASE) - 1;
+}
+
+void pagedb_set_page_state(uint64_t pfn, uint8_t entry_type) {
+    pagedb_page_t* page = pagedb_get_page(pfn);
+    if(page == nullptr) {
+        arch_panic("called pagedb_set_page_state on invalid page");
+    }
+
+    ATOMIC_STORE(&page->type, entry_type, ATOMIC_RELAXED);
+    if(entry_type == PAGEDB_ENTRY_TYPE_FREE) {
+        ATOMIC_STORE(&page->free.next_pfn, 0, ATOMIC_RELAXED);
+    } else if(entry_type == PAGEDB_ENTRY_TYPE_ALLOCATED) {
+        ATOMIC_STORE(&page->allocated.ref_count, 0, ATOMIC_RELAXED);
+        ATOMIC_STORE(&page->allocated.map_count, 0, ATOMIC_RELAXED);
+        ATOMIC_STORE(&page->allocated.page_level_mapping_count, 0, ATOMIC_RELAXED);
+    } else {
+        arch_panic("called pagedb_set_page with invaild state");
+    }
 }
