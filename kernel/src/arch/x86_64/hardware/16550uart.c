@@ -158,12 +158,14 @@ static int serial_test(uint16_t port) {
         arch_io_port_write_u8(port + SERIAL_TX_BUFF, SERIAL_TEST_MAGIC);
         for(int i = 0; i < 256; i++) arch_io_wait();
 
-        if(arch_io_port_read_u8(port + SERIAL_RX_BUFF) == SERIAL_TEST_MAGIC) return 2;
+        if(arch_io_port_read_u8(port + SERIAL_RX_BUFF) == SERIAL_TEST_MAGIC)
+            return 2;
     }
 
     // fallback test to just make sure it exists at all
     arch_io_port_write_u8(port + SERIAL_SCRATCH_REG, SERIAL_TEST_MAGIC);
-    if(arch_io_port_read_u8(port + SERIAL_SCRATCH_REG) == SERIAL_TEST_MAGIC) return 1;
+    if(arch_io_port_read_u8(port + SERIAL_SCRATCH_REG) == SERIAL_TEST_MAGIC)
+        return 1;
     return 0;
 }
 
@@ -183,7 +185,8 @@ int arch_16550uart_data_ready(arch_16550uart_t* uart) {
 
 void arch_16550uart_send(arch_16550uart_t* uart, char c) {
     for(int i = 0; i < 100000; i++) {
-        if(arch_16550uart_transmit_empty(uart)) break;
+        if(arch_16550uart_transmit_empty(uart))
+            break;
         arch_spin_hint();
     }
     arch_io_wait();
@@ -192,7 +195,8 @@ void arch_16550uart_send(arch_16550uart_t* uart, char c) {
 }
 
 int arch_16550uart_read(arch_16550uart_t* uart) {
-    if(!arch_16550uart_data_ready(uart)) return -1;
+    if(!arch_16550uart_data_ready(uart))
+        return -1;
 
     arch_io_wait();
     uint8_t data = arch_io_port_read_u8(uart->uart_port + SERIAL_RX_BUFF);

@@ -20,7 +20,9 @@ rwlock_write_t* rwlock_lock_write(rwlock_t* lock) {
     for(;;) {
         expected = 0;
 
-        if(ATOMIC_COMPARE_EXCHANGE_WEAK(&lock->value, &expected, UINT32_MAX, ATOMIC_ACQUIRE, ATOMIC_RELAXED)) { return &lock->write_lock; }
+        if(ATOMIC_COMPARE_EXCHANGE_WEAK(&lock->value, &expected, UINT32_MAX, ATOMIC_ACQUIRE, ATOMIC_RELAXED)) {
+            return &lock->write_lock;
+        }
 
         arch_spin_hint();
     }
@@ -40,7 +42,9 @@ rwlock_read_t* rwlock_lock_read(rwlock_t* lock) {
         }
 
 
-        if(ATOMIC_COMPARE_EXCHANGE_WEAK(&lock->value, &old, old + 1, ATOMIC_ACQUIRE, ATOMIC_RELAXED)) { return &lock->read_lock; }
+        if(ATOMIC_COMPARE_EXCHANGE_WEAK(&lock->value, &old, old + 1, ATOMIC_ACQUIRE, ATOMIC_RELAXED)) {
+            return &lock->read_lock;
+        }
     }
 }
 

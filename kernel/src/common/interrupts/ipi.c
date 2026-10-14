@@ -37,7 +37,8 @@ void ipi_broadcast(ipi_message_t message) {
 
     uint64_t self = CPU_LOCAL_READ(core_id);
     for(uint32_t i = 0; i < g_init_boot_info->core_count; i++) {
-        if(i == self) continue;
+        if(i == self)
+            continue;
         ipi_send(i, message);
     }
 
@@ -66,7 +67,7 @@ bool ipi_pop(ipi_message_t* message) {
 
 void ipi_handle(ipi_message_t message) {
     switch(message.type) {
-        case IPI_TLB_FLUSH: ptm_flush_tlb(message.tlb_flush.vaddr, message.tlb_flush.length); break;
+        case IPI_TLB_FLUSH:     ptm_flush_tlb(message.tlb_flush.vaddr, message.tlb_flush.length); break;
         case IPI_TLB_FLUSH_ALL: ptm_flush_tlb_all(); break;
         case IPI_HALT:
             while(1) {

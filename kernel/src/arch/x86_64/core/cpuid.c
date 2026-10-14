@@ -51,7 +51,9 @@
 
 [[nodiscard]] const char* arch_cpuid_get_name_string() {
     uint32_t max_ext_leaf = arch_cpuid(0x80000000, 0, ARCH_CPUID_EAX);
-    if(max_ext_leaf < 0x80000004) { return "Unknown CPU :("; }
+    if(max_ext_leaf < 0x80000004) {
+        return "Unknown CPU :(";
+    }
 
     static char name[49];
 

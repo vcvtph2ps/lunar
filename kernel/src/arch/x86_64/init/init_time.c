@@ -25,7 +25,9 @@ static void register_timer(timer_registry_t* registry, time_timer_t* timer) {
     if(timer) {
         registry->timers[registry->count++] = timer;
         bool is_best = registry->best_timer == nullptr || timer->score > registry->best_timer->score;
-        if(is_best) { registry->best_timer = timer; }
+        if(is_best) {
+            registry->best_timer = timer;
+        }
         LOG_OKAY("found timer: %s%s\n", timer->name, is_best ? " (best)" : "");
     }
 }
@@ -38,5 +40,7 @@ void init_stage_time(uint32_t core_id) {
     register_timer(&registry, arch_tsc_init_timer(registry.best_timer));
     arch_lapic_timer_init(core_id, registry.best_timer);
 
-    if(INIT_CORE_IS_BSP(core_id)) { time_init(registry.best_timer); }
+    if(INIT_CORE_IS_BSP(core_id)) {
+        time_init(registry.best_timer);
+    }
 }

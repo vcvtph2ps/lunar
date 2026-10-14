@@ -35,7 +35,9 @@ typedef struct ec_device {
 
 static bool ec_wait_ibf_clear(ec_device_t* device) {
     for(uint32_t i = 0; i < EC_TIMEOUT_ITERATIONS; ++i) {
-        if((arch_io_port_read_u8(device->command_port) & EC_STATUS_IBF) == 0) { return true; }
+        if((arch_io_port_read_u8(device->command_port) & EC_STATUS_IBF) == 0) {
+            return true;
+        }
         arch_io_wait();
     }
     return false;
@@ -43,7 +45,9 @@ static bool ec_wait_ibf_clear(ec_device_t* device) {
 
 static bool ec_wait_obf_set(ec_device_t* device) {
     for(uint32_t i = 0; i < EC_TIMEOUT_ITERATIONS; ++i) {
-        if((arch_io_port_read_u8(device->command_port) & EC_STATUS_OBF) != 0) { return true; }
+        if((arch_io_port_read_u8(device->command_port) & EC_STATUS_OBF) != 0) {
+            return true;
+        }
         arch_io_wait();
     }
     return false;
@@ -84,7 +88,9 @@ static bool ec_write(ec_device_t* device, uint8_t addr, uint8_t data) {
 static uacpi_iteration_decision ec_parse_crs(void* ctx, uacpi_resource* resource) {
     ec_device_t* ec = (ec_device_t*) ctx;
 
-    if(resource->type != UACPI_RESOURCE_TYPE_IO) { return UACPI_ITERATION_DECISION_CONTINUE; }
+    if(resource->type != UACPI_RESOURCE_TYPE_IO) {
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }
     uacpi_resource_io* r = &resource->io;
 
     if(ec->data_port == 0)
@@ -118,7 +124,9 @@ static uacpi_status ec_region_handler(uacpi_region_op op, uacpi_handle op_data) 
             bool status = ec_read(ec, addr, &value);
             spinlock_nodw_unlock(&ec->lock);
 
-            if(!status) { arch_panic("ec: read failed for address 0x%02x\n", addr); }
+            if(!status) {
+                arch_panic("ec: read failed for address 0x%02x\n", addr);
+            }
 
             data->value = value;
             LOG_KTRC("ec: read addr=0x%02x -> 0x%02x\n", addr, (uint8_t) value);
@@ -134,7 +142,9 @@ static uacpi_status ec_region_handler(uacpi_region_op op, uacpi_handle op_data) 
             spinlock_nodw_lock(&ec->lock);
             bool status = ec_write(ec, addr, (uint8_t) data->value);
             spinlock_nodw_unlock(&ec->lock);
-            if(!status) { arch_panic("ec: write failed for address 0x%02x\n", addr); }
+            if(!status) {
+                arch_panic("ec: write failed for address 0x%02x\n", addr);
+            }
             return UACPI_STATUS_OK;
         }
         default: return UACPI_STATUS_OK;
@@ -199,7 +209,9 @@ static uacpi_iteration_decision ec_find_callback(void* user, uacpi_namespace_nod
 }
 
 void arch_ec_init(uint32_t core_id) {
-    if(!INIT_CORE_IS_BSP(core_id)) { return; }
+    if(!INIT_CORE_IS_BSP(core_id)) {
+        return;
+    }
 
     const char* ec_ids[] = { "PNP0C09", nullptr };
     uacpi_status status = uacpi_find_devices_at(uacpi_namespace_root(), ec_ids, ec_find_callback, nullptr);

@@ -75,7 +75,9 @@ static inline uint16_t pcie_status(pci_device_t* pci_device) {
 }
 
 static inline int pcie_capability_pointer(pci_device_t* pci_device) {
-    if(!(pcie_status(pci_device) & PCI_STATUS_CAPABILITIES_LIST)) { return 0; }
+    if(!(pcie_status(pci_device) & PCI_STATUS_CAPABILITIES_LIST)) {
+        return 0;
+    }
     return pci_device_read_u32(&pci_device->access, PCI_REGISTER_CAPABILITY_POINTER) & 0xfc;
 }
 
@@ -132,9 +134,15 @@ static void parse_capabilities(pci_device_t* pci_device) {
 }
 
 static pci_bar_type_t get_bar_type(uint32_t bar_value) {
-    if(bar_value == 0) { return PCI_BAR_TYPE_NONE; }
-    if(bar_value & 0x1) { return PCI_BAR_TYPE_IO; }
-    if((bar_value & 0x6) == 0x4) { return PCI_BAR_TYPE_MMIO_64; }
+    if(bar_value == 0) {
+        return PCI_BAR_TYPE_NONE;
+    }
+    if(bar_value & 0x1) {
+        return PCI_BAR_TYPE_IO;
+    }
+    if((bar_value & 0x6) == 0x4) {
+        return PCI_BAR_TYPE_MMIO_64;
+    }
     return PCI_BAR_TYPE_MMIO_32;
 }
 
@@ -149,7 +157,9 @@ static size_t probe_bar(pci_device_t* pci_device, size_t bar_index) {
 
 static size_t get_bar_size(pci_device_t* pci_device, uint32_t bar_value, size_t bar_index) {
     pci_bar_type_t bar_type = get_bar_type(bar_value);
-    if(bar_type == PCI_BAR_TYPE_NONE) { return 0; }
+    if(bar_type == PCI_BAR_TYPE_NONE) {
+        return 0;
+    }
 
     uint16_t command_byte = pci_device_read_u16(&pci_device->access, PCI_REGISTER_STATUS_COMMAND + 4);
     pci_device_write_u16(&pci_device->access, PCI_REGISTER_STATUS_COMMAND + 4, command_byte & 0x2); // apparently we must disable memory and i/o space decoding
@@ -157,19 +167,25 @@ static size_t get_bar_size(pci_device_t* pci_device, uint32_t bar_value, size_t 
     switch(bar_type) {
         case PCI_BAR_TYPE_IO: {
             uint32_t size = (uint32_t) probe_bar(pci_device, bar_index) & 0xfffffffc;
-            if(size == 0) { return 0; }
+            if(size == 0) {
+                return 0;
+            }
             return (~size) + 1;
         } break;
         case PCI_BAR_TYPE_MMIO_32: {
             uint32_t size = (uint32_t) probe_bar(pci_device, bar_index) & 0xfffffffc;
-            if(size == 0) { return 0; }
+            if(size == 0) {
+                return 0;
+            }
             return (~size) + 1;
         } break;
         case PCI_BAR_TYPE_MMIO_64: {
             uint32_t size_low = (uint32_t) probe_bar(pci_device, bar_index) & 0xfffffff0;
             uint32_t size_high = (uint32_t) probe_bar(pci_device, bar_index + 1);
             uint64_t size = ((uint64_t) size_high << 32) | size_low;
-            if(size == 0) { return 0; }
+            if(size == 0) {
+                return 0;
+            }
             return (~size) + 1;
         } break;
         default: return 0;
@@ -182,8 +198,12 @@ static bool fill_device_info(pci_device_t* pci_device) {
     uint32_t vendor_device = pci_device_read_u32(&pci_device->access, PCI_REGISTER_VENDOR_DEVICE);
     pci_device->device_info.vendor = vendor_device & 0xffff;
     pci_device->device_info.device = vendor_device >> 16;
-    if(pci_device->device_info.vendor == 0 || pci_device->device_info.vendor == 0xffff) { return false; }
-    if(pci_device->device_info.device == 0 || pci_device->device_info.device == 0xffff) { return false; }
+    if(pci_device->device_info.vendor == 0 || pci_device->device_info.vendor == 0xffff) {
+        return false;
+    }
+    if(pci_device->device_info.device == 0 || pci_device->device_info.device == 0xffff) {
+        return false;
+    }
 
     uint32_t class_revision = pci_device_read_u32(&pci_device->access, PCI_REGISTER_CLASS_REVISION);
 
@@ -230,7 +250,9 @@ static bool fill_device_info(pci_device_t* pci_device) {
         uint32_t bar_value = pci_device_read_u32(&pci_device->access, PCI_REGISTER_BAR(bar_index));
 
         pci_bar_type_t bar_type = get_bar_type(bar_value);
-        if(bar_type == PCI_BAR_TYPE_NONE) { continue; }
+        if(bar_type == PCI_BAR_TYPE_NONE) {
+            continue;
+        }
 
         pci_device->device_info.bars[bar_index].type = bar_type;
         switch(bar_type) {
@@ -248,16 +270,20 @@ static bool fill_device_info(pci_device_t* pci_device) {
             default: break;
         }
         pci_device->device_info.bars[bar_index].size = get_bar_size(pci_device, bar_value, bar_index);
-        if(bar_type == PCI_BAR_TYPE_MMIO_64) bar_index++;
+        if(bar_type == PCI_BAR_TYPE_MMIO_64)
+            bar_index++;
     }
 
     return true;
 }
 
 bool pci_create_device(pci_host_bridge_t* pci_host_bridge, pci_device_t* parent_bridge, uint8_t bus, uint8_t device, uint8_t function, pci_device_t** out_device) {
-    if(bus < pci_host_bridge->start_bus_number || bus > pci_host_bridge->end_bus_number) return false;
+    if(bus < pci_host_bridge->start_bus_number || bus > pci_host_bridge->end_bus_number)
+        return false;
     pci_device_t* pci_device = heap_alloc(sizeof(pci_device_t));
-    if(!pci_device) { return false; }
+    if(!pci_device) {
+        return false;
+    }
 
     memory_zero(pci_device, sizeof(pci_device_t));
 

@@ -24,6 +24,8 @@
     log_print_lockless(LOG_LEVEL_FAIL, "     ((____|    )_-\\ \\_-\\`\n");
     log_print_lockless(LOG_LEVEL_FAIL, "     `-----'`-----` `--`\n");
 
-    while(1) { asm volatile("wfi"); }
+    while(1) {
+        asm volatile("wfi");
+    }
     __builtin_unreachable();
 }

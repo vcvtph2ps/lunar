@@ -55,10 +55,12 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
 /// Find last region within a segment.
 static vm_region_t* find_region(vm_address_space_t* address_space, uintptr_t address, size_t length) {
     rb_node_t* node = rb_find(&address_space->regions_tree, address + length, RB_SEARCH_TYPE_NEAREST_LT);
-    if(node == nullptr) return nullptr;
+    if(node == nullptr)
+        return nullptr;
 
     vm_region_t* region = CONTAINER_OF(node, vm_region_t, region_tree_node);
-    if(region->base + region->length > address) return region;
+    if(region->base + region->length > address)
+        return region;
 
     return nullptr;
 }
@@ -79,7 +81,8 @@ static bool find_hole_aligned(vm_address_space_t* address_space, uintptr_t addre
 
     address = ALIGN_UP(address_space->start, align);
     while(true) {
-        if(!segment_in_bounds(address, length, address_space->start, address_space->end)) return false;
+        if(!segment_in_bounds(address, length, address_space->start, address_space->end))
+            return false;
 
         vm_region_t* region = find_region(address_space, address, length);
         if(region == nullptr) {
@@ -103,12 +106,16 @@ static bool find_hole(vm_address_space_t* address_space, uintptr_t address, size
     size_t candidates[3];
     size_t count = 0;
 
-    if(align <= PAGE_SIZE_HUGE) candidates[count++] = PAGE_SIZE_HUGE;
-    if(align <= PAGE_SIZE_LARGE) candidates[count++] = PAGE_SIZE_LARGE;
-    if(count == 0 || candidates[count - 1] != align) candidates[count++] = align;
+    if(align <= PAGE_SIZE_HUGE)
+        candidates[count++] = PAGE_SIZE_HUGE;
+    if(align <= PAGE_SIZE_LARGE)
+        candidates[count++] = PAGE_SIZE_LARGE;
+    if(count == 0 || candidates[count - 1] != align)
+        candidates[count++] = align;
 
     for(size_t i = 0; i < count; ++i) {
-        if(find_hole_aligned(address_space, address, length, candidates[i], hole)) return true;
+        if(find_hole_aligned(address_space, address, length, candidates[i], hole))
+            return true;
     }
     return false;
 }
@@ -136,7 +143,17 @@ static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
             }
             break;
         case VM_REGION_TYPE_DIRECT:
-            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, region->no_pagedb))
+            if(!ptm_map(
+                   region->address_space,
+                   address,
+                   region->type_data.direct.physical_address + (address - region->base),
+                   length,
+                   region->protection,
+                   region->cache,
+                   is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER,
+                   is_global,
+                   region->no_pagedb
+               ))
                 return false;
             break;
     }
@@ -148,7 +165,9 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
     assert(address >= region->base && address + length <= region->base + region->length);
 
     if(region->type == VM_REGION_TYPE_ANON) {
-        enum { UNMAP_BATCH_PAGES = 32 };
+        enum {
+            UNMAP_BATCH_PAGES = 32
+        };
         uintptr_t batch_phys[UNMAP_BATCH_PAGES];
 
         size_t i = 0;
@@ -158,7 +177,8 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
 
             for(; i < length && (i - batch_start) / PAGE_SIZE_DEFAULT < UNMAP_BATCH_PAGES; i += PAGE_SIZE_DEFAULT) {
                 uintptr_t phys;
-                if(!ptm_physical(region->address_space, address + i, &phys)) continue;
+                if(!ptm_physical(region->address_space, address + i, &phys))
+                    continue;
 
                 pagedb_page_t* page = pagedb_get_page(phys / ARCH_PAGE_SIZE_4K);
                 if(page != nullptr && ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED) == 1) {
@@ -181,20 +201,29 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
 
 /// Check whether the flags of a region are compatible with each other.
 static bool regions_mergeable(vm_region_t* left, vm_region_t* right) {
-    if(left->type != right->type) return false;
-    if(left->base + left->length != right->base) return false;
-    if(!prot_equals(left->protection, right->protection)) return false;
-    if(left->cache != right->cache) return false;
-    if(left->dynamically_backed != right->dynamically_backed) return false;
-    if(left->no_pagedb != right->no_pagedb) return false;
+    if(left->type != right->type)
+        return false;
+    if(left->base + left->length != right->base)
+        return false;
+    if(!prot_equals(left->protection, right->protection))
+        return false;
+    if(left->cache != right->cache)
+        return false;
+    if(left->dynamically_backed != right->dynamically_backed)
+        return false;
+    if(left->no_pagedb != right->no_pagedb)
+        return false;
 
     switch(left->type) {
         case VM_REGION_TYPE_ANON:
-            if(left->type_data.anon.back_zeroed != right->type_data.anon.back_zeroed) return false;
+            if(left->type_data.anon.back_zeroed != right->type_data.anon.back_zeroed)
+                return false;
             break;
         case VM_REGION_TYPE_DIRECT:
-            if(!segment_in_bounds(left->type_data.direct.physical_address, left->length, 0, ARCH_MEM_PHYS_MAX)) return false;
-            if(left->type_data.direct.physical_address + left->length != right->type_data.direct.physical_address) return false;
+            if(!segment_in_bounds(left->type_data.direct.physical_address, left->length, 0, ARCH_MEM_PHYS_MAX))
+                return false;
+            if(left->type_data.direct.physical_address + left->length != right->type_data.direct.physical_address)
+                return false;
             break;
     }
 
@@ -233,7 +262,8 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
         region[0].dynamically_backed = false;
 
         region_insert(g_vm_global_address_space, &region[0]);
-        if(!global_lock_acquired) spinlock_nodw_unlock(&g_vm_global_address_space->lock);
+        if(!global_lock_acquired)
+            spinlock_nodw_unlock(&g_vm_global_address_space->lock);
 
         spinlock_nodw_lock(&g_region_cache_lock);
         for(unsigned int i = 1; i < PAGE_SIZE_DEFAULT / sizeof(vm_region_t); i++) list_push(&g_region_cache, &region[i].region_cache_node);
@@ -310,26 +340,32 @@ static vm_region_t* region_insert(vm_address_space_t* address_space, vm_region_t
 }
 
 static vm_region_t* addr_to_region(vm_address_space_t* address_space, uintptr_t address) {
-    if(!address_in_bounds(address, address_space->start, address_space->end)) return nullptr;
+    if(!address_in_bounds(address, address_space->start, address_space->end))
+        return nullptr;
 
     rb_node_t* node = rb_find(&address_space->regions_tree, address, RB_SEARCH_TYPE_NEAREST_LTE);
-    if(node == nullptr) return nullptr;
+    if(node == nullptr)
+        return nullptr;
 
     vm_region_t* region = CONTAINER_OF(node, vm_region_t, region_tree_node);
-    if(!address_in_segment(address, region->base, region->length)) return nullptr;
+    if(!address_in_segment(address, region->base, region->length))
+        return nullptr;
 
     return region;
 }
 
 static bool address_space_fix_page(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
     vm_region_t* region = addr_to_region(address_space, vaddr);
-    if(region == nullptr) return false;
+    if(region == nullptr)
+        return false;
 
     if(reason == VM_FAULT_NOT_PRESENT) {
-        if(!region->dynamically_backed) return false;
+        if(!region->dynamically_backed)
+            return false;
         return region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT);
     } else if(reason == VM_FAULT_WRITE_TO_RO) {
-        if(!region->protection.write) return false;
+        if(!region->protection.write)
+            return false;
         return ptm_cow_fault(address_space, vaddr, region->protection, region->cache, region->address_space == g_vm_global_address_space);
     }
 
@@ -337,15 +373,18 @@ static bool address_space_fix_page(vm_address_space_t* address_space, vm_fault_r
 }
 
 static bool memory_exists(vm_address_space_t* address_space, uintptr_t address, size_t length) {
-    if(!address_in_bounds(address, address_space->start, address_space->end) || !address_in_bounds(address + length, address_space->start, address_space->end)) return false;
+    if(!address_in_bounds(address, address_space->start, address_space->end) || !address_in_bounds(address + length, address_space->start, address_space->end))
+        return false;
 
     uintptr_t top = address + length;
     while(top > address) {
         rb_node_t* node = rb_find(&address_space->regions_tree, top, RB_SEARCH_TYPE_NEAREST_LT);
-        if(node == nullptr) return false;
+        if(node == nullptr)
+            return false;
 
         vm_region_t* region = CONTAINER_OF(node, vm_region_t, region_tree_node);
-        if(region->base + region->length < top) return false;
+        if(region->base + region->length < top)
+            return false;
 
         top = region->base;
     }
@@ -353,7 +392,8 @@ static bool memory_exists(vm_address_space_t* address_space, uintptr_t address, 
 }
 
 static void rewrite_common(vm_address_space_t* address_space, void* address, size_t length, rewrite_type_t type, vm_protection_t prot, vm_cache_t cache) {
-    if(length == 0) return;
+    if(length == 0)
+        return;
 
     assert((uintptr_t) address % PAGE_SIZE_DEFAULT == 0);
     assert(length % PAGE_SIZE_DEFAULT == 0);
@@ -369,15 +409,18 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
         if(split_region->base + split_region->length > current_address) {
             uintptr_t split_base = current_address;
             size_t split_length = (split_region->base + split_region->length) - split_base;
-            if(split_length > length) split_length = length;
+            if(split_length > length)
+                split_length = length;
 
             switch(type) {
                 case REWRITE_TYPE_DELETE: region_unmap(split_region, split_base, split_length); goto l_no_clone;
                 case REWRITE_TYPE_CACHE:
-                    if(split_region->cache == cache) goto l_skip;
+                    if(split_region->cache == cache)
+                        goto l_skip;
                     break;
                 case REWRITE_TYPE_PROTECTION:
-                    if(prot_equals(split_region->protection, prot)) goto l_skip;
+                    if(prot_equals(split_region->protection, prot))
+                        goto l_skip;
                     break;
             }
 
@@ -417,25 +460,30 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
 
     while(current_address < ((uintptr_t) address + length)) {
         node = rb_find(&address_space->regions_tree, current_address, RB_SEARCH_TYPE_NEAREST_GTE);
-        if(node == nullptr) break;
+        if(node == nullptr)
+            break;
 
         vm_region_t* split_region = CONTAINER_OF(node, vm_region_t, region_tree_node);
 
-        if(split_region->base >= ((uintptr_t) address + length)) break;
+        if(split_region->base >= ((uintptr_t) address + length))
+            break;
 
         current_address = split_region->base + split_region->length;
 
         size_t split_length = ((uintptr_t) address + length) - split_region->base;
-        if(split_length > split_region->length) split_length = split_region->length;
+        if(split_length > split_region->length)
+            split_length = split_region->length;
         uintptr_t split_base = split_region->base;
 
         switch(type) {
             case REWRITE_TYPE_DELETE: region_unmap(split_region, split_region->base, split_length); goto r_no_clone;
             case REWRITE_TYPE_CACHE:
-                if(split_region->cache == cache) goto r_skip;
+                if(split_region->cache == cache)
+                    goto r_skip;
                 break;
             case REWRITE_TYPE_PROTECTION:
-                if(prot_equals(split_region->protection, prot)) goto r_skip;
+                if(prot_equals(split_region->protection, prot))
+                    goto r_skip;
                 break;
         }
 
@@ -560,7 +608,8 @@ void vm_rewrite_cache(vm_address_space_t* address_space, void* address, size_t l
 }
 
 size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* src, size_t count) {
-    if(!memory_exists(dest_as, dest_addr, count)) return 0;
+    if(!memory_exists(dest_as, dest_addr, count))
+        return 0;
     size_t i = 0;
 
     uintptr_t src_ptr = (uintptr_t) src;
@@ -568,7 +617,8 @@ size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* 
         size_t offset = (dest_addr + i) % PAGE_SIZE_DEFAULT;
         uintptr_t phys;
         if(!ptm_physical(dest_as, dest_addr + i, &phys)) {
-            if(!address_space_fix_page(dest_as, VM_FAULT_NOT_PRESENT, dest_addr + i)) return i;
+            if(!address_space_fix_page(dest_as, VM_FAULT_NOT_PRESENT, dest_addr + i))
+                return i;
             bool success = ptm_physical(dest_as, dest_addr + i, &phys);
             assert(success);
         }
@@ -582,7 +632,8 @@ size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* 
 }
 
 size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, size_t count) {
-    if(!memory_exists(src_as, src_addr, count)) return 0;
+    if(!memory_exists(src_as, src_addr, count))
+        return 0;
     size_t i = 0;
 
     uintptr_t dest_ptr = (uintptr_t) dest;
@@ -590,7 +641,8 @@ size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, 
         size_t offset = (src_addr + i) % PAGE_SIZE_DEFAULT;
         uintptr_t phys;
         if(!ptm_physical(src_as, src_addr + i, &phys)) {
-            if(!address_space_fix_page(src_as, VM_FAULT_NOT_PRESENT, src_addr + i)) return i;
+            if(!address_space_fix_page(src_as, VM_FAULT_NOT_PRESENT, src_addr + i))
+                return i;
             bool success = ptm_physical(src_as, src_addr + i, &phys);
             assert(success);
         }
@@ -611,7 +663,8 @@ bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t addr, size_t 
     for(virt_addr_t i = addr; i < addr + size; i += PAGE_SIZE_DEFAULT) {
         phys_addr_t phys;
         if(!ptm_physical(target_as, i, &phys)) {
-            if(!address_space_fix_page(target_as, VM_FAULT_NOT_PRESENT, i)) return false;
+            if(!address_space_fix_page(target_as, VM_FAULT_NOT_PRESENT, i))
+                return false;
             bool success = ptm_physical(target_as, i, &phys);
             assert(success);
         }
@@ -691,14 +744,17 @@ static void vm_fault_dw(void* data) {
 }
 
 bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
-    if(fault == VM_FAULT_UKKNOWN) return false;
-    if(address_in_bounds(address, g_vm_global_address_space->start, g_vm_global_address_space->end)) return false;
+    if(fault == VM_FAULT_UKKNOWN)
+        return false;
+    if(address_in_bounds(address, g_vm_global_address_space->start, g_vm_global_address_space->end))
+        return false;
 
     thread_t* current_thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
     assert(!current_thread->vm_fault.in_process);
 
     process_t* process = current_thread->process;
-    if(process == nullptr) return false;
+    if(process == nullptr)
+        return false;
 
     current_thread->vm_fault.in_process = true;
     current_thread->vm_fault.reason = fault;

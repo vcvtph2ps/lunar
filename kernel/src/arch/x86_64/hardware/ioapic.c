@@ -212,8 +212,10 @@ void arch_ioapic_map_gsi(uint8_t gsi, uint8_t lapic_id, bool low_polarity, bool 
     redirect_entry &= ~((uint64_t) 0xFF << 56);
     redirect_entry |= ((uint64_t) lapic_id) << 56;
 
-    if(low_polarity) redirect_entry |= IOAPIC_PIN_POLARITY;
-    if(!trigger_mode) redirect_entry |= IOAPIC_TRIGGER_LEVEL;
+    if(low_polarity)
+        redirect_entry |= IOAPIC_PIN_POLARITY;
+    if(!trigger_mode)
+        redirect_entry |= IOAPIC_TRIGGER_LEVEL;
     uint32_t local_index;
     ioapic_t* ioapic = find_ioapic_by_gsi(gsi, &local_index);
     assert(ioapic && "ioapic must exist for gsi");

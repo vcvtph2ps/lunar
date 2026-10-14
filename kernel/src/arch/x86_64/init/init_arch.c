@@ -31,7 +31,9 @@ void init_stage_arch_cpu(uint32_t core_id) {
 
         LOG_KTRC("cr0=0x%016lx\n", arch_cr_read_cr0());
         LOG_KTRC("cr4=0x%016lx\n", arch_cr_read_cr4());
-        if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) { LOG_KTRC("xcr0=0x%016lx\n", arch_cr_read_xcr0()); }
+        if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
+            LOG_KTRC("xcr0=0x%016lx\n", arch_cr_read_xcr0());
+        }
         LOG_KTRC("efer=0x%016lx\n", arch_msr_read(ARCH_MSR_EFER));
         LOG_KTRC("active_gs=0x%016lx\n", arch_msr_read(ARCH_MSR_ACTIVE_GS_BASE));
 
@@ -44,7 +46,9 @@ void init_stage_arch_cpu(uint32_t core_id) {
         LOG_INFO("x2apic: %s\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC) ? "supported" : "not supported");
     }
 
-    if(INIT_CORE_IS_BSP(core_id)) { dw_init(); }
+    if(INIT_CORE_IS_BSP(core_id)) {
+        dw_init();
+    }
 
     arch_gdt_init();
     interrupt_init(core_id);

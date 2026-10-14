@@ -37,7 +37,8 @@ static uacpi_iteration_decision pci_enumerate_resources(void* ctx, uacpi_resourc
     switch(resource->type) {
         case UACPI_RESOURCE_TYPE_ADDRESS16: {
             uacpi_resource_address16* r = &resource->address16;
-            if(r->common.type != UACPI_RANGE_BUS) break;
+            if(r->common.type != UACPI_RANGE_BUS)
+                break;
 
             bridge->start_bus_number = r->minimum;
             bridge->end_bus_number = r->maximum;
@@ -45,7 +46,8 @@ static uacpi_iteration_decision pci_enumerate_resources(void* ctx, uacpi_resourc
         }
         case UACPI_RESOURCE_TYPE_ADDRESS32: {
             uacpi_resource_address32* r = &resource->address32;
-            if(r->common.type != UACPI_RANGE_BUS) break;
+            if(r->common.type != UACPI_RANGE_BUS)
+                break;
 
             bridge->start_bus_number = r->minimum;
             bridge->end_bus_number = r->maximum;
@@ -53,7 +55,8 @@ static uacpi_iteration_decision pci_enumerate_resources(void* ctx, uacpi_resourc
         }
         case UACPI_RESOURCE_TYPE_ADDRESS64: {
             uacpi_resource_address64* r = &resource->address64;
-            if(r->common.type != UACPI_RANGE_BUS) break;
+            if(r->common.type != UACPI_RANGE_BUS)
+                break;
 
             bridge->start_bus_number = r->minimum;
             bridge->end_bus_number = r->maximum;
@@ -61,7 +64,8 @@ static uacpi_iteration_decision pci_enumerate_resources(void* ctx, uacpi_resourc
         }
         case UACPI_RESOURCE_TYPE_ADDRESS64_EXTENDED: {
             uacpi_resource_address64_extended* r = &resource->address64_extended;
-            if(r->common.type != UACPI_RANGE_BUS) break;
+            if(r->common.type != UACPI_RANGE_BUS)
+                break;
 
             bridge->start_bus_number = r->minimum;
             bridge->end_bus_number = r->maximum;
@@ -78,7 +82,9 @@ static void determine_bus_number(acpi_pci_scan_ctx_t* scan_ctx) {
     uacpi_status st;
 
     st = uacpi_for_each_device_resource(scan_ctx->scan_parent_namespace_node, "_CRS", pci_enumerate_resources, scan_ctx->host_bridge);
-    if(uacpi_likely_success(st)) { return; }
+    if(uacpi_likely_success(st)) {
+        return;
+    }
 
     scan_ctx->host_bridge->end_bus_number = 0xff;
     LOG_WARN("ACPI: failed to enumerate _CRS for PCI root bridge %s, status=%s\n", uacpi_namespace_node_generate_absolute_path(scan_ctx->scan_parent_namespace_node), uacpi_status_to_string(st));
@@ -133,8 +139,10 @@ static void parse_interrupt_table(pci_host_bridge_t* pci_host_bridge, uint8_t bu
                     }
                     interrupt_entry->gsi = irq->irqs[0];
 
-                    if(irq->triggering == UACPI_TRIGGERING_EDGE) interrupt_entry->level_trigger = false;
-                    if(irq->polarity == UACPI_POLARITY_ACTIVE_HIGH) interrupt_entry->active_low = false;
+                    if(irq->triggering == UACPI_TRIGGERING_EDGE)
+                        interrupt_entry->level_trigger = false;
+                    if(irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
+                        interrupt_entry->active_low = false;
                 } break;
                 case UACPI_RESOURCE_TYPE_EXTENDED_IRQ: {
                     uacpi_resource_extended_irq* irq = &resources->entries[0].extended_irq;
@@ -145,8 +153,10 @@ static void parse_interrupt_table(pci_host_bridge_t* pci_host_bridge, uint8_t bu
                     }
                     interrupt_entry->gsi = irq->irqs[0];
 
-                    if(irq->triggering == UACPI_TRIGGERING_EDGE) interrupt_entry->level_trigger = false;
-                    if(irq->polarity == UACPI_POLARITY_ACTIVE_HIGH) interrupt_entry->active_low = false;
+                    if(irq->triggering == UACPI_TRIGGERING_EDGE)
+                        interrupt_entry->level_trigger = false;
+                    if(irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
+                        interrupt_entry->active_low = false;
                 } break;
                 default: LOG_WARN("Unexpected resource type: %i\n", resources->entries[0].type); break;
             }
@@ -173,7 +183,8 @@ static uacpi_iteration_decision find_pci_device(void* param, uacpi_namespace_nod
     (void) depth;
 
     uacpi_status ret = uacpi_eval_integer(node, "_ADR", UACPI_NULL, &addr);
-    if(ret != UACPI_STATUS_OK && ret != UACPI_STATUS_NOT_FOUND) return UACPI_ITERATION_DECISION_CONTINUE;
+    if(ret != UACPI_STATUS_OK && ret != UACPI_STATUS_NOT_FOUND)
+        return UACPI_ITERATION_DECISION_CONTINUE;
 
     if(addr == ctx->addr) {
         ctx->out_node = node;
@@ -221,15 +232,21 @@ static void check_function(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* pci_func
         pci_function->device_info.header_type
     );
     LOG_KTRC("\tclass %02x:%02x.%02x (rev %02x)\n", pci_function->device_info.class_code, pci_function->device_info.subclass_code, pci_function->device_info.prog_if, pci_function->device_info.revision_id);
-    if(pci_function->device_info.is_bridge) { LOG_KTRC("\tsecondary bus %u\n", pci_function->device_info.bridge_info.secondary_bus); }
+    if(pci_function->device_info.is_bridge) {
+        LOG_KTRC("\tsecondary bus %u\n", pci_function->device_info.bridge_info.secondary_bus);
+    }
 
     list_push_back(&g_pci_devices, &pci_function->device_list_node);
-    if(pci_function->device_info.is_bridge) { check_bridge(scan_ctx, pci_function); }
+    if(pci_function->device_info.is_bridge) {
+        check_bridge(scan_ctx, pci_function);
+    }
 }
 
 static void check_device(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* parent_bridge, uint8_t bus, uint8_t device) {
     pci_device_t* pci_device;
-    if(!pci_create_device(scan_ctx->host_bridge, parent_bridge, bus, device, 0, &pci_device)) { return; }
+    if(!pci_create_device(scan_ctx->host_bridge, parent_bridge, bus, device, 0, &pci_device)) {
+        return;
+    }
 
     LOG_KTRC("PCI: Checking device %04x:%02x:%02x.0 vendor=%04x device=%04x\n", scan_ctx->host_bridge->segment, bus, device, pci_device->device_info.vendor, pci_device->device_info.device);
 
@@ -237,14 +254,18 @@ static void check_device(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* parent_bri
     if(pci_device->device_info.multifunction) {
         for(int function = 1; function < 8; ++function) {
             pci_device_t* pci_function;
-            if(!pci_create_device(scan_ctx->host_bridge, parent_bridge, bus, device, function, &pci_function)) { continue; }
+            if(!pci_create_device(scan_ctx->host_bridge, parent_bridge, bus, device, function, &pci_function)) {
+                continue;
+            }
             check_function(scan_ctx, pci_function);
         }
     }
 }
 
 static void check_bus(acpi_pci_scan_ctx_t* scan_ctx, pci_device_t* parent_bridge, uint8_t bus) {
-    for(int i = 0; i < 32; ++i) { check_device(scan_ctx, parent_bridge, bus, i); }
+    for(int i = 0; i < 32; ++i) {
+        check_device(scan_ctx, parent_bridge, bus, i);
+    }
 }
 
 static void enumerate_pci_bus(acpi_pci_scan_ctx_t* scan_ctx, uint16_t bus) {
@@ -263,7 +284,9 @@ static void enumerate_pci_bus(acpi_pci_scan_ctx_t* scan_ctx, uint16_t bus) {
 pci_ecam_region_t* pci_find_ecam_region(uint16_t segment, uint8_t bus) {
     for(size_t i = 0; i < g_pci_ecam_region_count; ++i) {
         pci_ecam_region_t* region = &g_pci_ecam_regions[i];
-        if(region->segment == segment && region->start_bus <= bus && region->end_bus >= bus) { return region; }
+        if(region->segment == segment && region->start_bus <= bus && region->end_bus >= bus) {
+            return region;
+        }
     }
     return nullptr;
 }
@@ -309,10 +332,18 @@ static uacpi_iteration_decision pci_iteration_callback(void* user, uacpi_namespa
 }
 
 static int pci_compare_address(const pci_device_access_t* a, const pci_device_access_t* b) {
-    if(a->segment != b->segment) { return a->segment < b->segment ? -1 : 1; }
-    if(a->bus != b->bus) { return a->bus < b->bus ? -1 : 1; }
-    if(a->device != b->device) { return a->device < b->device ? -1 : 1; }
-    if(a->function != b->function) { return a->function < b->function ? -1 : 1; }
+    if(a->segment != b->segment) {
+        return a->segment < b->segment ? -1 : 1;
+    }
+    if(a->bus != b->bus) {
+        return a->bus < b->bus ? -1 : 1;
+    }
+    if(a->device != b->device) {
+        return a->device < b->device ? -1 : 1;
+    }
+    if(a->function != b->function) {
+        return a->function < b->function ? -1 : 1;
+    }
     return 0;
 }
 
@@ -342,7 +373,9 @@ static void sort_pci_devices() {
         device_array[j] = key;
     }
 
-    for(size_t i = 0; i < count; ++i) { list_push_back(&g_pci_devices, &device_array[i]->device_list_node); }
+    for(size_t i = 0; i < count; ++i) {
+        list_push_back(&g_pci_devices, &device_array[i]->device_list_node);
+    }
     heap_free(device_array, sizeof(pci_device_t*) * count);
 }
 
@@ -441,7 +474,9 @@ bool pci_init() {
 
         for(int i = 0; i < 6; i++) {
             pci_bar_t* bar = &device->device_info.bars[i];
-            if(bar->type == PCI_BAR_TYPE_NONE) { continue; }
+            if(bar->type == PCI_BAR_TYPE_NONE) {
+                continue;
+            }
 
             LOG_INFO("\tBAR[%d] type=%d phys=0x%lx size=0x%lx\n", i, bar->type, bar->physical_base, bar->size);
         }

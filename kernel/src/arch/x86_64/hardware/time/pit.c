@@ -24,7 +24,8 @@ static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
     arch_interrupt_state_t irq_state = spinlock_noint_lock(&self->lock);
 
     uint64_t total_ticks = (PIT_FREQUENCY * microseconds) / 1000000ULL;
-    if(total_ticks == 0) total_ticks = 1;
+    if(total_ticks == 0)
+        total_ticks = 1;
 
     while(total_ticks > 0) {
         uint16_t chunk = (total_ticks > 0xFFFF) ? 0xFFFF : (uint16_t) total_ticks;
@@ -38,7 +39,8 @@ static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
             uint8_t lo = arch_io_port_read_u8(PIT_CHANNEL0);
             uint8_t hi = arch_io_port_read_u8(PIT_CHANNEL0);
             uint16_t current = ((uint16_t) hi << 8) | lo;
-            if(current > last) break;
+            if(current > last)
+                break;
             last = current;
         }
     }

@@ -30,7 +30,8 @@ static slab_cache_t* find_cache(size_t size) {
         cache = g_128x_slabs[MATH_DIV_CEIL(size, 128) - 1];
     } else {
         for(size_t i = 0; i < SLAB_OTHER_COUNT; i++) {
-            if(g_slab_other_sizes[i] < size) continue;
+            if(g_slab_other_sizes[i] < size)
+                continue;
             cache = g_other_slabs[i];
             break;
         }
@@ -40,8 +41,10 @@ static slab_cache_t* find_cache(size_t size) {
 }
 
 static inline void* internal_heap_alloc(size_t size) {
-    if(EXPECT_UNLIKELY(size == 0)) return nullptr;
-    if(EXPECT_UNLIKELY(size > g_slab_other_sizes[SLAB_OTHER_COUNT - 1])) return (void*) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+    if(EXPECT_UNLIKELY(size == 0))
+        return nullptr;
+    if(EXPECT_UNLIKELY(size > g_slab_other_sizes[SLAB_OTHER_COUNT - 1]))
+        return (void*) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
     return slab_cache_alloc(find_cache(size));
 }
 
@@ -55,17 +58,21 @@ void* heap_alloc(size_t size) {
 
 void* heap_zalloc(size_t size) {
     void* address = heap_alloc(size);
-    if(EXPECT_UNLIKELY(address == nullptr)) return nullptr;
+    if(EXPECT_UNLIKELY(address == nullptr))
+        return nullptr;
     memory_zero(address, size);
     return address;
 }
 
 void* heap_realloc(void* address, size_t current_size, size_t new_size) {
-    if(current_size == new_size) return address;
-    if(address == nullptr && new_size == 0) return address;
+    if(current_size == new_size)
+        return address;
+    if(address == nullptr && new_size == 0)
+        return address;
 
     void* new_address = heap_alloc(new_size);
-    if(address == nullptr || current_size == 0) return new_address;
+    if(address == nullptr || current_size == 0)
+        return new_address;
 
     memory_copy(new_address, address, current_size > new_size ? current_size : new_size);
     heap_free(address, current_size);
@@ -74,15 +81,20 @@ void* heap_realloc(void* address, size_t current_size, size_t new_size) {
 
 void* heap_reallocarray(void* array, size_t element_size, size_t current_count, size_t new_count) {
     size_t old_bytes;
-    if(__builtin_mul_overflow(current_count, element_size, &old_bytes)) { return nullptr; }
+    if(__builtin_mul_overflow(current_count, element_size, &old_bytes)) {
+        return nullptr;
+    }
 
     size_t new_bytes;
-    if(__builtin_mul_overflow(new_count, element_size, &new_bytes)) { return nullptr; }
+    if(__builtin_mul_overflow(new_count, element_size, &new_bytes)) {
+        return nullptr;
+    }
     return heap_realloc(array, old_bytes, new_bytes);
 }
 
 void heap_free(void* address, size_t size) {
-    if(EXPECT_UNLIKELY(address == nullptr)) return;
+    if(EXPECT_UNLIKELY(address == nullptr))
+        return;
     if(EXPECT_UNLIKELY(size > g_slab_other_sizes[SLAB_OTHER_COUNT - 1])) {
         vm_unmap(g_vm_global_address_space, (void*) address, ALIGN_UP(size, PAGE_SIZE_DEFAULT));
         return;

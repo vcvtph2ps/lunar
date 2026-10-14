@@ -24,7 +24,8 @@ static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, ui
 
     pt_radix_walk_path_t path;
     pt_radix_walk_result_t res = pt_radix_walk(top_level_page_table, vaddr, target_level, true, true, prot, privilege, &path);
-    if(res != PT_RADIX_WALK_OK) return false;
+    if(res != PT_RADIX_WALK_OK)
+        return false;
 
     pt_radix_walk_step_t* leaf = &path.steps[path.step_count - 1];
     arch_pte_entry_t* table = leaf->table;
@@ -50,13 +51,15 @@ static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, ui
 static bool internal_ptm_physical(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
     pt_radix_walk_path_t path;
     pt_radix_walk_result_t res = pt_radix_walk(top_level_page_table, vaddr, 1, false, false, VM_PROT_RO, VM_PRIVILEGE_KERNEL, &path);
-    if(res == PT_RADIX_WALK_NOMEM) return false;
+    if(res == PT_RADIX_WALK_NOMEM)
+        return false;
 
     pt_radix_walk_step_t* last = &path.steps[path.step_count - 1];
     arch_pte_entry_t entry = last->table[last->index];
     uint32_t level = last->level;
 
-    if(!pte_is_present(entry)) return false;
+    if(!pte_is_present(entry))
+        return false;
 
     *paddr = pte_get_leaf_phys(entry, level) | (vaddr & (pte_level_page_size(level) - 1u));
     return true;
@@ -67,7 +70,7 @@ void ptm_flush_tlb(virt_addr_t vaddr, size_t length) {
         ptm_flush_tlb_all();
         return;
     }
-    
+
     for(; length > 0; length -= ARCH_PAGE_SIZE_4K, vaddr += ARCH_PAGE_SIZE_4K) asm volatile("sfence.vma %0, zero" ::"r"(vaddr) : "memory");
 }
 
@@ -87,8 +90,10 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     for(size_t i = 0; i < length;) {
         page_size_t cursize = ARCH_PAGE_SIZE_4K;
-        if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M) cursize = ARCH_PAGE_SIZE_2M;
-        if(paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G) cursize = ARCH_PAGE_SIZE_1G;
+        if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M)
+            cursize = ARCH_PAGE_SIZE_2M;
+        if(paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G)
+            cursize = ARCH_PAGE_SIZE_1G;
 
         if(!map_page(top, vaddr + i, paddr + i, cursize, prot, cache, privilege, global, no_pagedb)) {
             spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
@@ -180,7 +185,8 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
             size_t ps = pte_level_page_size(level);
             if((vaddr + i) % ps != 0 || length - i < ps) {
                 entry = pt_radix_break_large(table, index, level);
-                if(entry == 0) goto skip;
+                if(entry == 0)
+                    goto skip;
                 continue;
             }
         }
@@ -198,7 +204,8 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
             pt_radix_walk_step_t* child = &path.steps[d + 1];
             uint32_t old_count = ATOMIC_LOAD_SUB(&pagedb_get_page(pt_radix_table_pfn(child->table))->allocated.page_level_mapping_count, 1, ATOMIC_SEQ_CST);
 
-            if(old_count != 1) break;
+            if(old_count != 1)
+                break;
 
             ATOMIC_STORE(&step->table[step->index], 0, ATOMIC_SEQ_CST);
             pmm_free_page((uintptr_t) PTM_FROM_HHDM(child->table));
@@ -262,7 +269,8 @@ static void map_kernel(arch_pte_entry_t* boot_top) {
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(entry->type == BOOTINFO_MM_TYPE_RESERVED || entry->type == BOOTINFO_MM_TYPE_BAD) continue;
+        if(entry->type == BOOTINFO_MM_TYPE_RESERVED || entry->type == BOOTINFO_MM_TYPE_BAD)
+            continue;
 
         const phys_addr_t aligned_paddr = ALIGN_DOWN(entry->phys_base, ARCH_PAGE_SIZE_4K);
         const virt_addr_t aligned_vaddr = (virt_addr_t) PTM_TO_HHDM(aligned_paddr);
@@ -282,13 +290,15 @@ static void map_kernel(arch_pte_entry_t* boot_top) {
 
     for(uintptr_t va = g_init_boot_info->pfndb_start; va < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; va += ARCH_PAGE_SIZE_4K) {
         uintptr_t pa;
-        if(internal_ptm_physical(boot_top, va, &pa)) ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, true);
+        if(internal_ptm_physical(boot_top, va, &pa))
+            ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, true);
     }
 }
 
 static bool detect_svpbmt(void) {
     for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) {
-        if(string_compare_i((*g_init_boot_info->riscv_extentions)[i], "svpbmt") == 0) return true;
+        if(string_compare_i((*g_init_boot_info->riscv_extentions)[i], "svpbmt") == 0)
+            return true;
     }
     return false;
 }
@@ -367,7 +377,8 @@ void ptm_init_kernel(uint32_t core_id) {
 
 bool ptm_init_user(vm_address_space_t* address_space) {
     address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
-    if(address_space->ptm.top_level_page_table == 0) return false;
+    if(address_space->ptm.top_level_page_table == 0)
+        return false;
 
     address_space->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
     address_space->is_user = true;

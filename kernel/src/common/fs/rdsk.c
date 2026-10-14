@@ -86,7 +86,8 @@ static rdsk_index_t get_file_index(vfs_t* vfs, rdsk_file_t* file) {
 
 static vfs_node_t* create_vfs_dir_node(vfs_t* vfs, rdsk_index_t index) {
     info_t* info = INFO(vfs);
-    if(info->dir_cache[index - 1]) return vfs_node_get(info->dir_cache[index - 1]);
+    if(info->dir_cache[index - 1])
+        return vfs_node_get(info->dir_cache[index - 1]);
     vfs_node_t* node = heap_alloc(sizeof(vfs_node_t));
     memory_set(node, 0, sizeof(vfs_node_t));
     node->lock = MUTEX_INIT;
@@ -103,7 +104,8 @@ static vfs_node_t* create_vfs_dir_node(vfs_t* vfs, rdsk_index_t index) {
 
 static vfs_node_t* create_vfs_file_node(vfs_t* vfs, rdsk_index_t index) {
     info_t* info = INFO(vfs);
-    if(info->file_cache[index - 1]) return vfs_node_get(info->file_cache[index - 1]);
+    if(info->file_cache[index - 1])
+        return vfs_node_get(info->file_cache[index - 1]);
     vfs_node_t* node = heap_alloc(sizeof(vfs_node_t));
     memory_set(node, 0, sizeof(vfs_node_t));
     node->lock = MUTEX_INIT;
@@ -121,7 +123,8 @@ static rdsk_dir_t* find_dir(vfs_t* vfs, rdsk_dir_t* dir, const char* name) {
     while(curindex != 0) {
         rdsk_dir_t* curdir = get_dir(vfs, curindex);
         curindex = curdir->next_index;
-        if(string_compare(name, get_name(vfs, curdir->nametable_offset))) continue;
+        if(string_compare(name, get_name(vfs, curdir->nametable_offset)))
+            continue;
         return curdir;
     }
     return nullptr;
@@ -132,7 +135,8 @@ static rdsk_file_t* find_file(vfs_t* vfs, rdsk_dir_t* dir, const char* name) {
     while(curindex != 0) {
         rdsk_file_t* curfile = get_file(vfs, curindex);
         curindex = curfile->next_index;
-        if(string_compare(name, get_name(vfs, curfile->nametable_offset))) continue;
+        if(string_compare(name, get_name(vfs, curfile->nametable_offset)))
+            continue;
         return curfile;
     }
     return nullptr;
@@ -149,7 +153,8 @@ static vfs_result_t rdsk_node_attr(vfs_node_t* node, vfs_node_attr_t* out_attr) 
 }
 
 static vfs_result_t rdsk_node_lookup(vfs_node_t* node, const char* name, vfs_node_t** out_node) {
-    if(node->type != VFS_NODE_TYPE_DIR) return VFS_RESULT_ERR_NOT_DIR;
+    if(node->type != VFS_NODE_TYPE_DIR)
+        return VFS_RESULT_ERR_NOT_DIR;
 
     if(string_compare(name, ".") == 0) {
         *out_node = vfs_node_get(node);
@@ -172,7 +177,8 @@ static vfs_result_t rdsk_node_lookup(vfs_node_t* node, const char* name, vfs_nod
 }
 
 static vfs_result_t rdsk_node_readdir(vfs_node_t* node, size_t* offset, vfs_node_t** out_node, const char** out_name) {
-    if(node->type != VFS_NODE_TYPE_DIR) return VFS_RESULT_ERR_NOT_DIR;
+    if(node->type != VFS_NODE_TYPE_DIR)
+        return VFS_RESULT_ERR_NOT_DIR;
 
     int local_offset = *offset;
     rdsk_header_t* header = INFO(node->current_vfs)->header;
@@ -183,7 +189,8 @@ static vfs_result_t rdsk_node_readdir(vfs_node_t* node, size_t* offset, vfs_node
             local_offset = header->file_table.entry_count;
         } else {
             *out_name = (char*) get_name(node->current_vfs, get_file(node->current_vfs, index)->nametable_offset);
-            if(out_node) *out_node = create_vfs_file_node(node->current_vfs, index);
+            if(out_node)
+                *out_node = create_vfs_file_node(node->current_vfs, index);
             *offset = local_offset + 1;
             return VFS_RESULT_OK;
         }
@@ -192,19 +199,24 @@ static vfs_result_t rdsk_node_readdir(vfs_node_t* node, size_t* offset, vfs_node
     rdsk_index_t index = DIR(node)->dirtable_index;
     for(int i = 0; i < local_offset - (int) header->file_table.entry_count && index != 0; i++) index = get_dir(node->current_vfs, index)->next_index;
     if(index == 0) {
-        if(out_name) *out_name = nullptr;
-        if(out_node) *out_node = nullptr;
+        if(out_name)
+            *out_name = nullptr;
+        if(out_node)
+            *out_node = nullptr;
         return VFS_RESULT_OK;
     }
 
-    if(out_name) *out_name = (char*) get_name(node->current_vfs, get_dir(node->current_vfs, index)->nametable_offset);
-    if(out_node) *out_node = create_vfs_dir_node(node->current_vfs, index);
+    if(out_name)
+        *out_name = (char*) get_name(node->current_vfs, get_dir(node->current_vfs, index)->nametable_offset);
+    if(out_node)
+        *out_node = create_vfs_dir_node(node->current_vfs, index);
     *offset = local_offset + 1;
     return VFS_RESULT_OK;
 }
 
 static vfs_result_t rdsk_node_read(vfs_node_t* node, void* buffer, size_t size, size_t offset, size_t* read_count) {
-    if(node->type != VFS_NODE_TYPE_FILE) return VFS_RESULT_ERR_NOT_FILE;
+    if(node->type != VFS_NODE_TYPE_FILE)
+        return VFS_RESULT_ERR_NOT_FILE;
 
     if(buffer == nullptr || size == 0) {
         assert(buffer == nullptr && size == 0);
@@ -214,13 +226,16 @@ static vfs_result_t rdsk_node_read(vfs_node_t* node, void* buffer, size_t size, 
     }
 
     if(offset >= FILE(node)->size) {
-        if(read_count) *read_count = 0;
+        if(read_count)
+            *read_count = 0;
         return VFS_RESULT_OK;
     }
     size_t count = FILE(node)->size - offset;
-    if(count > size) count = size;
+    if(count > size)
+        count = size;
     memory_copy(buffer, (void*) (((uintptr_t) INFO(node->current_vfs)->header + FILE(node)->data_offset) + offset), count);
-    if(read_count) *read_count = count;
+    if(read_count)
+        *read_count = count;
     return VFS_RESULT_OK;
 }
 
@@ -241,7 +256,9 @@ static vfs_result_t rdsk_umount(vfs_t* vfs) {
 
 static vfs_result_t rdsk_mount(vfs_t* vfs) {
     rdsk_header_t* header = (rdsk_header_t*) vfs->private_data;
-    if(header->revision != MAKE_RDSK_VERSION(1, 1)) { return VFS_RESULT_ERR_UNSUPPORTED; }
+    if(header->revision != MAKE_RDSK_VERSION(1, 1)) {
+        return VFS_RESULT_ERR_UNSUPPORTED;
+    }
 
     info_t* info = heap_alloc(sizeof(info_t));
     info->header = header;

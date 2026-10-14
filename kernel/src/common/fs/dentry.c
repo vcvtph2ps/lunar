@@ -63,7 +63,8 @@ void vfs_dcache_insert(vfs_dentry_t* dentry) {
     }
     spinlock_unlock(&g_dcache.lock);
 
-    if(evicted != nullptr) vfs_dentry_put(evicted);
+    if(evicted != nullptr)
+        vfs_dentry_put(evicted);
 }
 
 vfs_dentry_t* vfs_dcache_lookup(vfs_dentry_t* parent, const char* name) {
@@ -107,7 +108,8 @@ void vfs_dentry_put(vfs_dentry_t* dentry) {
         size_t remaining = --dentry->refcount;
         spinlock_unlock(&g_dcache.lock);
 
-        if(remaining > 0) return;
+        if(remaining > 0)
+            return;
 
         if(dentry->node != nullptr) {
             mutex_acquire(&dentry->node->lock);

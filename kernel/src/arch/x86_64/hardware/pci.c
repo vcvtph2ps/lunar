@@ -11,7 +11,9 @@ static uint32_t pci_legacy_address(uint8_t bus, uint8_t device, uint8_t function
 
 uint32_t pci_device_read_u32(pci_device_access_t* access, uint16_t offset) {
     assert(access != nullptr);
-    if(access->ecam_window == nullptr && access->segment != 0) { arch_panic("PCI: Attempted to read from device with no ECAM window\n"); }
+    if(access->ecam_window == nullptr && access->segment != 0) {
+        arch_panic("PCI: Attempted to read from device with no ECAM window\n");
+    }
 
     if(access->ecam_window) {
         return access->ecam_window[offset / 4];
@@ -24,7 +26,9 @@ uint32_t pci_device_read_u32(pci_device_access_t* access, uint16_t offset) {
 
 void pci_device_write_u32(pci_device_access_t* access, uint16_t offset, uint32_t value) {
     assert(access != nullptr);
-    if(access->ecam_window == nullptr && access->segment != 0) { arch_panic("PCI: Attempted to write to device with no ECAM window\n"); }
+    if(access->ecam_window == nullptr && access->segment != 0) {
+        arch_panic("PCI: Attempted to write to device with no ECAM window\n");
+    }
 
     if(access->ecam_window) {
         access->ecam_window[offset / 4] = value;

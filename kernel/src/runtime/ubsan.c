@@ -87,7 +87,9 @@ static void print_location(const char* message, const struct tu_source_location 
 }
 
 static void print_type(const char* label, const struct tu_type_descriptor* type) {
-    if(!type || !type->name[0]) { return; }
+    if(!type || !type->name[0]) {
+        return;
+    }
     LOG_FAIL("  %s type: %s\n", label, type->name);
 }
 

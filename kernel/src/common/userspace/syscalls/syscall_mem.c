@@ -20,14 +20,26 @@ syscall_ret_t syscall_sys_vm_map(syscall_args_t* args) {
 
     // @note: non readable mappings aren't supported
     vm_protection_t vm_prot = VM_PROT_RO;
-    if(prot & UAPI_PROT_READ) { vm_prot.read = true; }
-    if(prot & UAPI_PROT_WRITE) { vm_prot.write = true; }
-    if(prot & UAPI_PROT_EXEC) { vm_prot.execute = true; }
+    if(prot & UAPI_PROT_READ) {
+        vm_prot.read = true;
+    }
+    if(prot & UAPI_PROT_WRITE) {
+        vm_prot.write = true;
+    }
+    if(prot & UAPI_PROT_EXEC) {
+        vm_prot.execute = true;
+    }
 
     uint64_t vm_flags = VM_FLAG_NONE;
-    if(flags & UAPI_MAP_FIXED) { vm_flags |= VM_FLAG_FIXED; }
-    if(flags & UAPI_MAP_SHARED) { vm_flags |= VM_FLAG_SHARED; }
-    if(flags & UAPI_MAP_ANON) { vm_flags |= VM_FLAG_ZERO; }
+    if(flags & UAPI_MAP_FIXED) {
+        vm_flags |= VM_FLAG_FIXED;
+    }
+    if(flags & UAPI_MAP_SHARED) {
+        vm_flags |= VM_FLAG_SHARED;
+    }
+    if(flags & UAPI_MAP_ANON) {
+        vm_flags |= VM_FLAG_ZERO;
+    }
 
     process_t* current_process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
@@ -44,7 +56,9 @@ syscall_ret_t syscall_sys_vm_map(syscall_args_t* args) {
         offset,
         vaddr
     );
-    if(vaddr == 0) { return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL); }
+    if(vaddr == 0) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
     return SYSCALL_RET_VALUE(vaddr);
 }
 
@@ -64,9 +78,15 @@ syscall_ret_t syscall_sys_vm_protect(syscall_args_t* args) {
 
     // @note: non readable mappings aren't supported
     vm_protection_t vm_prot = VM_PROT_RO;
-    if(prot & UAPI_PROT_READ) { vm_prot.read = true; }
-    if(prot & UAPI_PROT_WRITE) { vm_prot.write = true; }
-    if(prot & UAPI_PROT_EXEC) { vm_prot.execute = true; }
+    if(prot & UAPI_PROT_READ) {
+        vm_prot.read = true;
+    }
+    if(prot & UAPI_PROT_WRITE) {
+        vm_prot.write = true;
+    }
+    if(prot & UAPI_PROT_EXEC) {
+        vm_prot.execute = true;
+    }
 
     process_t* current_process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 

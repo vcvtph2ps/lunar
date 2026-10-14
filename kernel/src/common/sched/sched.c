@@ -24,7 +24,8 @@ void sched_preempt_enable() {
     assert(count > 0);
     bool yield = count == 1 && CPU_LOCAL_EXCHANGE(scheduler.yield_pending, false);
     ATOMIC_LOAD_SUB(&CPU_LOCAL_GET_SELF()->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
-    if(yield) sched_yield();
+    if(yield)
+        sched_yield();
 }
 
 [[noreturn]] static void idle_thread_entry() {

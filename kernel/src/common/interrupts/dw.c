@@ -79,5 +79,7 @@ void dw_status_disable() {
 }
 
 void dw_status_enable() {
-    if(internal_enable()) { dw_process(); }
+    if(internal_enable()) {
+        dw_process();
+    }
 }

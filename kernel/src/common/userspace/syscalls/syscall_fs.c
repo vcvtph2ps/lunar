@@ -100,9 +100,9 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
 
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
-        case VFS_RESULT_OK: break;
+        case VFS_RESULT_OK:              break;
         case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
-        default:            user_assert("Invalid return value");
+        default:                         user_assert("Invalid return value");
     }
 
     entry->offset += io_req.read.bytes_read;
@@ -162,7 +162,9 @@ syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
     LOG_UTRC("fd=%d\n", fd);
 
     // @todo: STUB
-    if(fd == 0 || fd == 1 || fd == 2) { return SYSCALL_RET_VALUE(0); }
+    if(fd == 0 || fd == 1 || fd == 2) {
+        return SYSCALL_RET_VALUE(0);
+    }
 
     // fd_store_t* store = CPU_LOCAL_GET_CURRENT_THREAD()->common.process->fd_store;
 
@@ -182,7 +184,9 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
     int whence = args->arg3;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    if(fd == 0 || fd == 1 || fd == 2) { return SYSCALL_RET_VALUE(0); }
+    if(fd == 0 || fd == 1 || fd == 2) {
+        return SYSCALL_RET_VALUE(0);
+    }
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {

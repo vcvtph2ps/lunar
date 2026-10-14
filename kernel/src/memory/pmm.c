@@ -22,7 +22,9 @@ static void populate_global() {
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(entry->type != BOOTINFO_MM_TYPE_USABLE) { continue; }
+        if(entry->type != BOOTINFO_MM_TYPE_USABLE) {
+            continue;
+        }
 
         uintptr_t start = entry->phys_base;
         uintptr_t end = entry->phys_base + entry->length;
@@ -42,7 +44,9 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
     spinlock_nodw_lock(&pmm->pmm_lock);
     if(pmm->num_pages == 0) {
         spinlock_nodw_unlock(&pmm->pmm_lock);
-        if(flags & PMM_FLAG_PANIC) { arch_panic("pmm: out of physical memory!"); }
+        if(flags & PMM_FLAG_PANIC) {
+            arch_panic("pmm: out of physical memory!");
+        }
         LOG_WARN("pmm: out of physical memory!!");
         return 0;
     }
@@ -96,7 +100,9 @@ static void free_page_to(pmm_t* pmm, uintptr_t addr) {
 
 static void transfer_pages_from(pmm_t* src, pmm_t* dest, size_t num_pages) {
     for(size_t i = 0; i < num_pages; i++) {
-        if(src->num_pages == 0) { break; }
+        if(src->num_pages == 0) {
+            break;
+        }
 
         uint64_t entry = alloc_page_from(src, PMM_FLAG_PANIC);
         free_page_to(dest, entry);

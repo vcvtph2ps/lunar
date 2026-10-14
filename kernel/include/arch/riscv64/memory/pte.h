@@ -52,9 +52,11 @@ extern bool g_arch_pte_svpbmt_enabled;
 }
 
 [[gnu::always_inline]] static inline uint32_t pte_page_size_to_level(page_size_t ps) {
-    if(ps == ARCH_PAGE_SIZE_2M) return 2u;
-    if(ps == ARCH_PAGE_SIZE_1G) return 3u;
-    return 1u;
+    switch(ps) {
+        case ARCH_PAGE_SIZE_1G: return 3u;
+        case ARCH_PAGE_SIZE_2M: return 2u;
+        case ARCH_PAGE_SIZE_4K: return 1u;
+    }
 }
 
 [[gnu::always_inline]] static inline bool pte_is_present(arch_pte_entry_t e) {
@@ -80,7 +82,8 @@ extern bool g_arch_pte_svpbmt_enabled;
 
 [[gnu::always_inline]] static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
     (void) level;
-    if(!g_arch_pte_svpbmt_enabled) return 0u;
+    if(!g_arch_pte_svpbmt_enabled)
+        return 0u;
     switch(cache) {
         case VM_CACHE_NORMAL:        return ARCH_PTE_PBMT_PMA;
         case VM_CACHE_WRITE_THROUGH: return ARCH_PTE_PBMT_PMA;
@@ -117,11 +120,15 @@ extern bool g_arch_pte_svpbmt_enabled;
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(phys & ~((phys_addr_t) (pte_level_page_size(level) - 1u)));
-    if(prot.read) e |= ARCH_PTE_R;
-    if(prot.write) e |= ARCH_PTE_W;
-    if(prot.execute) e |= ARCH_PTE_X;
+    if(prot.read)
+        e |= ARCH_PTE_R;
+    if(prot.write)
+        e |= ARCH_PTE_W;
+    if(prot.execute)
+        e |= ARCH_PTE_X;
     e |= pte_priv_flags(priv);
-    if(global) e |= ARCH_PTE_G;
+    if(global)
+        e |= ARCH_PTE_G;
     e |= pte_cache_flags(cache, level);
     return e;
 }
@@ -134,11 +141,15 @@ extern bool g_arch_pte_svpbmt_enabled;
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = ARCH_PTE_V | (old & ARCH_PTE_PPN_MASK) | (old & (ARCH_PTE_A | ARCH_PTE_D));
-    if(prot.read) e |= ARCH_PTE_R;
-    if(prot.write) e |= ARCH_PTE_W;
-    if(prot.execute) e |= ARCH_PTE_X;
+    if(prot.read)
+        e |= ARCH_PTE_R;
+    if(prot.write)
+        e |= ARCH_PTE_W;
+    if(prot.execute)
+        e |= ARCH_PTE_X;
     e |= pte_priv_flags(priv);
-    if(global) e |= ARCH_PTE_G;
+    if(global)
+        e |= ARCH_PTE_G;
     e |= pte_cache_flags(cache, level);
     return e;
 }

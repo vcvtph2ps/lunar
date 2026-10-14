@@ -15,7 +15,8 @@ arch_pte_entry_t pt_radix_break_large(arch_pte_entry_t* table, uint32_t index, u
     size_t child_page_size = pte_level_page_size(child_level);
 
     uintptr_t child_table_phys = pmm_alloc_page(PMM_FLAG_ZERO);
-    if(child_table_phys == 0) return 0;
+    if(child_table_phys == 0)
+        return 0;
 
     arch_pte_entry_t* child_table = (arch_pte_entry_t*) PTM_TO_HHDM(child_table_phys);
     for(int i = 0; i < 512; i++) {
@@ -47,20 +48,25 @@ pt_radix_walk_result_t pt_radix_walk(arch_pte_entry_t* top_level_table, virt_add
         bool dirty = false;
 
         if(!pte_is_present(entry)) {
-            if(!allocate) return PT_RADIX_WALK_NOT_FOUND;
+            if(!allocate)
+                return PT_RADIX_WALK_NOT_FOUND;
 
             pmm_flag_t flags = PMM_FLAG_ZERO | (privilege == VM_PRIVILEGE_KERNEL ? PMM_FLAG_PANIC : 0);
             uintptr_t page = pmm_alloc_page(flags);
-            if(page == 0) return PT_RADIX_WALK_NOMEM;
+            if(page == 0)
+                return PT_RADIX_WALK_NOMEM;
 
             entry = pte_make_new_table((phys_addr_t) page, prot, privilege);
             dirty = true;
 
             ATOMIC_LOAD_ADD(&pagedb_get_page(pt_radix_table_pfn(current_table))->allocated.page_level_mapping_count, 1, ATOMIC_SEQ_CST);
         } else if(pte_is_large(entry, level)) {
-            if(!split_large) { return PT_RADIX_WALK_OK; }
+            if(!split_large) {
+                return PT_RADIX_WALK_OK;
+            }
             entry = pt_radix_break_large(current_table, index, level);
-            if(entry == 0) return PT_RADIX_WALK_NOMEM;
+            if(entry == 0)
+                return PT_RADIX_WALK_NOMEM;
         }
 
         if(allocate) {

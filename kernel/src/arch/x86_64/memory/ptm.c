@@ -34,7 +34,8 @@ static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, ui
 
     pt_radix_walk_path_t path;
     pt_radix_walk_result_t res = pt_radix_walk(top_level_page_table, vaddr, target_level, true, true, prot, privilege, &path);
-    if(res != PT_RADIX_WALK_OK) return false;
+    if(res != PT_RADIX_WALK_OK)
+        return false;
 
     pt_radix_walk_step_t* leaf = &path.steps[path.step_count - 1];
     arch_pte_entry_t* table = leaf->table;
@@ -60,13 +61,15 @@ static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, ui
 static bool internal_ptm_physical(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t* paddr) {
     pt_radix_walk_path_t path;
     pt_radix_walk_result_t res = pt_radix_walk(top_level_page_table, vaddr, 1, false, false, VM_PROT_RO, VM_PRIVILEGE_KERNEL, &path);
-    if(res == PT_RADIX_WALK_NOMEM) return false;
+    if(res == PT_RADIX_WALK_NOMEM)
+        return false;
 
     pt_radix_walk_step_t* last = &path.steps[path.step_count - 1];
     arch_pte_entry_t entry = last->table[last->index];
     uint32_t level = last->level;
 
-    if(!pte_is_present(entry)) return false;
+    if(!pte_is_present(entry))
+        return false;
 
     *paddr = pte_get_leaf_phys(entry, level) | (vaddr & (pte_level_page_size(level) - 1u));
     return true;
@@ -89,14 +92,17 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
     assert(paddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
-    if(!prot.read) LOG_WARN("Mapping with no read permission is not supported, ignoring\n");
+    if(!prot.read)
+        LOG_WARN("Mapping with no read permission is not supported, ignoring\n");
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
     arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     for(size_t i = 0; i < length;) {
         page_size_t cursize = ARCH_PAGE_SIZE_4K;
-        if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M) cursize = ARCH_PAGE_SIZE_2M;
-        if(g_huge_pages_support && paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G) cursize = ARCH_PAGE_SIZE_1G;
+        if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M)
+            cursize = ARCH_PAGE_SIZE_2M;
+        if(g_huge_pages_support && paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G)
+            cursize = ARCH_PAGE_SIZE_1G;
 
         if(!map_page(top, vaddr + i, paddr + i, cursize, prot, cache, privilege, global, no_pagedb)) {
             spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
@@ -114,7 +120,8 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
-    if(!prot.read) LOG_FAIL("No-read mapping is not supported on x86_64\n");
+    if(!prot.read)
+        LOG_FAIL("No-read mapping is not supported on x86_64\n");
     spinlock_nodw_lock(&address_space->ptm.ptm_lock);
 
     for(size_t i = 0; i < length;) {
@@ -198,7 +205,8 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
             size_t ps = pte_level_page_size(level);
             if((vaddr + i) % ps != 0 || length - i < ps) {
                 entry = pt_radix_break_large(table, index, level);
-                if(entry == 0) goto skip;
+                if(entry == 0)
+                    goto skip;
                 continue;
             }
         }
@@ -216,7 +224,8 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
             pt_radix_walk_step_t* child = &path.steps[d + 1];
             uint32_t old_count = ATOMIC_LOAD_SUB(&pagedb_get_page(pt_radix_table_pfn(child->table))->allocated.page_level_mapping_count, 1, ATOMIC_SEQ_CST);
 
-            if(old_count != 1) break;
+            if(old_count != 1)
+                break;
 
             ATOMIC_STORE(&step->table[step->index], 0, ATOMIC_SEQ_CST);
             pmm_free_page((uintptr_t) PTM_FROM_HHDM(child->table));
@@ -272,7 +281,8 @@ static void map_kernel() {
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(entry->type == BOOTINFO_MM_TYPE_RESERVED || entry->type == BOOTINFO_MM_TYPE_BAD) continue;
+        if(entry->type == BOOTINFO_MM_TYPE_RESERVED || entry->type == BOOTINFO_MM_TYPE_BAD)
+            continue;
 
         const phys_addr_t aligned_paddr = ALIGN_DOWN(entry->phys_base, ARCH_PAGE_SIZE_4K);
         const virt_addr_t aligned_vaddr = (virt_addr_t) PTM_TO_HHDM(aligned_paddr);
@@ -294,7 +304,8 @@ static void map_kernel() {
 
     for(uintptr_t va = g_init_boot_info->pfndb_start; va < g_init_boot_info->pfndb_start + g_init_boot_info->pfndb_size; va += ARCH_PAGE_SIZE_4K) {
         uintptr_t pa;
-        if(internal_ptm_physical(boot_top, va, &pa)) ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, true);
+        if(internal_ptm_physical(boot_top, va, &pa))
+            ptm_map(g_vm_global_address_space, va, pa, ARCH_PAGE_SIZE_4K, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, true);
     }
 }
 
@@ -366,7 +377,8 @@ void ptm_init_kernel(uint32_t core_id) {
 
 bool ptm_init_user(vm_address_space_t* address_space) {
     address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
-    if(address_space->ptm.top_level_page_table == 0) return false;
+    if(address_space->ptm.top_level_page_table == 0)
+        return false;
 
     address_space->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
     address_space->is_user = true;
@@ -404,7 +416,8 @@ static bool ptm_make_cow_page_table(arch_pte_entry_t* new_page_table_base, arch_
         }
 
         uintptr_t new_pt_level = pmm_alloc_page(PMM_FLAG_ZERO);
-        if(new_pt_level == 0) return false;
+        if(new_pt_level == 0)
+            return false;
         new_page_table_base[i] = pte_clone_table(new_pt_level, old_page_table_base[i]);
         bool success = ptm_make_cow_page_table((arch_pte_entry_t*) PTM_TO_HHDM(new_pt_level), (arch_pte_entry_t*) PTM_TO_HHDM(pte_get_table_phys(old_page_table_base[i])), level - 1);
         if(!success) {
@@ -419,11 +432,13 @@ bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protec
     virt_addr_t page_addr = ALIGN_DOWN(vaddr, ARCH_PAGE_SIZE_4K);
 
     uintptr_t phys;
-    if(!ptm_physical(address_space, page_addr, &phys)) return false;
+    if(!ptm_physical(address_space, page_addr, &phys))
+        return false;
 
     uint64_t pfn = phys >> 12;
     pagedb_page_t* page = pagedb_get_page(pfn);
-    if(page == nullptr) return false;
+    if(page == nullptr)
+        return false;
 
     uint32_t map_count = ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED);
     vm_privilege_t priv = global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER;
@@ -434,7 +449,8 @@ bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protec
     }
 
     uintptr_t new_phys = pmm_alloc_page(PMM_FLAG_NONE);
-    if(new_phys == 0) return false;
+    if(new_phys == 0)
+        return false;
 
     memory_copy((void*) PTM_TO_HHDM(new_phys), (void*) PTM_TO_HHDM(phys), ARCH_PAGE_SIZE_4K);
 
@@ -450,7 +466,8 @@ bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protec
 
 bool ptm_fork_user(vm_address_space_t* new_as, vm_address_space_t* parent_as) {
     new_as->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
-    if(new_as->ptm.top_level_page_table == 0) return false;
+    if(new_as->ptm.top_level_page_table == 0)
+        return false;
 
     new_as->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
 

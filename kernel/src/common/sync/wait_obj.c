@@ -96,7 +96,8 @@ bool wait_obj_try_consume(wait_obj_t* obj) {
 
     switch(obj->type) {
         case WAIT_OBJ_NOTIFICATION:
-            if(ATOMIC_LOAD(&obj->signal_state, ATOMIC_ACQUIRE) == 1) success = true;
+            if(ATOMIC_LOAD(&obj->signal_state, ATOMIC_ACQUIRE) == 1)
+                success = true;
             break;
         case WAIT_OBJ_SYNCHRONIZATION: {
             size_t count = ATOMIC_XCHG(&obj->signal_state, 0, ATOMIC_ACQUIRE);

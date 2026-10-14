@@ -33,28 +33,40 @@
 void init_stage_acpi_early(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         uacpi_status status = uacpi_initialize(UACPI_FLAG_BAD_CSUM_FATAL);
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: early initialization failed uacpi_initialize, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: early initialization failed uacpi_initialize, %s\n", uacpi_status_to_string(status));
+        }
         pci_early_init();
     }
 }
 
 void init_stage_platform_early(uint32_t core_id) {
-    if(INIT_CORE_IS_BSP(core_id)) { arch_ioapic_init(); }
+    if(INIT_CORE_IS_BSP(core_id)) {
+        arch_ioapic_init();
+    }
 }
 
 void init_stage_acpi(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         uacpi_status status = uacpi_namespace_load();
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_namespace_load, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: initialization failed uacpi_namespace_load, %s\n", uacpi_status_to_string(status));
+        }
 
         status = uacpi_set_interrupt_model(UACPI_INTERRUPT_MODEL_IOAPIC);
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_set_interrupt_model, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: initialization failed uacpi_set_interrupt_model, %s\n", uacpi_status_to_string(status));
+        }
 
         status = uacpi_namespace_initialize();
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_namespace_initialize, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: initialization failed uacpi_namespace_initialize, %s\n", uacpi_status_to_string(status));
+        }
 
         status = uacpi_finalize_gpe_initialization();
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_finalize_gpe_initialization, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: initialization failed uacpi_finalize_gpe_initialization, %s\n", uacpi_status_to_string(status));
+        }
     }
 }
 
@@ -100,10 +112,14 @@ void init_stage_platform(uint32_t core_id) {
         g_shutdown_item->cleanup_fn = nullptr;
 
         uacpi_status status = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, power_btn, nullptr);
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_install_fixed_event_handler, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: initialization failed uacpi_install_fixed_event_handler, %s\n", uacpi_status_to_string(status));
+        }
 
         status = uacpi_enable_fixed_event(UACPI_FIXED_EVENT_POWER_BUTTON);
-        if(uacpi_unlikely_error(status)) { arch_panic("ACPI: initialization failed uacpi_enable_fixed_event, %s\n", uacpi_status_to_string(status)); }
+        if(uacpi_unlikely_error(status)) {
+            arch_panic("ACPI: initialization failed uacpi_enable_fixed_event, %s\n", uacpi_status_to_string(status));
+        }
 
         arch_16550uart_setup();
     }

@@ -67,13 +67,17 @@ static uint64_t arch_kvm_pvclock_get_us(time_timer_t* self) {
 static void arch_kvm_pvclock_sleep(time_timer_t* self, uint64_t microseconds) {
     uint64_t start_ns = arch_kvm_pvclock_get_ns(self);
     uint64_t end_ns = start_ns + (microseconds * 1000);
-    while(arch_kvm_pvclock_get_ns(self) < end_ns) { arch_spin_hint(); }
+    while(arch_kvm_pvclock_get_ns(self) < end_ns) {
+        arch_spin_hint();
+    }
 }
 
 time_timer_t* arch_kvm_pvclock_init() {
     // @todo: do we need to check for kvm? couldn't other hypervisors implement this feature?
-    if(arch_cpuid_get_hypervisor() != ARCH_CPUID_HYPERVISOR_KVM) return nullptr;
-    if(!arch_cpuid_get_feature_value(ARCH_CPUID_FEATURE_KVM_PVCLOCK)) return nullptr;
+    if(arch_cpuid_get_hypervisor() != ARCH_CPUID_HYPERVISOR_KVM)
+        return nullptr;
+    if(!arch_cpuid_get_feature_value(ARCH_CPUID_FEATURE_KVM_PVCLOCK))
+        return nullptr;
 
     uint64_t paddr = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
     arch_msr_write(ARCH_MSR_KVM_PVCLOCK, paddr | 1);

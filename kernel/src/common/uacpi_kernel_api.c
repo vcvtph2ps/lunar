@@ -27,38 +27,49 @@
 #include <uacpi/status.h>
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr* out_rsdp_address) {
-    if(!g_init_boot_info->rdsp_physical) { return UACPI_STATUS_NOT_FOUND; }
+    if(!g_init_boot_info->rdsp_physical) {
+        return UACPI_STATUS_NOT_FOUND;
+    }
     *out_rsdp_address = g_init_boot_info->rdsp_physical;
     return UACPI_STATUS_OK;
 }
 
 static bool uacpi_phys_is_ram(uintptr_t paddr, size_t length) {
-    if(length == 0 || length > UINTPTR_MAX - paddr) { return false; }
+    if(length == 0 || length > UINTPTR_MAX - paddr) {
+        return false;
+    }
 
     const uintptr_t end = paddr + length;
     const uint64_t last_pfn = (end - 1) / PAGE_SIZE_DEFAULT;
     for(uint64_t pfn = paddr / PAGE_SIZE_DEFAULT; pfn <= last_pfn; pfn++) {
-        if(!pagedb_valid_page(pfn)) { return false; }
+        if(!pagedb_valid_page(pfn)) {
+            return false;
+        }
     }
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         const bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
-        if(paddr < entry->phys_base) { return false; }
+        if(paddr < entry->phys_base) {
+            return false;
+        }
         const uintptr_t offset = paddr - entry->phys_base;
-        if(offset >= entry->length) { continue; }
+        if(offset >= entry->length) {
+            continue;
+        }
 
         switch(entry->type) {
             case BOOTINFO_MM_TYPE_USABLE:
             case BOOTINFO_MM_TYPE_USED:
             case BOOTINFO_MM_TYPE_MODULE:
             case BOOTINFO_MM_TYPE_RECLAIMABLE:
-            case BOOTINFO_MM_TYPE_ACPI_RECLAIMABLE:
-                break;
-            default: return false;
+            case BOOTINFO_MM_TYPE_ACPI_RECLAIMABLE: break;
+            default:                                return false;
         }
 
         const size_t remaining = entry->length - offset;
-        if(remaining >= end - paddr) { return true; }
+        if(remaining >= end - paddr) {
+            return true;
+        }
         paddr += remaining;
     }
     return false;
@@ -181,7 +192,9 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handl
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle) {
     pci_handle_t* pci_handle = (pci_handle_t*) handle;
-    if(pci_handle->allocated) { heap_free(pci_handle->access, sizeof(pci_device_access_t)); }
+    if(pci_handle->allocated) {
+        heap_free(pci_handle->access, sizeof(pci_device_access_t));
+    }
     heap_free(pci_handle, sizeof(pci_handle_t));
 }
 
@@ -337,14 +350,18 @@ uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void) {
 void uacpi_kernel_stall(uacpi_u8 usec) {
     uint64_t start = time_monotonic_ns();
     uint64_t delta = usec * 1000ULL;
-    while((time_monotonic_ns() - start) < delta) { arch_spin_hint(); }
+    while((time_monotonic_ns() - start) < delta) {
+        arch_spin_hint();
+    }
 }
 
 /**
  * Sleep for N milliseconds.
  */
 void uacpi_kernel_sleep(uacpi_u64 msec) {
-    if(msec == 0) { return; }
+    if(msec == 0) {
+        return;
+    }
     if(CPU_LOCAL_READ(scheduler.preempt_counter) > 0) {
         LOG_WARN("uacpi: sleep called with preemption disabled, busy-waiting for %lu ms\n", msec);
         uacpi_kernel_stall(msec * 1000);
@@ -393,7 +410,9 @@ void uacpi_kernel_free_event(uacpi_handle handle) {
 uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
     assert(timeout == 0xffff);
     kernel_event_t* event = (kernel_event_t*) handle;
-    while(ATOMIC_LOAD(&event->counter, ATOMIC_RELAXED) == 0) { arch_spin_hint(); }
+    while(ATOMIC_LOAD(&event->counter, ATOMIC_RELAXED) == 0) {
+        arch_spin_hint();
+    }
     return UACPI_TRUE;
 }
 
@@ -512,7 +531,9 @@ static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
     uacpi_interrupt_ret ret = ctx->handler(ctx->ctx);
     arch_ioapic_mask_gsi(ctx->gsi, false);
-    if(ret == UACPI_INTERRUPT_NOT_HANDLED) { arch_panic("uacpi: Unhandled interrupt\n"); }
+    if(ret == UACPI_INTERRUPT_NOT_HANDLED) {
+        arch_panic("uacpi: Unhandled interrupt\n");
+    }
 }
 #endif
 
@@ -619,7 +640,9 @@ static void process_work() {
 [[noreturn]] static void uacpi_worker_entry() {
     while(1) {
         // @todo: we should just block and wait for the thread to be woken
-        if(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) == 0) { sched_sleep(100); }
+        if(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) == 0) {
+            sched_sleep(100);
+        }
         process_work();
     }
 }
@@ -660,6 +683,8 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
  * Note that the waits must be done in this order specifically.
  */
 uacpi_status uacpi_kernel_wait_for_work_completion(void) {
-    while(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) != 0) { sched_sleep(25); }
+    while(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) != 0) {
+        sched_sleep(25);
+    }
     return UACPI_STATUS_OK;
 }

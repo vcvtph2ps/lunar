@@ -62,7 +62,8 @@ size_t bitmap_find_free(bitmap_t* bitmap) {
     for(size_t word_index = 0; word_index < bitmap->word_count; word_index++) {
         uint64_t word = bitmap->words[word_index];
 
-        if(word == UINT64_MAX) continue;
+        if(word == UINT64_MAX)
+            continue;
 
         uint64_t free_bits = ~word;
         size_t bit_offset = __builtin_ctzll(free_bits);

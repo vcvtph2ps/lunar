@@ -11,10 +11,14 @@ void pagedb_init() {
 }
 
 bool pagedb_valid_page(uint64_t pfn) {
-    if(pfn >= g_init_boot_info->pfndb_size / sizeof(pagedb_page_t)) { return false; }
+    if(pfn >= g_init_boot_info->pfndb_size / sizeof(pagedb_page_t)) {
+        return false;
+    }
 
     const uint64_t page_index = pfn * sizeof(pagedb_page_t) / ARCH_PAGE_SIZE_4K;
-    if(page_index / 8 >= g_init_boot_info->pfndb_bitmap_size) { return false; }
+    if(page_index / 8 >= g_init_boot_info->pfndb_bitmap_size) {
+        return false;
+    }
 
     const uint8_t* bitmap = (const uint8_t*) g_init_boot_info->pfndb_bitmap_start;
     return (bitmap[page_index / 8] & (1u << (page_index % 8))) != 0;
@@ -26,7 +30,9 @@ pagedb_page_t* pagedb_get_page(uint64_t pfn) {
         LOG_KTRC("pagedb_get_page: pfn=0x%lx out of range (count=0x%lx)\n", pfn, count);
         return nullptr;
     }
-    if(!pagedb_valid_page(pfn)) { return nullptr; }
+    if(!pagedb_valid_page(pfn)) {
+        return nullptr;
+    }
     return &g_pagedb_start[pfn];
 }
 

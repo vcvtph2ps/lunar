@@ -39,7 +39,9 @@ static void set_idtr_entry(int vector, uintptr_t isr_addr, uint8_t type_attr, in
 __attribute__((no_sanitize("undefined"))) // @todo: ubsan reports unaligned access for the x86_isr_stub_table
 void idt_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
-        for(int i = 0; i < 256; ++i) { set_idtr_entry(i, x86_64_isr_stub_table[i], 0x8E, 0); }
+        for(int i = 0; i < 256; ++i) {
+            set_idtr_entry(i, x86_64_isr_stub_table[i], 0x8E, 0);
+        }
 
         // #BP
         set_idtr_entry(0x03, x86_64_isr_stub_table[0x03], 0xEE, 0);

@@ -50,7 +50,8 @@ static vfs_result_t lookup_component(vfs_dentry_t* current, const char* componen
     vfs_result_t res = current->node->ops->lookup(current->node, component, &next_node);
     mutex_release(&current->node->lock);
 
-    if(res == VFS_RESULT_OK && next_node == nullptr) res = VFS_RESULT_ERR_NOT_FOUND;
+    if(res == VFS_RESULT_OK && next_node == nullptr)
+        res = VFS_RESULT_ERR_NOT_FOUND;
 
     if(res == VFS_RESULT_ERR_NOT_FOUND) {
         res = vfs_dentry_create(current, component, nullptr, true, &dentry);
@@ -80,10 +81,12 @@ static vfs_dentry_t* dentry_for_node(vfs_node_t* node) {
     }
     mutex_release(&node->lock);
 
-    if(dentry != nullptr) return dentry;
+    if(dentry != nullptr)
+        return dentry;
 
     vfs_node_t* root_node;
-    if(vfs_root_node(&root_node) != VFS_RESULT_OK) return nullptr;
+    if(vfs_root_node(&root_node) != VFS_RESULT_OK)
+        return nullptr;
 
     if(root_node != node) {
         vfs_node_put(root_node);
@@ -187,7 +190,8 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node) {
 
     vfs_node_t* root_node;
     vfs_result_t res = root_vfs->ops->get_root_node(root_vfs, &root_node);
-    if(res != VFS_RESULT_OK) return res;
+    if(res != VFS_RESULT_OK)
+        return res;
 
     if(g_root_dentry == nullptr) {
         vfs_dentry_t* root_dentry;
@@ -208,7 +212,8 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node) {
 vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);
-    if(res != VFS_RESULT_OK) return res;
+    if(res != VFS_RESULT_OK)
+        return res;
 
     // @todo: read/write mutex
     mutex_acquire(&node->lock);
@@ -235,7 +240,8 @@ vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request) {
 vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_attr) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);
-    if(res != VFS_RESULT_OK) return res;
+    if(res != VFS_RESULT_OK)
+        return res;
 
     // @todo: read/write mutex
     mutex_acquire(&node->lock);
@@ -265,17 +271,20 @@ vfs_result_t vfs_lookup_dentry(const vfs_path_t* path, vfs_dentry_t** out_result
     if(path->node == nullptr || path->rel_path[0] == '/') {
         vfs_node_t* root_node;
         vfs_result_t res = vfs_root_node(&root_node);
-        if(res != VFS_RESULT_OK) return res;
+        if(res != VFS_RESULT_OK)
+            return res;
         current_dentry = dentry_for_node(root_node);
         vfs_node_put(root_node);
-        if(current_dentry == nullptr) return VFS_RESULT_ERR_NOT_FOUND;
+        if(current_dentry == nullptr)
+            return VFS_RESULT_ERR_NOT_FOUND;
         if(path->rel_path[0] == '/') {
             comp_start++;
             comp_end++;
         }
     } else {
         current_dentry = dentry_for_node(path->node);
-        if(current_dentry == nullptr) return VFS_RESULT_ERR_NOT_FOUND;
+        if(current_dentry == nullptr)
+            return VFS_RESULT_ERR_NOT_FOUND;
     }
 
     vfs_result_t res = VFS_RESULT_OK;
@@ -307,7 +316,8 @@ vfs_result_t vfs_lookup_dentry(const vfs_path_t* path, vfs_dentry_t** out_result
                 break;
         }
 
-        if(current_dentry->mounted_vfs == nullptr) continue;
+        if(current_dentry->mounted_vfs == nullptr)
+            continue;
 
         vfs_dentry_t* mount_root = vfs_dcache_lookup(current_dentry, "");
         if(mount_root != nullptr) {
@@ -342,7 +352,8 @@ vfs_result_t vfs_lookup_dentry(const vfs_path_t* path, vfs_dentry_t** out_result
 vfs_result_t vfs_lookup(const vfs_path_t* path, vfs_node_t** out_result_node) {
     vfs_dentry_t* dentry;
     vfs_result_t res = vfs_lookup_dentry(path, &dentry);
-    if(res != VFS_RESULT_OK) return res;
+    if(res != VFS_RESULT_OK)
+        return res;
 
     if(dentry->node == nullptr) {
         vfs_dentry_put(dentry);
@@ -356,7 +367,8 @@ vfs_result_t vfs_lookup(const vfs_path_t* path, vfs_node_t** out_result_node) {
 
 vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size) {
     vfs_dentry_t* dentry = dentry_for_node(node);
-    if(dentry == nullptr) return VFS_RESULT_ERR_NOT_FOUND;
+    if(dentry == nullptr)
+        return VFS_RESULT_ERR_NOT_FOUND;
 
     size_t name_bytes = 0;
     size_t depth = 0;
@@ -368,7 +380,8 @@ vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size) {
     }
 
     size_t path_size = name_bytes + depth + 1;
-    if(path_size < 2) path_size = 2;
+    if(path_size < 2)
+        path_size = 2;
     char* buf = heap_alloc(path_size);
 
     size_t end = path_size - 1;
@@ -393,7 +406,8 @@ vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size) {
 vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_dentry) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, &node);
-    if(res != VFS_RESULT_OK) return res;
+    if(res != VFS_RESULT_OK)
+        return res;
 
     vfs_dentry_t* dir_dentry = dentry_for_node(node);
     if(dir_dentry == nullptr) {
@@ -426,13 +440,15 @@ vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_d
     vfs_dentry_t* child_dentry = vfs_dcache_lookup(dir_dentry, child_name);
     if(child_dentry == nullptr) {
         res = vfs_dentry_create(dir_dentry, child_name, child_node, false, &child_dentry);
-        if(child_node) vfs_node_put(child_node);
+        if(child_node)
+            vfs_node_put(child_node);
         if(res == VFS_RESULT_OK) {
             vfs_dcache_insert(child_dentry);
             vfs_dentry_get(child_dentry);
         }
     } else {
-        if(child_node) vfs_node_put(child_node);
+        if(child_node)
+            vfs_node_put(child_node);
         if(child_dentry->negative) {
             vfs_dentry_put(child_dentry);
             child_dentry = nullptr;

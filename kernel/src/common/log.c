@@ -105,9 +105,13 @@ static void dispatch_to_sinks(int c, void* ctx) {
     for(size_t i = 0; i < print_ctx->sink_count; i++) {
         const log_sink_t* sink = print_ctx->selected_sinks[i];
 
-        if(sink->write == nullptr) { continue; }
+        if(sink->write == nullptr) {
+            continue;
+        }
 
-        if(sink->is_framebuffer && !g_log_to_framebuffer) { continue; }
+        if(sink->is_framebuffer && !g_log_to_framebuffer) {
+            continue;
+        }
 
         if(c == '\n') {
             sink->write('\r', sink->ctx);
@@ -120,10 +124,14 @@ void log_vprint_lockless(log_level_t level, const char* fmt, va_list val) {
     log_sink_t* selected_sinks[MAX_LOG_SINKS];
     size_t selected_sink_count = 0;
     for(size_t i = 0; i < g_sink_count; i++) {
-        if(level >= g_sinks[i].min_level && g_sinks[i].write != nullptr) { selected_sinks[selected_sink_count++] = &g_sinks[i]; }
+        if(level >= g_sinks[i].min_level && g_sinks[i].write != nullptr) {
+            selected_sinks[selected_sink_count++] = &g_sinks[i];
+        }
     }
 
-    if(selected_sink_count == 0) { return; }
+    if(selected_sink_count == 0) {
+        return;
+    }
 
     log_print_ctx_t ctx = {
         .selected_sinks = (const struct log_sink**) &selected_sinks,

@@ -16,7 +16,9 @@ static void arch_tsc_sleep(time_timer_t* self, uint64_t microseconds) {
     uint64_t tsc_ticks_per_us = CPU_LOCAL_READ(tsc_ticks_per_us);
     uint64_t tsc_start = arch_tsc_read();
     uint64_t tsc_end = tsc_start + (tsc_ticks_per_us * microseconds);
-    while(arch_tsc_read() < tsc_end) { __asm__ volatile("pause"); }
+    while(arch_tsc_read() < tsc_end) {
+        __asm__ volatile("pause");
+    }
 }
 
 static uint64_t arch_tsc_read_raw(time_timer_t* self) {

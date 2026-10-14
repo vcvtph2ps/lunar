@@ -18,8 +18,11 @@ static inline void spinlock_unlock_raw(ATOMIC_PARAM uint32_t* lock) {
 
 static inline void spinlock_lock_raw(ATOMIC_PARAM uint32_t* lock) {
     while(true) {
-        if(spinlock_try_lock(lock)) return;
-        while(ATOMIC_LOAD(lock, ATOMIC_RELAXED)) { arch_spin_hint(); }
+        if(spinlock_try_lock(lock))
+            return;
+        while(ATOMIC_LOAD(lock, ATOMIC_RELAXED)) {
+            arch_spin_hint();
+        }
     }
 }
 

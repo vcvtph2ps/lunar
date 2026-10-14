@@ -32,7 +32,9 @@ static void set_node_child(rb_node_t* node, rb_direction_t direction, rb_node_t*
 }
 
 static bool safe_node_red_check(rb_node_t* node) {
-    if(node == nullptr) { return false; }
+    if(node == nullptr) {
+        return false;
+    }
 
     return node->color == RB_COLOR_RED;
 }
@@ -45,7 +47,8 @@ static void replace_node(rb_tree_t* tree, rb_node_t* target, rb_node_t* new_node
         set_node_child(target->parent, get_direction(target), new_node);
     }
 
-    if(new_node != nullptr) new_node->parent = target->parent;
+    if(new_node != nullptr)
+        new_node->parent = target->parent;
 }
 
 static rb_node_t* rotate(rb_tree_t* tree, rb_node_t* node, rb_direction_t direction) {
@@ -53,7 +56,9 @@ static rb_node_t* rotate(rb_tree_t* tree, rb_node_t* node, rb_direction_t direct
     rb_node_t* new_root = get_node_child(node, opposite_direction(direction));
 
     set_node_child(node, opposite_direction(direction), get_node_child(new_root, direction));
-    if(get_node_child(node, opposite_direction(direction)) != nullptr) { get_node_child(node, opposite_direction(direction))->parent = node; }
+    if(get_node_child(node, opposite_direction(direction)) != nullptr) {
+        get_node_child(node, opposite_direction(direction))->parent = node;
+    }
 
     set_node_child(new_root, direction, node);
     node->parent = new_root;
@@ -70,10 +75,12 @@ static rb_node_t* rotate(rb_tree_t* tree, rb_node_t* node, rb_direction_t direct
 
 static void rebalance_insert(rb_tree_t* tree, rb_node_t* node) {
     rb_node_t* parent = node->parent;
-    if(parent == nullptr) return;
+    if(parent == nullptr)
+        return;
 
     do {
-        if(!parent->color) return;
+        if(!parent->color)
+            return;
 
         rb_node_t* grandparent = parent->parent;
 
@@ -136,7 +143,8 @@ void rb_insert(rb_tree_t* tree, rb_node_t* node) {
     }
     set_node_child(node->parent, direction, node);
 
-    if(node->parent->parent == nullptr) return;
+    if(node->parent->parent == nullptr)
+        return;
 
     rebalance_insert(tree, node);
 }
@@ -179,7 +187,8 @@ void rb_remove(rb_tree_t* tree, rb_node_t* node) {
 
     assert(target_parent == nullptr || target == target_parent->left || target == target_parent->right);
 
-    if(original_is_red) return;
+    if(original_is_red)
+        return;
 
     while(target != tree->root && !safe_node_red_check(target)) {
         if(target == target_parent->left) {
@@ -235,14 +244,18 @@ void rb_remove(rb_tree_t* tree, rb_node_t* node) {
         }
         target_parent = target->parent;
     }
-    if(target) target->color = RB_COLOR_BLACK;
+    if(target)
+        target->color = RB_COLOR_BLACK;
 }
 
 rb_node_t* rb_find_first(rb_tree_t* tree) {
     rb_node_t* current = tree->root;
-    if(current == nullptr) return nullptr;
+    if(current == nullptr)
+        return nullptr;
 
-    while(current->left != nullptr) { current = current->left; }
+    while(current->left != nullptr) {
+        current = current->left;
+    }
 
     return current;
 }
@@ -251,11 +264,15 @@ rb_node_t* rb_find_next(rb_tree_t* tree, rb_node_t* current) {
     (void) tree;
     if(current->right != nullptr) {
         current = current->right;
-        while(current->left != nullptr) { current = current->left; }
+        while(current->left != nullptr) {
+            current = current->left;
+        }
         return current;
     }
 
-    while(current->parent != nullptr && current == current->parent->right) { current = current->parent; }
+    while(current->parent != nullptr && current == current->parent->right) {
+        current = current->parent;
+    }
 
     return current->parent;
 }
@@ -269,7 +286,8 @@ rb_node_t* rb_find(rb_tree_t* tree, size_t search_value, rb_search_type_t search
 
         switch(search_type) {
             case RB_SEARCH_TYPE_EXACT:
-                if(current_value == search_value) return current;
+                if(current_value == search_value)
+                    return current;
                 current = (search_value > current_value) ? current->right : current->left;
                 break;
 

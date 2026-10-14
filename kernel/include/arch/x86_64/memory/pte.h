@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "common/assert.h"
+
 typedef uint64_t arch_pte_entry_t;
 
 #define ARCH_PTE_MAX_LEVELS 5
@@ -29,9 +31,12 @@ extern bool g_arch_pte_la57_enabled;
 #define ARCH_PTE_ADDR_MASK_1G ((uint64_t) 0x000FFFFFC0000000u)
 
 [[gnu::always_inline]] static inline uint64_t pte_addr_mask(uint32_t level) {
-    if(level == 2u) return ARCH_PTE_ADDR_MASK_2M;
-    if(level == 3u) return ARCH_PTE_ADDR_MASK_1G;
-    return ARCH_PTE_ADDR_MASK;
+    switch(level) {
+        case 3u: return ARCH_PTE_ADDR_MASK_1G;
+        case 2u: return ARCH_PTE_ADDR_MASK_2M;
+        case 1u: return ARCH_PTE_ADDR_MASK;
+    }
+    ASSERT_UNREACHABLE();
 }
 
 [[gnu::always_inline]] static inline uint64_t pte_pat_bit(uint32_t level) {
@@ -73,9 +78,11 @@ extern bool g_arch_pte_la57_enabled;
 }
 
 [[gnu::always_inline]] static inline uint32_t pte_page_size_to_level(page_size_t ps) {
-    if(ps == ARCH_PAGE_SIZE_2M) return 2u;
-    if(ps == ARCH_PAGE_SIZE_1G) return 3u;
-    return 1u;
+    switch(ps) {
+        case ARCH_PAGE_SIZE_1G: return 3u;
+        case ARCH_PAGE_SIZE_2M: return 2u;
+        case ARCH_PAGE_SIZE_4K: return 1u;
+    }
 }
 
 [[gnu::always_inline]] static inline bool pte_is_present(arch_pte_entry_t e) {
@@ -100,7 +107,8 @@ extern bool g_arch_pte_la57_enabled;
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protection_t prot, vm_privilege_t priv) {
     arch_pte_entry_t e = ARCH_PTE_PRESENT | (phys & ARCH_PTE_ADDR_MASK) | pte_priv_flags(priv);
-    if(!prot.execute) e |= ARCH_PTE_NX;
+    if(!prot.execute)
+        e |= ARCH_PTE_NX;
     return e;
 }
 
@@ -111,18 +119,24 @@ extern bool g_arch_pte_la57_enabled;
 }
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_widen_table_entry(arch_pte_entry_t e, vm_protection_t prot, vm_privilege_t priv) {
-    if(prot.write) e |= ARCH_PTE_RW;
-    if(prot.execute) e &= ~ARCH_PTE_NX;
+    if(prot.write)
+        e |= ARCH_PTE_RW;
+    if(prot.execute)
+        e &= ~ARCH_PTE_NX;
     e |= pte_priv_flags(priv);
     return e;
 }
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = ARCH_PTE_PRESENT | (phys & pte_addr_mask(level)) | pte_priv_flags(priv) | pte_cache_flags(cache, level);
-    if(level != 1u) e |= ARCH_PTE_LARGE;
-    if(prot.write) e |= ARCH_PTE_RW;
-    if(!prot.execute) e |= ARCH_PTE_NX;
-    if(global) e |= ARCH_PTE_GLOBAL;
+    if(level != 1u)
+        e |= ARCH_PTE_LARGE;
+    if(prot.write)
+        e |= ARCH_PTE_RW;
+    if(!prot.execute)
+        e |= ARCH_PTE_NX;
+    if(global)
+        e |= ARCH_PTE_GLOBAL;
     return e;
 }
 
@@ -134,22 +148,28 @@ extern bool g_arch_pte_la57_enabled;
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = (old & pte_addr_mask(level)) | ARCH_PTE_PRESENT | (old & (ARCH_PTE_ACCESSED | ARCH_PTE_DIRTY));
-    if(level != 1u) e |= ARCH_PTE_LARGE;
+    if(level != 1u)
+        e |= ARCH_PTE_LARGE;
     e |= pte_priv_flags(priv);
     e |= pte_cache_flags(cache, level);
-    if(prot.write) e |= ARCH_PTE_RW;
-    if(!prot.execute) e |= ARCH_PTE_NX;
-    if(global) e |= ARCH_PTE_GLOBAL;
+    if(prot.write)
+        e |= ARCH_PTE_RW;
+    if(!prot.execute)
+        e |= ARCH_PTE_NX;
+    if(global)
+        e |= ARCH_PTE_GLOBAL;
     return e;
 }
 
 [[gnu::always_inline]] static inline arch_pte_entry_t pte_make_large_child(arch_pte_entry_t parent, phys_addr_t child_phys, uint32_t child_level) {
     uint64_t flags = parent & (ARCH_PTE_PRESENT | ARCH_PTE_RW | ARCH_PTE_USER | ARCH_PTE_WRITETHROUGH | ARCH_PTE_DISABLECACHE | ARCH_PTE_ACCESSED | ARCH_PTE_GLOBAL | ARCH_PTE_NX);
     arch_pte_entry_t e = flags | (child_phys & pte_addr_mask(child_level));
-    if(child_level > 1u) e |= ARCH_PTE_LARGE;
+    if(child_level > 1u)
+        e |= ARCH_PTE_LARGE;
 
     uint32_t parent_level = child_level + 1u;
-    if(parent & pte_pat_bit(parent_level)) e |= pte_pat_bit(child_level);
+    if(parent & pte_pat_bit(parent_level))
+        e |= pte_pat_bit(child_level);
     return e;
 }
 

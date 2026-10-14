@@ -23,7 +23,8 @@ static void dump_fs_recursive(const char* path, int depth) {
             arch_panic("Failed to read directory %s (%d)\n", path, res);
         }
 
-        if(dirent == nullptr) break;
+        if(dirent == nullptr)
+            break;
 
         for(int i = 0; i < depth; i++) log_print(LOG_LEVEL_INFO, "  ");
 

@@ -71,11 +71,15 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
 
     if(old_value == core_id) {
         log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %d (recursive panic)\n", core_id);
-        while(1) { arch_wait_for_interrupt(); }
+        while(1) {
+            arch_wait_for_interrupt();
+        }
     }
 
     if(old_value != 0xffffffff) {
-        while(1) { arch_wait_for_interrupt(); }
+        while(1) {
+            arch_wait_for_interrupt();
+        }
     }
 
     // @note: we set these to false, we need to be able to grab any kind of lock. and it doesn't matter anyway the kernel panicked
@@ -98,7 +102,9 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
     log_print_lockless(LOG_LEVEL_FAIL, "     ((____|    )_-\\ \\_-\\`\n");
     log_print_lockless(LOG_LEVEL_FAIL, "     `-----'`-----` `--`\n");
 
-    while(1) { asm volatile("pause;hlt"); }
+    while(1) {
+        asm volatile("pause;hlt");
+    }
     __builtin_unreachable();
 }
 
@@ -143,16 +149,22 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
             0
         );
 
-        if(reserved_bit) { log_print_lockless(LOG_LEVEL_FAIL, "Reserved bit in page table entry\n"); }
+        if(reserved_bit) {
+            log_print_lockless(LOG_LEVEL_FAIL, "Reserved bit in page table entry\n");
+        }
         if(protection_key) {
             log_print_lockless(LOG_LEVEL_FAIL, "Protection key violation\n");
         } else {
             const char* who = user_mode ? "User Process" : "Kernel";
             const char* access = write_access ? "write" : "read";
-            if(instruction_fetch) { access = "execute"; }
+            if(instruction_fetch) {
+                access = "execute";
+            }
 
             const char* reason = page_protection_violation ? "non-accessable" : "non-present";
-            if(instruction_fetch) { reason = "non-executable"; }
+            if(instruction_fetch) {
+                reason = "non-executable";
+            }
 
             log_print_lockless(LOG_LEVEL_FAIL, "%s tried to %s a %s page\n", who, access, reason);
         }
@@ -161,7 +173,9 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
             log_print_lockless(LOG_LEVEL_FAIL, "General Protection Fault (0x%lx | no error code)\n", frame->vector);
         } else {
             log_print_lockless(LOG_LEVEL_FAIL, "General Protection Fault (0x%lx | 0x%lx)", frame->vector, frame->error);
-            if(frame->error & 0x1) { log_print_lockless(LOG_LEVEL_FAIL, "  [external event]"); }
+            if(frame->error & 0x1) {
+                log_print_lockless(LOG_LEVEL_FAIL, "  [external event]");
+            }
             if(frame->error & 0x2) {
                 log_print_lockless(LOG_LEVEL_FAIL, " [idt]");
             } else if(frame->error & 0x4) {
@@ -221,7 +235,9 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
 
     log_print_lockless(LOG_LEVEL_FAIL, "cr4 = 0x%016lx [todo]\n", cr4);
     log_print_lockless(LOG_LEVEL_FAIL, "cr8 = 0x%016lx [tpl=%ld]\n", cr8, cr8);
-    if(!frame->is_user) { panic_stacktrace(frame->regs->rbp); }
+    if(!frame->is_user) {
+        panic_stacktrace(frame->regs->rbp);
+    }
 
     panic_end();
 }

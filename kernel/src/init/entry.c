@@ -53,7 +53,9 @@ const char* memmap_type_to_string(uint64_t type) {
 }
 
 [[gnu::used, noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
-    if(core_id != 0) { kernel_entry_ap(core_id); }
+    if(core_id != 0) {
+        kernel_entry_ap(core_id);
+    }
 
     g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
@@ -155,7 +157,9 @@ const char* memmap_type_to_string(uint64_t type) {
             }
         }
 
-        for(size_t i = 0; i < 3; i++) { log_print(LOG_LEVEL_STRC, "%c%u", pixels[i].color, pixels[i].size); }
+        for(size_t i = 0; i < 3; i++) {
+            log_print(LOG_LEVEL_STRC, "%c%u", pixels[i].color, pixels[i].size);
+        }
         log_print(LOG_LEVEL_STRC, "\n");
     }
     LOG_KTRC("module_count=%zu\n", boot_info->module_count);
@@ -164,7 +168,9 @@ const char* memmap_type_to_string(uint64_t type) {
         bootinfo_module_t* module = &boot_info->modules[i];
         (void) module;
         LOG_KTRC("module[%zu]: name=%s, phys_addr=0x%016lx, size=0x%016lx\n", i, module->name, module->phys_addr, module->size);
-        if(string_compare(module->name, "/boot/kernel.ksym") == 0) { ksym_load((void*) module->phys_addr + g_init_boot_info->hhdm_offset); }
+        if(string_compare(module->name, "/boot/kernel.ksym") == 0) {
+            ksym_load((void*) module->phys_addr + g_init_boot_info->hhdm_offset);
+        }
     }
 
     LOG_KTRC("cpu_count=%ld\n", boot_info->core_count);

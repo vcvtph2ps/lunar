@@ -24,7 +24,9 @@ void arch_log_init() {
         .ctx = nullptr,
     };
 
-    if(!log_add_sink(&sink)) { LOG_OKAY("Failed to add log sink; serial output will not work :(\n"); }
+    if(!log_add_sink(&sink)) {
+        LOG_OKAY("Failed to add log sink; serial output will not work :(\n");
+    }
 }
 
 uint64_t arch_get_core_id() {

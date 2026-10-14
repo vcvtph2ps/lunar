@@ -222,7 +222,8 @@ static void lapic_send_icr(uint32_t apic_id, uint64_t icr) {
          * > Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3 (3A, 3B, 3C, & 3D): System Programming Guide
          * @note: on amd64 platforms, WRMSR is ordered and this fence is not needed
          */
-        if(g_icr_needs_fence) asm volatile("mfence; lfence" ::: "memory");
+        if(g_icr_needs_fence)
+            asm volatile("mfence; lfence" ::: "memory");
         lapic_write64(LAPIC_X2APIC_ICR, icr);
     } else {
         // ughhhhh

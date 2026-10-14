@@ -106,7 +106,8 @@ static vfs_result_t root_read_dir(vfs_node_t* node, size_t* offset, vfs_node_t**
     spinlock_unlock(&g_devfs_lock);
 
     *out_name = nullptr;
-    if(out_node) *out_node = nullptr;
+    if(out_node)
+        *out_node = nullptr;
     return VFS_RESULT_OK;
 }
 
