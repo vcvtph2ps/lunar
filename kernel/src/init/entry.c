@@ -111,12 +111,21 @@ const char* memmap_type_to_string(uint64_t type) {
             (segment->flags & BOOTINFO_SEGMENT_FLAG_EXECUTE) ? 'x' : '-'
         );
     }
+
     LOG_KTRC("mm_entry_count=%zu\n", boot_info->mm_entry_count);
+    size_t usable_memory_size = 0;
+    size_t reclaimable_memory_size = 0;
     for(size_t i = 0; i < boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &boot_info->mm_entries[i];
-        (void) entry;
+        if(entry->type == BOOTINFO_MM_TYPE_USABLE) {
+            usable_memory_size += entry->length;
+        }
+        if(entry->type == BOOTINFO_MM_TYPE_RECLAIMABLE) {
+            reclaimable_memory_size += entry->length;
+        }
         LOG_KTRC("mm_entry[%zu]: paddr=0x%016lx, end=0x%016lx (0x%lx), type=%s (%ld)\n", i, entry->phys_base, entry->phys_base + entry->length, entry->length, memmap_type_to_string(entry->type), entry->type);
     }
+    LOG_INFO("usable memory: %zu MiB (%zu MiB Reclaimable)\n", usable_memory_size / 1024 / 1024, reclaimable_memory_size / 1024 / 1024);
 
     LOG_KTRC("framebuffer_count=%zu\n", boot_info->framebuffer_count);
     for(size_t i = 0; i < boot_info->framebuffer_count; i++) {
