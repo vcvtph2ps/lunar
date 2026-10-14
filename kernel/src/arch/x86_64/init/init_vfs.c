@@ -86,33 +86,4 @@ void init_stage_vfs(uint32_t core_id) {
     LOG_OKAY("mounted devfs at /dev\n");
 
     dump_fs("/");
-
-    vfs_node_attr_t node;
-    vfs_get_attributes(&VFS_MAKE_ABS_PATH("/test/meow/nesting.txt"), &node);
-    LOG_INFO("nesting.txt size: %ld\n", node.size);
-    LOG_INFO("nesting.txt type: %s\n", node.type == VFS_NODE_TYPE_FILE ? "file" : "dir");
-    LOG_INFO(
-        "nesting.txt permissions: user=%c%c%c, group=%c%c%c, other=%c%c%c\n",
-        (node.permissions.user & VFS_PERM_READ) ? 'r' : '-',
-        (node.permissions.user & VFS_PERM_WRITE) ? 'w' : '-',
-        (node.permissions.user & VFS_PERM_EXECUTE) ? 'x' : '-',
-        (node.permissions.group & VFS_PERM_READ) ? 'r' : '-',
-        (node.permissions.group & VFS_PERM_WRITE) ? 'w' : '-',
-        (node.permissions.group & VFS_PERM_EXECUTE) ? 'x' : '-',
-        (node.permissions.other & VFS_PERM_READ) ? 'r' : '-',
-        (node.permissions.other & VFS_PERM_WRITE) ? 'w' : '-',
-        (node.permissions.other & VFS_PERM_EXECUTE) ? 'x' : '-'
-    );
-
-
-    io_request_t io_req;
-    io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = heap_alloc(256);
-    io_req.read.count = 256;
-    io_req.read.offset = 0;
-    io_req.read.bytes_read = 0;
-    io_req.no_block = false;
-
-    res = vfs_perform_io(&VFS_MAKE_ABS_PATH("/test/meow/nesting.txt"), &io_req);
-    LOG_OKAY("read /test/meow/nesting.txt: %.*s\n", (int) io_req.read.bytes_read, (char*) io_req.read.buffer);
 }
