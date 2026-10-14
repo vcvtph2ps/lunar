@@ -31,54 +31,54 @@ extern bool g_arch_pte_svpbmt_enabled;
 #define ARCH_PTE_PHYS_TO_PTE(pa) (((uint64_t) (pa) >> 2u) & ARCH_PTE_PPN_MASK)
 #define ARCH_PTE_TO_PHYS(pte) (((uint64_t) (pte) & ARCH_PTE_PPN_MASK) << 2u)
 
-static inline uint32_t pte_top_level(void) {
+[[gnu::always_inline]] static inline uint32_t pte_top_level(void) {
     return g_arch_pte_top_level;
 }
 
-static inline size_t pte_level_shift(uint32_t level) {
+[[gnu::always_inline]] static inline size_t pte_level_shift(uint32_t level) {
     return 12u + (level - 1u) * 9u;
 }
 
-static inline size_t pte_level_page_size(uint32_t level) {
+[[gnu::always_inline]] static inline size_t pte_level_page_size(uint32_t level) {
     return (size_t) 1u << pte_level_shift(level);
 }
 
-static inline uint32_t pte_index(virt_addr_t va, uint32_t level) {
+[[gnu::always_inline]] static inline uint32_t pte_index(virt_addr_t va, uint32_t level) {
     return (uint32_t) ((va >> pte_level_shift(level)) & 0x1FFu);
 }
 
-static inline bool pte_level_supports_large(uint32_t level) {
+[[gnu::always_inline]] static inline bool pte_level_supports_large(uint32_t level) {
     return level == 2u || level == 3u;
 }
 
-static inline uint32_t pte_page_size_to_level(page_size_t ps) {
+[[gnu::always_inline]] static inline uint32_t pte_page_size_to_level(page_size_t ps) {
     if(ps == ARCH_PAGE_SIZE_2M) return 2u;
     if(ps == ARCH_PAGE_SIZE_1G) return 3u;
     return 1u;
 }
 
-static inline bool pte_is_present(arch_pte_entry_t e) {
+[[gnu::always_inline]] static inline bool pte_is_present(arch_pte_entry_t e) {
     return (e & ARCH_PTE_V) != 0u;
 }
 
-static inline bool pte_is_large(arch_pte_entry_t e, uint32_t level) {
+[[gnu::always_inline]] static inline bool pte_is_large(arch_pte_entry_t e, uint32_t level) {
     return level > 1u && (e & (ARCH_PTE_R | ARCH_PTE_W | ARCH_PTE_X)) != 0u;
 }
 
-static inline bool pte_is_leaf(arch_pte_entry_t e, uint32_t level) {
+[[gnu::always_inline]] static inline bool pte_is_leaf(arch_pte_entry_t e, uint32_t level) {
     return level == 1u || pte_is_large(e, level);
 }
 
-static inline phys_addr_t pte_get_table_phys(arch_pte_entry_t e) {
+[[gnu::always_inline]] static inline phys_addr_t pte_get_table_phys(arch_pte_entry_t e) {
     return ARCH_PTE_TO_PHYS(e);
 }
 
-static inline phys_addr_t pte_get_leaf_phys(arch_pte_entry_t e, uint32_t level) {
+[[gnu::always_inline]] static inline phys_addr_t pte_get_leaf_phys(arch_pte_entry_t e, uint32_t level) {
     phys_addr_t pa = ARCH_PTE_TO_PHYS(e);
     return pa & ~((phys_addr_t) (pte_level_page_size(level) - 1u));
 }
 
-static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
+[[gnu::always_inline]] static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
     (void) level;
     if(!g_arch_pte_svpbmt_enabled) return 0u;
     switch(cache) {
@@ -90,32 +90,32 @@ static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
     __builtin_unreachable();
 }
 
-static inline uint64_t pte_priv_flags(vm_privilege_t priv) {
+[[gnu::always_inline]] static inline uint64_t pte_priv_flags(vm_privilege_t priv) {
     return priv == VM_PRIVILEGE_USER ? ARCH_PTE_U : 0u;
 }
 
-static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protection_t prot, vm_privilege_t priv) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protection_t prot, vm_privilege_t priv) {
     (void) prot;
     (void) priv;
     // On riscv intermediate pt entries carry no protection or privilege bits.
     return ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(phys);
 }
 
-static inline arch_pte_entry_t pte_clone_table(phys_addr_t phys, arch_pte_entry_t other) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_clone_table(phys_addr_t phys, arch_pte_entry_t other) {
     (void) other;
     // On riscv intermediate pt entries carry no protection or privilege bits.
     // so there isn't anything to actually clone here
     return ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(phys);
 }
 
-static inline arch_pte_entry_t pte_widen_table_entry(arch_pte_entry_t e, vm_protection_t prot, vm_privilege_t priv) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_widen_table_entry(arch_pte_entry_t e, vm_protection_t prot, vm_privilege_t priv) {
     (void) prot;
     (void) priv;
     // nothing to widen for intermediate pt entries
     return e;
 }
 
-static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(phys & ~((phys_addr_t) (pte_level_page_size(level) - 1u)));
     if(prot.read) e |= ARCH_PTE_R;
     if(prot.write) e |= ARCH_PTE_W;
@@ -126,13 +126,13 @@ static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protecti
     return e;
 }
 
-static inline arch_pte_entry_t pte_clone_leaf_entry(phys_addr_t phys, arch_pte_entry_t other, uint32_t level) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_clone_leaf_entry(phys_addr_t phys, arch_pte_entry_t other, uint32_t level) {
     arch_pte_entry_t e = other & ~ARCH_PTE_PPN_MASK;
     e |= ARCH_PTE_PHYS_TO_PTE(phys & ~((phys_addr_t) (pte_level_page_size(level) - 1u)));
     return e;
 }
 
-static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = ARCH_PTE_V | (old & ARCH_PTE_PPN_MASK) | (old & (ARCH_PTE_A | ARCH_PTE_D));
     if(prot.read) e |= ARCH_PTE_R;
     if(prot.write) e |= ARCH_PTE_W;
@@ -143,13 +143,13 @@ static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_p
     return e;
 }
 
-static inline arch_pte_entry_t pte_make_large_child(arch_pte_entry_t parent, phys_addr_t child_phys, uint32_t child_level) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_large_child(arch_pte_entry_t parent, phys_addr_t child_phys, uint32_t child_level) {
     (void) child_level;
     uint64_t flags = parent & (ARCH_PTE_V | ARCH_PTE_R | ARCH_PTE_W | ARCH_PTE_X | ARCH_PTE_U | ARCH_PTE_G | ARCH_PTE_A | ARCH_PTE_D | ARCH_PTE_PBMT_MASK);
     return flags | ARCH_PTE_PHYS_TO_PTE(child_phys);
 }
 
-static inline arch_pte_entry_t pte_make_table_from_large(arch_pte_entry_t old_large, phys_addr_t new_table_phys) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_table_from_large(arch_pte_entry_t old_large, phys_addr_t new_table_phys) {
     (void) old_large;
     return ARCH_PTE_V | ARCH_PTE_PHYS_TO_PTE(new_table_phys);
 }

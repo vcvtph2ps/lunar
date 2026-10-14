@@ -87,7 +87,7 @@ if opt_build_type == "release" then
     })
 elseif opt_build_type == "debug" then
     table.extend(c_flags, {
-        "-O0",
+        "-O1",
         "-g",
         "-fno-lto",
         "-fno-omit-frame-pointer",

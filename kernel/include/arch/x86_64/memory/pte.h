@@ -28,17 +28,17 @@ extern bool g_arch_pte_la57_enabled;
 #define ARCH_PTE_ADDR_MASK_2M ((uint64_t) 0x000FFFFFFFE00000u)
 #define ARCH_PTE_ADDR_MASK_1G ((uint64_t) 0x000FFFFFC0000000u)
 
-static inline uint64_t pte_addr_mask(uint32_t level) {
+[[gnu::always_inline]] static inline uint64_t pte_addr_mask(uint32_t level) {
     if(level == 2u) return ARCH_PTE_ADDR_MASK_2M;
     if(level == 3u) return ARCH_PTE_ADDR_MASK_1G;
     return ARCH_PTE_ADDR_MASK;
 }
 
-static inline uint64_t pte_pat_bit(uint32_t level) {
+[[gnu::always_inline]] static inline uint64_t pte_pat_bit(uint32_t level) {
     return level == 1u ? ARCH_PTE_PAT_4K : ARCH_PTE_PAT_LARGE;
 }
 
-static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
+[[gnu::always_inline]] static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
     switch(cache) {
         case VM_CACHE_NORMAL:        return 0; // PAT0 = WB
         case VM_CACHE_WRITE_THROUGH: return ARCH_PTE_WRITETHROUGH; // PAT1 = WT
@@ -48,76 +48,76 @@ static inline uint64_t pte_cache_flags(vm_cache_t cache, uint32_t level) {
     __builtin_unreachable();
 }
 
-static inline uint64_t pte_priv_flags(vm_privilege_t priv) {
+[[gnu::always_inline]] static inline uint64_t pte_priv_flags(vm_privilege_t priv) {
     return priv == VM_PRIVILEGE_USER ? ARCH_PTE_USER : 0u;
 }
 
-static inline uint32_t pte_top_level() {
+[[gnu::always_inline]] static inline uint32_t pte_top_level() {
     return g_arch_pte_la57_enabled ? 5u : 4u;
 }
 
-static inline size_t pte_level_shift(uint32_t level) {
+[[gnu::always_inline]] static inline size_t pte_level_shift(uint32_t level) {
     return 12u + (level - 1u) * 9u;
 }
 
-static inline size_t pte_level_page_size(uint32_t level) {
+[[gnu::always_inline]] static inline size_t pte_level_page_size(uint32_t level) {
     return (size_t) 1u << pte_level_shift(level);
 }
 
-static inline uint32_t pte_index(virt_addr_t va, uint32_t level) {
+[[gnu::always_inline]] static inline uint32_t pte_index(virt_addr_t va, uint32_t level) {
     return (uint32_t) ((va >> pte_level_shift(level)) & 0x1FFu);
 }
 
-static inline bool pte_level_supports_large(uint32_t level) {
+[[gnu::always_inline]] static inline bool pte_level_supports_large(uint32_t level) {
     return level == 2u || level == 3u;
 }
 
-static inline uint32_t pte_page_size_to_level(page_size_t ps) {
+[[gnu::always_inline]] static inline uint32_t pte_page_size_to_level(page_size_t ps) {
     if(ps == ARCH_PAGE_SIZE_2M) return 2u;
     if(ps == ARCH_PAGE_SIZE_1G) return 3u;
     return 1u;
 }
 
-static inline bool pte_is_present(arch_pte_entry_t e) {
+[[gnu::always_inline]] static inline bool pte_is_present(arch_pte_entry_t e) {
     return (e & ARCH_PTE_PRESENT) != 0u;
 }
 
-static inline bool pte_is_large(arch_pte_entry_t e, uint32_t level) {
+[[gnu::always_inline]] static inline bool pte_is_large(arch_pte_entry_t e, uint32_t level) {
     return level > 1u && (e & ARCH_PTE_LARGE) != 0u;
 }
 
-static inline bool pte_is_leaf(arch_pte_entry_t e, uint32_t level) {
+[[gnu::always_inline]] static inline bool pte_is_leaf(arch_pte_entry_t e, uint32_t level) {
     return level == 1u || pte_is_large(e, level);
 }
 
-static inline phys_addr_t pte_get_table_phys(arch_pte_entry_t e) {
+[[gnu::always_inline]] static inline phys_addr_t pte_get_table_phys(arch_pte_entry_t e) {
     return e & ARCH_PTE_ADDR_MASK;
 }
 
-static inline phys_addr_t pte_get_leaf_phys(arch_pte_entry_t e, uint32_t level) {
+[[gnu::always_inline]] static inline phys_addr_t pte_get_leaf_phys(arch_pte_entry_t e, uint32_t level) {
     return e & pte_addr_mask(level);
 }
 
-static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protection_t prot, vm_privilege_t priv) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_new_table(phys_addr_t phys, vm_protection_t prot, vm_privilege_t priv) {
     arch_pte_entry_t e = ARCH_PTE_PRESENT | (phys & ARCH_PTE_ADDR_MASK) | pte_priv_flags(priv);
     if(!prot.execute) e |= ARCH_PTE_NX;
     return e;
 }
 
-static inline arch_pte_entry_t pte_clone_table(phys_addr_t phys, arch_pte_entry_t other) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_clone_table(phys_addr_t phys, arch_pte_entry_t other) {
     arch_pte_entry_t e = other & ~ARCH_PTE_ADDR_MASK;
     e |= (phys & ARCH_PTE_ADDR_MASK);
     return e;
 }
 
-static inline arch_pte_entry_t pte_widen_table_entry(arch_pte_entry_t e, vm_protection_t prot, vm_privilege_t priv) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_widen_table_entry(arch_pte_entry_t e, vm_protection_t prot, vm_privilege_t priv) {
     if(prot.write) e |= ARCH_PTE_RW;
     if(prot.execute) e &= ~ARCH_PTE_NX;
     e |= pte_priv_flags(priv);
     return e;
 }
 
-static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = ARCH_PTE_PRESENT | (phys & pte_addr_mask(level)) | pte_priv_flags(priv) | pte_cache_flags(cache, level);
     if(level != 1u) e |= ARCH_PTE_LARGE;
     if(prot.write) e |= ARCH_PTE_RW;
@@ -126,13 +126,13 @@ static inline arch_pte_entry_t pte_make_leaf_entry(phys_addr_t phys, vm_protecti
     return e;
 }
 
-static inline arch_pte_entry_t pte_clone_leaf_entry(phys_addr_t phys, arch_pte_entry_t other, uint32_t level) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_clone_leaf_entry(phys_addr_t phys, arch_pte_entry_t other, uint32_t level) {
     arch_pte_entry_t e = other & ~pte_addr_mask(level);
     e |= (phys & pte_addr_mask(level));
     return e;
 }
 
-static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_protection_t prot, vm_cache_t cache, vm_privilege_t priv, uint32_t level, bool global) {
     arch_pte_entry_t e = (old & pte_addr_mask(level)) | ARCH_PTE_PRESENT | (old & (ARCH_PTE_ACCESSED | ARCH_PTE_DIRTY));
     if(level != 1u) e |= ARCH_PTE_LARGE;
     e |= pte_priv_flags(priv);
@@ -143,7 +143,7 @@ static inline arch_pte_entry_t pte_rewrite_leaf_entry(arch_pte_entry_t old, vm_p
     return e;
 }
 
-static inline arch_pte_entry_t pte_make_large_child(arch_pte_entry_t parent, phys_addr_t child_phys, uint32_t child_level) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_large_child(arch_pte_entry_t parent, phys_addr_t child_phys, uint32_t child_level) {
     uint64_t flags = parent & (ARCH_PTE_PRESENT | ARCH_PTE_RW | ARCH_PTE_USER | ARCH_PTE_WRITETHROUGH | ARCH_PTE_DISABLECACHE | ARCH_PTE_ACCESSED | ARCH_PTE_GLOBAL | ARCH_PTE_NX);
     arch_pte_entry_t e = flags | (child_phys & pte_addr_mask(child_level));
     if(child_level > 1u) e |= ARCH_PTE_LARGE;
@@ -153,6 +153,6 @@ static inline arch_pte_entry_t pte_make_large_child(arch_pte_entry_t parent, phy
     return e;
 }
 
-static inline arch_pte_entry_t pte_make_table_from_large(arch_pte_entry_t old_large, phys_addr_t new_table_phys) {
+[[gnu::always_inline]] static inline arch_pte_entry_t pte_make_table_from_large(arch_pte_entry_t old_large, phys_addr_t new_table_phys) {
     return (old_large & (ARCH_PTE_PRESENT | ARCH_PTE_RW | ARCH_PTE_USER | ARCH_PTE_NX)) | (new_table_phys & ARCH_PTE_ADDR_MASK);
 }
