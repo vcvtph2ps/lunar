@@ -19,7 +19,7 @@ bool g_arch_pte_svpbmt_enabled = false;
 
 extern vm_address_space_t* g_vm_global_address_space;
 
-static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
+static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool no_pagedb) {
     uint32_t target_level = pte_page_size_to_level(page_size);
 
     pt_radix_walk_path_t path;
@@ -38,7 +38,7 @@ static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, ui
     if(!pte_is_present(prev)) {
         ATOMIC_LOAD_ADD(&pagedb_get_page(pt_radix_table_pfn(table))->allocated.page_level_mapping_count, 1, ATOMIC_SEQ_CST);
 
-        if(!mmio) {
+        if(!no_pagedb) {
             uint64_t num_4k_pages = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
             for(uint64_t i = 0; i < num_4k_pages; i++) pagedb_page_map((paddr >> 12) + i);
         }
@@ -70,7 +70,7 @@ void ptm_flush_tlb_all(void) {
     asm volatile("sfence.vma" ::: "memory");
 }
 
-bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool mmio) {
+bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t paddr, size_t length, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool no_pagedb) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(paddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
@@ -85,7 +85,7 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
         if(paddr % ARCH_PAGE_SIZE_2M == 0 && vaddr % ARCH_PAGE_SIZE_2M == 0 && length - i >= ARCH_PAGE_SIZE_2M) cursize = ARCH_PAGE_SIZE_2M;
         if(paddr % ARCH_PAGE_SIZE_1G == 0 && vaddr % ARCH_PAGE_SIZE_1G == 0 && length - i >= ARCH_PAGE_SIZE_1G) cursize = ARCH_PAGE_SIZE_1G;
 
-        if(!map_page(top, vaddr + i, paddr + i, cursize, prot, cache, privilege, global, mmio)) {
+        if(!map_page(top, vaddr + i, paddr + i, cursize, prot, cache, privilege, global, no_pagedb)) {
             spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
             return false;
         }
@@ -145,7 +145,7 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     return true;
 }
 
-void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, bool mmio) {
+void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length, bool no_pagedb) {
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
@@ -182,7 +182,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
 
         __atomic_store_n(&table[index], 0, __ATOMIC_SEQ_CST);
 
-        if(!mmio) {
+        if(!no_pagedb) {
             uint64_t num_4k_pages = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
             uintptr_t paddr_unmap = pte_get_leaf_phys(entry, level);
             for(uint64_t k = 0; k < num_4k_pages; k++) pagedb_page_unmap((paddr_unmap >> 12) + k);
@@ -236,7 +236,7 @@ void ptm_load_address_space(vm_address_space_t* address_space) {
 }
 
 static void map_kernel(arch_pte_entry_t* boot_top) {
-    // @note: EVEN THO VERY CURSED we pass mmio=true to all of these to bypass the pagedb
+    // @note: slightly cursed, we pass no_pagedb=true to all of these to bypass the pagedb
 
     for(size_t i = 0; i < g_init_boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* seg = &g_init_boot_info->kernel_segments[i];
@@ -354,7 +354,7 @@ void ptm_init_kernel(uint32_t core_id) {
         const phys_addr_t align_diff = paddr - aligned_paddr;
         const size_t aligned_length = ALIGN_UP(framebuffer.size + align_diff, ARCH_PAGE_SIZE_4K);
 
-        const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_MMIO);
+        const void* new_vaddr = vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_WRITE_COMBINE, aligned_paddr, VM_FLAG_NO_PAGEDB);
         LOG_INFO("mapping framebuffer %zu, 0x%lx → 0x%lx (len 0x%lx)\n", i, paddr, (uintptr_t) new_vaddr, aligned_length);
         g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + align_diff);
     }

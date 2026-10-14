@@ -123,7 +123,7 @@ static bool ioapic_is_absent(ioapic_t* ioapic) {
 }
 
 static void init_ioapic(struct acpi_madt_ioapic* entry) {
-    virt_addr_t mmio_virt = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_DISABLE, entry->address, VM_FLAG_MMIO);
+    virt_addr_t mmio_virt = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_DISABLE, entry->address, VM_FLAG_NO_PAGEDB);
     if(mmio_virt == 0) {
         arch_panic("Failed to map ioapic MMIO region");
     }

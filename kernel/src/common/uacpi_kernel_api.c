@@ -71,7 +71,7 @@ void* uacpi_kernel_map(uacpi_phys_addr paddr, uacpi_size length) {
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
 
     const bool mmio = !uacpi_phys_is_ram(aligned_paddr, aligned_length);
-    virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, mmio ? VM_CACHE_DISABLE : VM_CACHE_NORMAL, aligned_paddr, mmio ? VM_FLAG_MMIO : VM_FLAG_NONE);
+    virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, mmio ? VM_CACHE_DISABLE : VM_CACHE_NORMAL, aligned_paddr, VM_FLAG_NO_PAGEDB);
     if(vaddr == 0) {
         LOG_FAIL("uacpi: failed to map physical address %p, length=%zu\n", (void*) paddr, length);
         return nullptr;

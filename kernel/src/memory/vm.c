@@ -136,7 +136,7 @@ static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
             }
             break;
         case VM_REGION_TYPE_DIRECT:
-            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, region->mmio))
+            if(!ptm_map(region->address_space, address, region->type_data.direct.physical_address + (address - region->base), length, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, region->no_pagedb))
                 return false;
             break;
     }
@@ -147,21 +147,35 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
     assert(address % PAGE_SIZE_DEFAULT == 0 && length % PAGE_SIZE_DEFAULT == 0);
     assert(address >= region->base && address + length <= region->base + region->length);
 
-    switch(region->type) {
-        case VM_REGION_TYPE_ANON:
-            for(size_t i = 0; i < length; i += PAGE_SIZE_DEFAULT) {
+    if(region->type == VM_REGION_TYPE_ANON) {
+        enum { UNMAP_BATCH_PAGES = 32 };
+        uintptr_t batch_phys[UNMAP_BATCH_PAGES];
+
+        size_t i = 0;
+        while(i < length) {
+            size_t batch_start = i;
+            size_t phys_count = 0;
+
+            for(; i < length && (i - batch_start) / PAGE_SIZE_DEFAULT < UNMAP_BATCH_PAGES; i += PAGE_SIZE_DEFAULT) {
                 uintptr_t phys;
                 if(!ptm_physical(region->address_space, address + i, &phys)) continue;
 
                 pagedb_page_t* page = pagedb_get_page(phys / ARCH_PAGE_SIZE_4K);
                 if(page != nullptr && ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED) == 1) {
-                    pmm_free_page(phys);
+                    batch_phys[phys_count++] = phys;
                 }
             }
-            break;
-        case VM_REGION_TYPE_DIRECT: break;
+
+            ptm_unmap(region->address_space, address + batch_start, i - batch_start, region->no_pagedb);
+
+            for(size_t k = 0; k < phys_count; k++) {
+                pmm_free_page(batch_phys[k]);
+            }
+        }
+        return;
     }
-    ptm_unmap(region->address_space, address, length, region->mmio);
+
+    ptm_unmap(region->address_space, address, length, region->no_pagedb);
 }
 
 
@@ -172,7 +186,7 @@ static bool regions_mergeable(vm_region_t* left, vm_region_t* right) {
     if(!prot_equals(left->protection, right->protection)) return false;
     if(left->cache != right->cache) return false;
     if(left->dynamically_backed != right->dynamically_backed) return false;
-    if(left->mmio != right->mmio) return false;
+    if(left->no_pagedb != right->no_pagedb) return false;
 
     switch(left->type) {
         case VM_REGION_TYPE_ANON:
@@ -247,7 +261,7 @@ static vm_region_t* clone_to(bool global_lock_acquired, uintptr_t base, size_t l
     region->cache = from->cache;
     region->protection = from->protection;
     region->dynamically_backed = from->dynamically_backed;
-    region->mmio = from->mmio;
+    region->no_pagedb = from->no_pagedb;
 
     switch(from->type) {
         case VM_REGION_TYPE_ANON: region->type_data.anon.back_zeroed = from->type_data.anon.back_zeroed; break;
@@ -498,7 +512,7 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
     region->cache = cache;
     region->dynamically_backed = (flags & VM_FLAG_DYNAMICALLY_BACKED) != 0;
     region->shared = (flags & VM_FLAG_SHARED) != 0;
-    region->mmio = (flags & VM_FLAG_MMIO) != 0;
+    region->no_pagedb = (flags & VM_FLAG_NO_PAGEDB) != 0;
 
     switch(region->type) {
         case VM_REGION_TYPE_ANON: region->type_data.anon.back_zeroed = (flags & VM_FLAG_ZERO) != 0; break;
