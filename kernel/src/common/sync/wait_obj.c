@@ -5,6 +5,7 @@
 #include <common/sync/wait_obj.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
+#include <lib/math.h>
 
 bool wait_obj_signal(wait_obj_t* obj, size_t count) {
     spinlock_nodw_lock(&obj->lock);
@@ -14,7 +15,7 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count) {
     switch(obj->type) {
         case WAIT_OBJ_SYNCHRONIZATION: [[fallthrough]];
         case WAIT_OBJ_NOTIFICATION:    count = 1; break;
-        case WAIT_OBJ_SEMAPHORE:       break;
+        case WAIT_OBJ_SEMAPHORE:       count = MATH_MIN(count, obj->semaphore.max_signals); break;
     }
 
     ATOMIC_STORE(&obj->signal_state, count, ATOMIC_RELEASE);
@@ -107,11 +108,13 @@ bool wait_obj_try_consume(wait_obj_t* obj) {
             break;
         }
         case WAIT_OBJ_SEMAPHORE: {
-            // @todo: this could probably use some atomic black magic instead of a LOAD and LOAD_SUB, TOCOU bug???
-            size_t count = ATOMIC_LOAD(&obj->signal_state, ATOMIC_ACQUIRE);
-            if(count > 0) {
-                ATOMIC_LOAD_SUB(&obj->signal_state, 1, ATOMIC_RELEASE);
-                success = true;
+            size_t count = ATOMIC_LOAD(&obj->signal_state, ATOMIC_RELAXED);
+            while(count > 0) {
+                // On failure, count is overwritten with the current value, so it rechecks above 0
+                if(ATOMIC_COMPARE_EXCHANGE_WEAK(&obj->signal_state, &count, count - 1, ATOMIC_ACQUIRE, ATOMIC_RELAXED)) {
+                    success = true;
+                    break;
+                }
             }
             break;
         }

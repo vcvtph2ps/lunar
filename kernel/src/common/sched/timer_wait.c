@@ -14,7 +14,7 @@ timer_wait_t* timer_wait_create(uint64_t msec) {
     timer_wait_t* timer = heap_zalloc(sizeof(timer_wait_t));
     assert(timer != nullptr);
 
-    timer->obj = WAIT_OBJ_INIT(WAIT_OBJ_NOTIFICATION);
+    timer->obj = WAIT_OBJ_INIT_NOTIFICATION();
     timer->deadline_ns = time_monotonic_ns() + (msec * 1000000ULL);
     ATOMIC_STORE(&timer->pending, true, ATOMIC_RELEASE);
 

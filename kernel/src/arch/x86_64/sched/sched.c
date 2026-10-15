@@ -96,7 +96,7 @@ static x86_64_thread_t* sched_arch_create_thread_common(size_t tid, process_t* p
     thread->common.tid = tid;
     ATOMIC_STORE(&thread->common.ref_count, 1, ATOMIC_RELAXED);
     thread->common.sched.wait_entry = nullptr;
-    thread->common.thread_termination_object = WAIT_OBJ_INIT(WAIT_OBJ_NOTIFICATION);
+    thread->common.thread_termination_object = WAIT_OBJ_INIT_NOTIFICATION();
     ATOMIC_STORE(&thread->common.sched.migratable, true, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.state, THREAD_STATE_READY, ATOMIC_RELAXED);
     ATOMIC_STORE(&thread->common.sched.owner, sched, ATOMIC_RELAXED);

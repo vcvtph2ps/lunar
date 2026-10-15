@@ -50,7 +50,7 @@ tty_t* tty_get_default() {
 tty_t* tty_create() {
     tty_t* tty = heap_alloc(sizeof(tty_t));
     tty->mutex = MUTEX_INIT;
-    tty->wait_obj = WAIT_OBJ_INIT(WAIT_OBJ_SYNCHRONIZATION);
+    tty->wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
     tty->head = 0;
     tty->tail = 0;
     tty->commit = 0;

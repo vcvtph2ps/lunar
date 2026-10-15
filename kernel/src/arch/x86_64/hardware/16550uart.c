@@ -209,7 +209,7 @@ static void serial_sink(int c, void* ctx) {
     arch_16550uart_send(g_arch_16550uart_default_uart, (char) c);
 }
 
-wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT(WAIT_OBJ_SYNCHRONIZATION);
+wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
 [[noreturn]] static void serial_rx_thread() {
     sched_wait_single(&g_serial_wait_obj, UINT64_MAX);

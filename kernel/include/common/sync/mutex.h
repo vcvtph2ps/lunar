@@ -4,7 +4,7 @@
 #include <common/sync/wait_obj.h>
 #include <lib/list.h>
 
-#define MUTEX_INIT ((mutex_t) { .state = MUTEX_STATE_UNLOCKED, .lock = SPINLOCK_NO_INT_INIT, .wait_obj = WAIT_OBJ_INIT(WAIT_OBJ_SYNCHRONIZATION) })
+#define MUTEX_INIT ((mutex_t) { .state = MUTEX_STATE_UNLOCKED, .lock = SPINLOCK_NO_INT_INIT, .wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION() })
 
 typedef enum {
     MUTEX_STATE_UNLOCKED,

@@ -13,7 +13,7 @@
 
 static spinlock_no_dw_t g_reap_lock = SPINLOCK_NO_DW_INIT;
 static list_t g_reap_queue = LIST_INIT;
-static wait_obj_t g_reap_event = WAIT_OBJ_INIT(WAIT_OBJ_SEMAPHORE);
+static wait_obj_t g_reap_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
 /// @brief Processes a single thread that the scheduler is done with
 static void reaper_process_thread(thread_t* thread) {
