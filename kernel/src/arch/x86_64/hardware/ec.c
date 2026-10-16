@@ -1,6 +1,7 @@
 #include <arch/x86_64/hardware/ec.h>
 #include <arch/x86_64/io.h>
 #include <common/arch.h>
+#include <common/cpu_local.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <common/sync/spinlock.h>
@@ -16,6 +17,9 @@
 #include <uacpi/uacpi.h>
 #include <uacpi/utilities.h>
 
+#include "arch/x86_64/hardware/time/tsc.h"
+#include "common/time/time.h"
+
 static list_t g_ec_devices = LIST_INIT;
 
 typedef struct ec_device {
@@ -25,30 +29,32 @@ typedef struct ec_device {
     list_node_t list_node;
 } ec_device_t;
 
-#define EC_STATUS_IBF (1 << 0)
-#define EC_STATUS_OBF (1 << 1)
+#define EC_STATUS_OBF (1 << 0)
+#define EC_STATUS_IBF (1 << 1)
 
 #define EC_CMD_READ 0x80
 #define EC_CMD_WRITE 0x81
 
-#define EC_TIMEOUT_ITERATIONS 1000
+#define EC_TIMEOUT_ITERATIONS 100000
 
 static bool ec_wait_ibf_clear(ec_device_t* device) {
+    time_timer_t* timer = arch_tsc_timer_get();
     for(uint32_t i = 0; i < EC_TIMEOUT_ITERATIONS; ++i) {
         if((arch_io_port_read_u8(device->command_port) & EC_STATUS_IBF) == 0) {
             return true;
         }
-        arch_io_wait();
+        timer->sleep(timer, 100);
     }
     return false;
 }
 
 static bool ec_wait_obf_set(ec_device_t* device) {
+    time_timer_t* timer = arch_tsc_timer_get();
     for(uint32_t i = 0; i < EC_TIMEOUT_ITERATIONS; ++i) {
         if((arch_io_port_read_u8(device->command_port) & EC_STATUS_OBF) != 0) {
             return true;
         }
-        arch_io_wait();
+        timer->sleep(timer, 100);
     }
     return false;
 }
@@ -59,6 +65,11 @@ static bool ec_read(ec_device_t* device, uint8_t addr, uint8_t* out_data) {
         return false;
     }
     arch_io_port_write_u8(device->command_port, EC_CMD_READ);
+
+    if(!ec_wait_ibf_clear(device)) {
+        LOG_WARN("ec: read timeout (ibf cmd) for address 0x%02x\n", addr);
+        return false;
+    }
     arch_io_port_write_u8(device->data_port, addr);
 
     if(!ec_wait_obf_set(device)) {
@@ -75,6 +86,11 @@ static bool ec_write(ec_device_t* device, uint8_t addr, uint8_t data) {
         return false;
     }
     arch_io_port_write_u8(device->command_port, EC_CMD_WRITE);
+
+    if(!ec_wait_ibf_clear(device)) {
+        LOG_WARN("ec: write timeout (ibf cmd) for address 0x%02x\n", addr);
+        return false;
+    }
     arch_io_port_write_u8(device->data_port, addr);
 
     if(!ec_wait_ibf_clear(device)) {
@@ -87,7 +103,6 @@ static bool ec_write(ec_device_t* device, uint8_t addr, uint8_t data) {
 
 static uacpi_iteration_decision ec_parse_crs(void* ctx, uacpi_resource* resource) {
     ec_device_t* ec = (ec_device_t*) ctx;
-
     if(resource->type != UACPI_RESOURCE_TYPE_IO) {
         return UACPI_ITERATION_DECISION_CONTINUE;
     }
@@ -170,10 +185,10 @@ static bool ec_setup_device(ec_device_t* device, uacpi_namespace_node* node) {
         return false;
     }
 
+    LOG_INFO("ec(%s): command_port=0x%04x, data_port=0x%04x\n", uacpi_namespace_node_generate_absolute_path(node), device->command_port, device->data_port);
+
     assert(device->command_port != 0 && device->data_port != 0);
     assert(device->command_port != device->data_port);
-
-    LOG_INFO("ec(%s): command_port=0x%04x, data_port=0x%04x\n", uacpi_namespace_node_generate_absolute_path(node), device->command_port, device->data_port);
 
     status = uacpi_install_address_space_handler(node, UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER, ec_region_handler, device);
     if(uacpi_unlikely_error(status)) {
@@ -189,7 +204,7 @@ static uacpi_iteration_decision ec_find_callback(void* user, uacpi_namespace_nod
     (void) depth;
     LOG_INFO("ec: found device %s\n", uacpi_namespace_node_generate_absolute_path(node));
 
-    ec_device_t* device = (ec_device_t*) heap_alloc(sizeof(ec_device_t));
+    ec_device_t* device = (ec_device_t*) heap_zalloc(sizeof(ec_device_t));
     if(!device) {
         LOG_FAIL("ec: failed to allocate memory for device\n");
         return UACPI_ITERATION_DECISION_CONTINUE;
