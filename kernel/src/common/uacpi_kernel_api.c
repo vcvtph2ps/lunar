@@ -5,8 +5,12 @@
 #include <common/init.h>
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
+#include <common/sched/sched.h>
 #include <common/sync/mutex.h>
+#include <common/sync/wait_obj.h>
 #include <common/time/time.h>
+#include <lib/list.h>
+#include <stdint.h>
 
 #if defined(__ARCH_X86_64__)
 #include <arch/x86_64/hardware/ioapic.h>
@@ -370,69 +374,9 @@ void uacpi_kernel_sleep(uacpi_u64 msec) {
     sched_sleep(msec);
 }
 
-/**
- * Create/free an opaque non-recursive kernel mutex object.
- */
-uacpi_handle uacpi_kernel_create_mutex(void) {
-    mutex_t* mutex = (mutex_t*) heap_alloc(sizeof(mutex_t));
-    *mutex = MUTEX_INIT;
-    return (uacpi_handle) mutex;
-}
-
-void uacpi_kernel_free_mutex(uacpi_handle handle) {
-    mutex_t* mutex = (mutex_t*) handle;
-    heap_free(mutex, sizeof(mutex_t));
-}
-
 typedef struct {
     uacpi_u32 counter;
 } kernel_event_t;
-
-/**
- * Create/free an opaque kernel (semaphore-like) event object.
- */
-uacpi_handle uacpi_kernel_create_event(void) {
-    return (uacpi_handle) heap_zalloc(sizeof(kernel_event_t));
-}
-
-void uacpi_kernel_free_event(uacpi_handle handle) {
-    heap_free((kernel_event_t*) handle, sizeof(kernel_event_t));
-}
-
-/**
- * Try to wait for an event (counter > 0) with a millisecond timeout.
- * A timeout value of 0xFFFF implies infinite wait.
- *
- * The internal counter is decremented by 1 if wait was successful.
- *
- * A successful wait is indicated by returning UACPI_TRUE.
- */
-uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
-    assert(timeout == 0xffff);
-    kernel_event_t* event = (kernel_event_t*) handle;
-    while(ATOMIC_LOAD(&event->counter, ATOMIC_RELAXED) == 0) {
-        arch_spin_hint();
-    }
-    return UACPI_TRUE;
-}
-
-/**
- * Signal the event object by incrementing its internal counter by 1.
- *
- * This function may be used in interrupt contexts.
- */
-void uacpi_kernel_signal_event(uacpi_handle handle) {
-    kernel_event_t* event = (kernel_event_t*) handle;
-    ATOMIC_LOAD_ADD(&event->counter, 1, ATOMIC_RELEASE);
-}
-
-/**
- * Reset the event counter to 0.
- */
-void uacpi_kernel_reset_event(uacpi_handle handle) {
-    kernel_event_t* event = (kernel_event_t*) handle;
-    ATOMIC_STORE(&event->counter, 0, ATOMIC_RELEASE);
-}
 
 /**
  * Returns a unique identifier of the currently executing thread.
@@ -466,33 +410,6 @@ void uacpi_kernel_restore_interrupts(uacpi_interrupt_state interrupt_state) {
     arch_interrupt_restore(state);
 }
 
-/**
- * Try to acquire the mutex with a millisecond timeout.
- *
- * The timeout value has the following meanings:
- * 0x0000 - Attempt to acquire the mutex once, in a non-blocking manner
- * 0x0001...0xFFFE - Attempt to acquire the mutex for at least 'timeout'
- *                   milliseconds
- * 0xFFFF - Infinite wait, block until the mutex is acquired
- *
- * The following are possible return values:
- * 1. UACPI_STATUS_OK - successful acquire operation
- * 2. UACPI_STATUS_TIMEOUT - timeout reached while attempting to acquire (or the
- *                           single attempt to acquire was not successful for
- *                           calls with timeout=0)
- * 3. Any other value - signifies a host internal error and is treated as such
- */
-uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle handle, uacpi_u16 timeout) {
-    assert(timeout == 0xffff);
-    mutex_t* mutex = (mutex_t*) handle;
-    mutex_acquire(mutex);
-    return UACPI_STATUS_OK;
-}
-
-void uacpi_kernel_release_mutex(uacpi_handle handle) {
-    mutex_t* mutex = (mutex_t*) handle;
-    mutex_release(mutex);
-}
 
 /**
  * Handle a firmware request.
@@ -503,6 +420,9 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request*) {
     assert(false);
 }
 
+ATOMIC static uint32_t g_uacpi_interrupt_count = 0; // we use this instead of the list count so we can poll it without disabling interrupts
+ATOMIC static uint32_t g_uacpi_work_count = 0; // we use this instead of the list count so we can poll it without disabling interrupts
+
 /**
  * Install an interrupt handler at 'irq', 'ctx' is passed to the provided
  * handler for every invocation.
@@ -510,7 +430,6 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request*) {
  * 'out_irq_handle' is set to a kernel-implemented value that can be used to
  * refer to this handler from other API.
  */
-
 typedef struct {
     uint32_t vector;
     uint8_t gsi;
@@ -522,6 +441,7 @@ typedef struct {
 #if defined(__ARCH_X86_64__)
 static void uacpi_kernel_interrupt_handler(arch_interrupt_frame_t* frame, void* p_ctx) {
     (void) frame;
+    ATOMIC_LOAD_ADD(&g_uacpi_interrupt_count, 1, ATOMIC_ACQUIRE);
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
     arch_ioapic_mask_gsi(ctx->gsi, true);
     dw_queue(ctx->work_item);
@@ -534,6 +454,7 @@ static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
     if(ret == UACPI_INTERRUPT_NOT_HANDLED) {
         arch_panic("uacpi: Unhandled interrupt\n");
     }
+    ATOMIC_LOAD_SUB(&g_uacpi_interrupt_count, 1, ATOMIC_ACQUIRE);
 }
 #endif
 
@@ -619,61 +540,38 @@ typedef struct {
     list_node_t node;
 } uacpi_work_item_t;
 
-static spinlock_no_int_t g_uacpi_work_lock = SPINLOCK_NO_INT_INIT;
-static list_t g_uacpi_work_queue = LIST_INIT;
-ATOMIC static uint32_t g_uacpi_work_count = 0; // we use this instead of the list count so we can poll it without disabling interrupts
-static thread_t* g_uacpi_worker = nullptr;
+static spinlock_no_int_t g_uacpi_work_list_lock;
+static list_t g_uacpi_work_list;
+static wait_obj_t g_uacpi_work_signal = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
-static void process_work() {
-    arch_interrupt_state_t state = spinlock_noint_lock(&g_uacpi_work_lock);
-    if(g_uacpi_work_queue.count == 0) {
-        spinlock_noint_unlock(&g_uacpi_work_lock, state);
-        return;
-    }
-    uacpi_work_item_t* item = CONTAINER_OF(list_pop_front(&g_uacpi_work_queue), uacpi_work_item_t, node);
-    spinlock_noint_unlock(&g_uacpi_work_lock, state);
-
-    item->handler(item->ctx);
-    heap_free(item, sizeof(uacpi_work_item_t));
-}
-
-[[noreturn]] static void uacpi_worker_entry() {
+[[noreturn]] static void uacpi_work_thread() {
     while(1) {
-        // @todo: we should just block and wait for the thread to be woken
-        if(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) == 0) {
-            sched_sleep(100);
+        sched_wait_single(&g_uacpi_work_signal, UINT64_MAX);
+
+        while(1) {
+            arch_interrupt_state_t state = spinlock_noint_lock(&g_uacpi_work_list_lock);
+            list_node_t* node = list_pop(&g_uacpi_work_list);
+            spinlock_noint_unlock(&g_uacpi_work_list_lock, state);
+
+            if(node == nullptr) {
+                break;
+            }
+
+            uacpi_work_item_t* item = CONTAINER_OF(node, uacpi_work_item_t, node);
+            item->handler(item->ctx);
+            ATOMIC_LOAD_SUB(&g_uacpi_work_count, 1, ATOMIC_ACQUIRE);
         }
-        process_work();
     }
 }
 
-/**
- * Schedules deferred work for execution.
- * Might be invoked from an interrupt context.
- */
-uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler handler, uacpi_handle ctx) {
-    (void) type;
-    LOG_KTRC("uacpi: scheduling work handler=%p, ctx=%p\n", (void*) handler, ctx);
-
-    // @todo: we cannot do this here, there is a chance this is first called from an interrupt context...
-    if(g_uacpi_worker == nullptr) {
-        g_uacpi_worker = sched_arch_create_kernel_thread((virt_addr_t) uacpi_worker_entry);
-        sched_thread_schedule(g_uacpi_worker);
-    }
-
-    // @todo: again. cannot call heap_alloc...
-    uacpi_work_item_t* item = (uacpi_work_item_t*) heap_alloc(sizeof(uacpi_work_item_t));
-    item->handler = handler;
-    item->ctx = ctx;
-
-    arch_interrupt_state_t state = spinlock_noint_lock(&g_uacpi_work_lock);
-    list_push_back(&g_uacpi_work_queue, &item->node);
-    ATOMIC_LOAD_ADD(&g_uacpi_work_count, 1, ATOMIC_SEQ_CST);
-
-    spinlock_noint_unlock(&g_uacpi_work_lock, state);
-
-    return UACPI_STATUS_OK;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+void uacpi_create_kernel_thread() {
+    thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) uacpi_work_thread);
+    ATOMIC_STORE(&thread->sched.migratable, false, ATOMIC_SEQ_CST);
+    sched_thread_schedule(thread);
 }
+#pragma clang diagnostic pop
 
 /**
  * Waits for two types of work to finish:
@@ -683,8 +581,138 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
  * Note that the waits must be done in this order specifically.
  */
 uacpi_status uacpi_kernel_wait_for_work_completion(void) {
-    while(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_SEQ_CST) != 0) {
+    while(ATOMIC_LOAD(&g_uacpi_interrupt_count, ATOMIC_RELAXED) != 0) {
         sched_sleep(25);
     }
+
+    while(ATOMIC_LOAD(&g_uacpi_work_count, ATOMIC_RELAXED) != 0) {
+        sched_sleep(25);
+    }
+
     return UACPI_STATUS_OK;
+}
+
+
+/**
+ * Give one unit to the semaphore, waking up one of the threads that are
+ * waiting for it, if any.
+ *
+ * A semaphore has no notion of an owner: the unit may be given by a thread
+ * other than the one that took it.
+ *
+ * This function may be used in interrupt contexts, as well as with interrupts
+ * disabled and a spinlock held, and therefore must not sleep. Note that this
+ * applies to every semaphore, including those that are used as locks.
+ */
+void uacpi_kernel_signal_semaphore(uacpi_handle handle) {
+    wait_obj_signal((wait_obj_t*) handle, 1);
+}
+/**
+ * Try to take one unit from the semaphore with a millisecond timeout.
+ *
+ * The timeout value has the following meanings:
+ * 0x0000 - Attempt to take a unit once, in a non-blocking manner
+ * 0x0001...0xFFFE - Attempt to take a unit for at least 'timeout' milliseconds
+ * 0xFFFF - Infinite wait, block until a unit is available
+ *
+ * The following are possible return values:
+ * 1. UACPI_STATUS_OK - a unit was taken
+ * 2. UACPI_STATUS_TIMEOUT - timeout reached while waiting for a unit (or the
+ *                           single attempt to take one was not successful for
+ *                           calls with timeout=0)
+ * 3. Any other value - signifies a host internal error and is treated as such
+ *
+ * This function is never used in interrupt contexts, unless that's where the
+ * kernel chooses to execute deferred work, see uacpi_kernel_schedule_work.
+ */
+uacpi_status uacpi_kernel_wait_for_semaphore(uacpi_handle handle, uacpi_u16 timeout) {
+    wait_obj_t* obj = (wait_obj_t*) handle;
+    assert(timeout == 0xffff);
+    sched_wait_single(obj, UINT64_MAX);
+    return UACPI_STATUS_OK;
+}
+
+/**
+ * Create/free an opaque kernel counting semaphore object that starts out with
+ * 'initial_units' units available.
+ *
+ * This is the only blocking synchronization primitive that uACPI relies upon,
+ * it's used for two things:
+ * - As a lock, in which case it's created with 1 unit, and never has more
+ *   than that.
+ * - As an event, in which case it's created with 0 units, and there's no
+ *   limit on how many of them it may accumulate. A kernel whose semaphore
+ *   requires one should use the largest value that it supports.
+ *
+ * A semaphore is never freed while there's a thread waiting on it, as long as
+ * uacpi_state_reset is not called with another thread still inside of uACPI.
+ */
+uacpi_handle uacpi_kernel_create_semaphore(uacpi_u32 initial_units) {
+    size_t units = initial_units;
+    if(units == 0) {
+        units = SIZE_MAX;
+    }
+
+    wait_obj_t* wait_obj = (wait_obj_t*) heap_alloc(sizeof(wait_obj_t));
+    *wait_obj = WAIT_OBJ_INIT_SEMAPHORE(units);
+    if(units == 1) {
+        ATOMIC_STORE(&wait_obj->signal_state, 1, ATOMIC_RELAXED);
+    }
+    return (uacpi_handle) wait_obj;
+}
+
+void uacpi_kernel_free_semaphore(uacpi_handle handle) {
+    wait_obj_t* wait_obj = (wait_obj_t*) handle;
+    heap_free(wait_obj, sizeof(wait_obj_t));
+}
+
+/**
+ * Schedules 'handler' to be invoked with 'ctx' as its only argument.
+ * Might be invoked from an interrupt context.
+ *
+ * 'work_item' is there for the kernel to keep track of this work with, it's
+ * never scheduled while still pending, that is before the handler that it was
+ * last scheduled with has been invoked.
+ *
+ * Once that happens the work item may be reused: the handler is allowed to
+ * schedule it again, possibly as a different type of work, or to free it. The
+ * kernel therefore must not access a work item after it has invoked the
+ * handler, which means that both 'handler' and 'ctx' have to be taken out of
+ * it, and any of its state updated, before the handler is invoked and not
+ * after it returns.
+ */
+void uacpi_kernel_schedule_work(uacpi_work_type, uacpi_handle work_item, uacpi_work_handler handler, uacpi_handle ctx) {
+    uacpi_work_item_t* item = work_item;
+    item->handler = handler;
+    item->ctx = ctx;
+
+    ATOMIC_LOAD_ADD(&g_uacpi_work_count, 1, ATOMIC_ACQUIRE);
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_uacpi_work_list_lock);
+    list_push_back(&g_uacpi_work_list, &item->node);
+    spinlock_noint_unlock(&g_uacpi_work_list_lock, state);
+    wait_obj_signal(&g_uacpi_work_signal, 0);
+}
+
+/**
+ * Create/free an opaque kernel work item object, which is what a piece of
+ * deferred work is scheduled with, see uacpi_kernel_schedule_work.
+ *
+ * A work item is always created ahead of the time that it's needed, so that
+ * scheduling it doesn't require any memory to be allocated. It might end up
+ * never being scheduled at all.
+ *
+ * A kernel that has no use for a work item, e.g. because it executes all of
+ * the work right away, may return any value other than UACPI_NULL without
+ * allocating anything.
+ *
+ * Both of these might be invoked by the deferred work itself, but are never
+ * used in interrupt contexts, unless that's where the kernel chooses to
+ * execute said work.
+ */
+uacpi_handle uacpi_kernel_create_work_item(void) {
+    return (uacpi_handle) heap_alloc(sizeof(uacpi_work_item_t));
+}
+
+void uacpi_kernel_free_work_item(uacpi_handle handle) {
+    heap_free(handle, sizeof(uacpi_work_item_t));
 }

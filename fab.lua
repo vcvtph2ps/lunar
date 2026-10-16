@@ -29,7 +29,7 @@ local flanterm = fab.git(
 local uacpi = fab.git(
     "uacpi",
     "https://github.com/uACPI/uACPI.git",
-    "9c9b26d6291a1cdd9014cc5bb6b03e596697cbfd"
+    "686a9a52d9ad72690406d7cada82801377d5e2fa"
 )
 
 local function get_kernel_objs(kernel_flags)
@@ -149,7 +149,6 @@ table.extend(kernel_flags, {
     "-Wdocumentation",
     "-Wmissing-noreturn",
 })
-
 
 if opt_build_type == "debug" then
     table.extend(kernel_flags, {
