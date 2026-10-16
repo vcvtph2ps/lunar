@@ -7,9 +7,27 @@
 #include <common/sync/spinlock.h>
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
+#include <lib/math.h>
+#include <lib/types.h>
+#include <memory/vm.h>
 
 // @todo: refactor this
 #define MAX_LOG_SINKS 8
+
+static void* log_fb_alloc(size_t size) {
+    if(size == 0) {
+        return nullptr;
+    }
+    return vm_map_anon(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
+}
+
+static void log_fb_free(void* pointer, size_t size) {
+    if(pointer == nullptr) {
+        return;
+    }
+    vm_unmap(g_vm_global_address_space, pointer, ALIGN_UP(size, PAGE_SIZE_DEFAULT));
+}
+
 static log_sink_t g_sinks[MAX_LOG_SINKS];
 static size_t g_sink_count = 0;
 static bool g_log_to_framebuffer = true;
@@ -25,15 +43,6 @@ static void framebuffer_sink(int c, void* ctx) {
     flanterm_write(ft_ctx, (const char*) &c, 1);
 }
 
-void log_framebuffer_reinit() {
-    for(size_t i = 0; i < g_sink_count; i++) {
-        if(g_sinks[i].is_framebuffer) {
-            struct flanterm_context* ft_ctx = (struct flanterm_context*) g_sinks[i].ctx;
-            flanterm_fb_update_framebuffer(ft_ctx, g_init_boot_info->framebuffers[g_sinks[i].framebuffer_index].vaddr);
-        }
-    }
-}
-
 void log_framebuffer_enable(bool enable) {
     arch_interrupt_state_t state = spinlock_noint_lock(&g_log_lock);
     g_log_to_framebuffer = enable;
@@ -45,8 +54,8 @@ void log_framebuffer_init() {
         bootinfo_framebuffer_t framebuffer = g_init_boot_info->framebuffers[i];
         if(framebuffer.vaddr != nullptr) {
             struct flanterm_context* ft_ctx = flanterm_fb_init(
-                nullptr,
-                nullptr,
+                log_fb_alloc,
+                log_fb_free,
                 framebuffer.vaddr,
                 framebuffer.width,
                 framebuffer.height,

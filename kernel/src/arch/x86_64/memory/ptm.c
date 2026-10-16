@@ -370,7 +370,7 @@ void ptm_init_kernel(uint32_t core_id) {
         g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + align_diff);
     }
 
-    log_framebuffer_reinit();
+    log_framebuffer_init();
     log_framebuffer_enable(true);
     interrupt_set_hardirq_handler(0x0E, page_fault_handler, nullptr);
 }

@@ -44,11 +44,6 @@ void log_framebuffer_init();
  */
 void log_framebuffer_enable(bool enable);
 
-/**
- * @brief Reinitializes the framebuffer for logging output.
- */
-void log_framebuffer_reinit();
-
 void log_vprint_lockless(log_level_t log, const char* fmt, va_list val);
 [[gnu::format(printf, 2, 3)]] void log_print_lockless(log_level_t log, const char* fmt, ...);
 
