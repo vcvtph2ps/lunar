@@ -62,6 +62,7 @@ const char* memmap_type_to_string(uint64_t type) {
     log_init();
 
     LOG_KTRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
+    LOG_KTRC("cmdline=%s\n", boot_info->command_line);
 
 #ifdef __ARCH_RISCV64__
     LOG_INFO("Platform: %s (riscv64)\n", boot_info->riscv_base_isa_string);
