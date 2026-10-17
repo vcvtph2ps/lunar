@@ -15,7 +15,7 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count) {
     switch(obj->type) {
         case WAIT_OBJ_SYNCHRONIZATION: [[fallthrough]];
         case WAIT_OBJ_NOTIFICATION:    count = 1; break;
-        case WAIT_OBJ_SEMAPHORE:       count = MATH_MIN(count, obj->semaphore.max_signals); break;
+        case WAIT_OBJ_SEMAPHORE:       count = MATH_MIN(ATOMIC_LOAD(&obj->signal_state, ATOMIC_ACQUIRE) + count, obj->semaphore.max_signals); break;
     }
 
     ATOMIC_STORE(&obj->signal_state, count, ATOMIC_RELEASE);
