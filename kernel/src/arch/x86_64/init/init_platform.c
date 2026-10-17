@@ -46,8 +46,12 @@ void init_stage_platform_early(uint32_t core_id) {
     }
 }
 
+void uacpi_create_kernel_thread();
+
 void init_stage_acpi(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
+        uacpi_create_kernel_thread();
+
         uacpi_status status = uacpi_namespace_load();
         if(uacpi_unlikely_error(status)) {
             arch_panic("ACPI: initialization failed uacpi_namespace_load, %s\n", uacpi_status_to_string(status));
