@@ -196,6 +196,12 @@ static bool ec_setup_device(ec_device_t* device, uacpi_namespace_node* node) {
         return false;
     }
 
+    status = uacpi_reg_all_opregions(node, UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER);
+    if(uacpi_unlikely_error(status)) {
+        LOG_FAIL("ec(%s): failed to register operation regions: %s\n", uacpi_namespace_node_generate_absolute_path(node), uacpi_status_to_string(status));
+        return false;
+    }
+
     return true;
 }
 

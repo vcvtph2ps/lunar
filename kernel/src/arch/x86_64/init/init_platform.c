@@ -58,6 +58,8 @@ void init_stage_acpi(uint32_t core_id) {
             arch_panic("ACPI: initialization failed uacpi_namespace_load, %s\n", uacpi_status_to_string(status));
         }
 
+        arch_ec_init(core_id);
+
         status = uacpi_set_interrupt_model(UACPI_INTERRUPT_MODEL_IOAPIC);
         if(uacpi_unlikely_error(status)) {
             arch_panic("ACPI: initialization failed uacpi_set_interrupt_model, %s\n", uacpi_status_to_string(status));
@@ -108,8 +110,6 @@ static uacpi_interrupt_ret power_btn(uacpi_handle ctx) {
 
 void init_stage_platform(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
-        arch_ec_init(core_id);
-
         bool pci = pci_init();
         assert(pci && "PCI: Failed to initialize PCI from ACPI");
 
