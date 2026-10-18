@@ -1,6 +1,7 @@
 #include <arch/x86_64/hardware/16550uart.h>
 #include <arch/x86_64/hardware/ec.h>
 #include <arch/x86_64/hardware/fpu.h>
+#include <arch/x86_64/hardware/i8042.h>
 #include <arch/x86_64/hardware/ioapic.h>
 #include <arch/x86_64/hardware/lapic.h>
 #include <arch/x86_64/internal/cpuid.h>
@@ -126,5 +127,6 @@ void init_stage_platform(uint32_t core_id) {
         }
 
         arch_16550uart_setup();
+        arch_i8042_init();
     }
 }
