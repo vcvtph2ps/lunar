@@ -54,6 +54,10 @@ typedef struct tty {
     /// @brief Called when a byte is written to the tty output (e.g. to forward to UART)
     void (*on_write)(void* ctx, uint8_t c);
     void* write_ctx;
+
+    /// @brief Called after a batch of output has been written (e.g. to drain a framebuffer)
+    void (*on_flush)(void* ctx);
+    void* flush_ctx;
 } tty_t;
 
 /// @brief devfs ops for a tty device; pass the tty_t* as the ctx when calling devfs_bind
@@ -83,6 +87,12 @@ vfs_result_t tty_perform_io(void* ctx, io_request_t* request);
  * @note calls on_write if set
  */
 bool tty_write(tty_t* tty, uint8_t c);
+
+/**
+ * @brief Flush any buffered tty output
+ * @note calls on_flush if set
+ */
+void tty_flush(tty_t* tty);
 
 /// @brief Puts a byte into the tty input buffer
 bool tty_put(tty_t* tty, uint8_t c);

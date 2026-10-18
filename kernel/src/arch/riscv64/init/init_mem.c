@@ -1,4 +1,5 @@
 #include <common/assert.h>
+#include <common/framebuffer.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <lib/helpers.h>
@@ -14,6 +15,9 @@ void init_stage_base_mem(uint32_t core_id) {
     pmm_init(core_id);
     if(INIT_CORE_IS_BSP(core_id)) {
         ptm_init_kernel(core_id);
+
+        framebuffer_init();
+
         slab_init();
         heap_init();
     } else {

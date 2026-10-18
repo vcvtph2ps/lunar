@@ -17,9 +17,9 @@ typedef void (*log_sink_func_t)(int c, void* ctx);
 typedef struct log_sink {
     log_level_t min_level;
     log_sink_func_t write;
+    /// @brief Optional, invoked once after a whole formatted message has been written to this sink
+    void (*flush)(void* ctx);
     void* ctx;
-    bool is_framebuffer;
-    size_t framebuffer_index;
 } log_sink_t;
 
 /**
@@ -32,17 +32,6 @@ typedef struct log_sink {
  * @brief Initializes the logging system.
  */
 void log_init();
-
-/**
- * @brief Initializes the framebuffer for logging output.
- */
-void log_framebuffer_init();
-
-/**
- * @brief Enables or disables logging to the framebuffer.
- * @param enable true to enable logging to the framebuffer, false to disable
- */
-void log_framebuffer_enable(bool enable);
 
 void log_vprint_lockless(log_level_t log, const char* fmt, va_list val);
 [[gnu::format(printf, 2, 3)]] void log_print_lockless(log_level_t log, const char* fmt, ...);

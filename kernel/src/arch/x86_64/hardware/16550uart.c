@@ -387,6 +387,9 @@ void arch_16550uart_setup() {
         thread_t* serial_thread = sched_arch_create_kernel_thread((virt_addr_t) serial_rx_thread);
 
         uint8_t vector = arch_interrupt_alloc_allocate();
+        if(vector == 0) {
+            arch_panic("Failed to allocate interrupt vector for 16550uart\n");
+        }
         interrupt_set_waitobj_handler(vector, &g_serial_wait_obj);
 
         sched_thread_schedule(serial_thread);

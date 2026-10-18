@@ -70,6 +70,8 @@ tty_t* tty_create() {
 
     tty->on_write = nullptr;
     tty->write_ctx = nullptr;
+    tty->on_flush = nullptr;
+    tty->flush_ctx = nullptr;
 
     memory_zero(tty->buf, TTY_RB_SIZE);
     return tty;
@@ -100,6 +102,12 @@ bool tty_write(tty_t* tty, uint8_t c) {
         tty->on_write(tty->write_ctx, c);
     }
     return true;
+}
+
+void tty_flush(tty_t* tty) {
+    if(tty->on_flush != nullptr) {
+        tty->on_flush(tty->flush_ctx);
+    }
 }
 
 void tty_recv_generic(void* ctx, char c) {
@@ -295,6 +303,7 @@ bool tty_put(tty_t* tty, uint8_t c) {
     if(tty->mode.canonical) {
         bool res = tty_put_canonical(tty, c);
         mutex_release(&tty->mutex);
+        tty_flush(tty);
         return res;
     }
 
@@ -306,6 +315,8 @@ bool tty_put(tty_t* tty, uint8_t c) {
         tty_echo_char(tty, c);
     }
     mutex_release(&tty->mutex);
+
+    tty_flush(tty);
 
     if(ok) {
         wait_obj_signal(&tty->wait_obj, 1);
@@ -437,10 +448,12 @@ vfs_result_t tty_perform_io(void* ctx, io_request_t* request) {
             bool success = tty_write(tty, ((uint8_t*) request->write.buffer)[i]);
             if(!success) {
                 request->write.bytes_written = i;
+                tty_flush(tty);
                 return VFS_RESULT_ERR_NO_SPACE;
             }
         }
         request->write.bytes_written = request->write.count;
+        tty_flush(tty);
     }
 
     return VFS_RESULT_OK;

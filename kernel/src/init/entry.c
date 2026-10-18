@@ -78,9 +78,9 @@ const char* memmap_type_to_string(uint64_t type) {
 #endif
 
     LOG_INFO("Has acpi: %s\n", g_init_boot_info->rdsp_physical ? "true" : "false");
+    LOG_INFO("Has dtb: %s\n", g_init_boot_info->dtb_physical ? "true" : "false");
 
 #ifdef __ARCH_RISCV64__
-    LOG_INFO("Has dtb: %s\n", g_init_boot_info->dtb_physical ? "true" : "false");
     LOG_INFO("%zu extensions: ", g_init_boot_info->riscv_extension_count);
     for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) {
         if(i == 0)
@@ -94,6 +94,7 @@ const char* memmap_type_to_string(uint64_t type) {
 
     LOG_KTRC("boot_timestamp=%ld\n", boot_info->boot_timestamp);
     LOG_KTRC("rdsp_physical=0x%016lx\n", boot_info->rdsp_physical);
+    LOG_KTRC("dtb_physical=0x%016lx\n", boot_info->dtb_physical);
     LOG_KTRC("hhdm_offset=0x%016lx\n", boot_info->hhdm_offset);
     LOG_KTRC("hhdm_size=0x%016lx\n", boot_info->hhdm_size);
     LOG_KTRC("pfndb_start=0x%016lx\n", boot_info->pfndb_start);

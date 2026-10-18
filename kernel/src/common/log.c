@@ -14,82 +14,13 @@
 // @todo: refactor this
 #define MAX_LOG_SINKS 8
 
-static void* log_fb_alloc(size_t size) {
-    if(size == 0) {
-        return nullptr;
-    }
-    return vm_map_anon(g_vm_global_address_space, VM_NO_HINT, ALIGN_UP(size, PAGE_SIZE_DEFAULT), VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
-}
-
-static void log_fb_free(void* pointer, size_t size) {
-    if(pointer == nullptr) {
-        return;
-    }
-    vm_unmap(g_vm_global_address_space, pointer, ALIGN_UP(size, PAGE_SIZE_DEFAULT));
-}
-
 static log_sink_t g_sinks[MAX_LOG_SINKS];
 static size_t g_sink_count = 0;
-static bool g_log_to_framebuffer = true;
 static spinlock_no_int_t g_log_lock = SPINLOCK_NO_INT_INIT;
 
 void log_init() {
     arch_log_init();
     log_print_lockless(LOG_LEVEL_FAIL, "\n");
-}
-
-static void framebuffer_sink(int c, void* ctx) {
-    struct flanterm_context* ft_ctx = (struct flanterm_context*) ctx;
-    flanterm_write(ft_ctx, (const char*) &c, 1);
-}
-
-void log_framebuffer_enable(bool enable) {
-    arch_interrupt_state_t state = spinlock_noint_lock(&g_log_lock);
-    g_log_to_framebuffer = enable;
-    spinlock_noint_unlock(&g_log_lock, state);
-}
-
-void log_framebuffer_init() {
-    for(size_t i = 0; i < g_init_boot_info->framebuffer_count; i++) {
-        bootinfo_framebuffer_t framebuffer = g_init_boot_info->framebuffers[i];
-        if(framebuffer.vaddr != nullptr) {
-            struct flanterm_context* ft_ctx = flanterm_fb_init(
-                log_fb_alloc,
-                log_fb_free,
-                framebuffer.vaddr,
-                framebuffer.width,
-                framebuffer.height,
-                framebuffer.pitch,
-                framebuffer.red_size,
-                framebuffer.red_position,
-                framebuffer.green_size,
-                framebuffer.green_position,
-                framebuffer.blue_size,
-                framebuffer.blue_position,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr,
-                nullptr,
-                0,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0
-            );
-            log_sink_t sink = { .min_level = LOG_LEVEL_INFO, .write = framebuffer_sink, .ctx = ft_ctx, .is_framebuffer = true, .framebuffer_index = i };
-            if(log_add_sink(&sink)) {
-                LOG_OKAY("Framebuffer logging initialized for framebuffer %zu\n", i);
-            } else {
-                LOG_FAIL("Failed to add framebuffer logging for framebuffer %zu\n", i);
-            }
-        }
-    }
 }
 
 bool log_add_sink(const log_sink_t* sink) {
@@ -115,10 +46,6 @@ static void dispatch_to_sinks(int c, void* ctx) {
         const log_sink_t* sink = print_ctx->selected_sinks[i];
 
         if(sink->write == nullptr) {
-            continue;
-        }
-
-        if(sink->is_framebuffer && !g_log_to_framebuffer) {
             continue;
         }
 
@@ -148,6 +75,12 @@ void log_vprint_lockless(log_level_t level, const char* fmt, va_list val) {
     };
 
     npf_vpprintf(dispatch_to_sinks, &ctx, fmt, val);
+
+    for(size_t i = 0; i < selected_sink_count; i++) {
+        if(selected_sinks[i]->flush != nullptr) {
+            selected_sinks[i]->flush(selected_sinks[i]->ctx);
+        }
+    }
 }
 
 void log_print_lockless(log_level_t level, const char* fmt, ...) {

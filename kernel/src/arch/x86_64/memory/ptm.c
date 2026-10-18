@@ -10,6 +10,7 @@
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
 #include <common/sync/spinlock.h>
+#include <common/userspace/userspace.h>
 #include <lib/helpers.h>
 #include <lib/math.h>
 #include <lib/string.h>
@@ -20,8 +21,6 @@
 #include <memory/ptm.h>
 #include <memory/vm.h>
 #include <protocol/bootinfo.h>
-
-#include "common/userspace/userspace.h"
 
 bool g_arch_pte_la57_enabled = false;
 static bool g_pat_supported = false;
@@ -353,7 +352,6 @@ void ptm_init_kernel(uint32_t core_id) {
 
     map_kernel();
 
-    log_framebuffer_enable(false);
     ptm_load_address_space(g_vm_global_address_space);
     LOG_OKAY("switched to kernel page tables :33\n");
     vm_init_kernel();
@@ -370,8 +368,6 @@ void ptm_init_kernel(uint32_t core_id) {
         g_init_boot_info->framebuffers[i].vaddr = (void*) ((uintptr_t) new_vaddr + align_diff);
     }
 
-    log_framebuffer_init();
-    log_framebuffer_enable(true);
     interrupt_set_hardirq_handler(0x0E, page_fault_handler, nullptr);
 }
 
