@@ -30,7 +30,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
 
     LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", pathname, flags, mode, result);
     if(flags & UAPI_O_CREATE) {
-        LOG_UTRC("O_CREATE unimplemented");
+        LOG_UTRC("O_CREATE unimplemented\n");
     }
 
     user_assert(pathname_ubuffer_size <= 1024);
