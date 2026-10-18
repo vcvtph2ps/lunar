@@ -35,14 +35,14 @@ static uint64_t arch_kvm_pvclock_get_ns(time_timer_t* self) {
     while(true) {
         version = pvclock->version;
 
-        arch_memory_fence();
+        arch_memory_fence(ARCH_MEMORY_FENCE_FULL);
 
         system_time = pvclock->system_time;
         uint64_t tsc_base = pvclock->tsc_timestamp;
         mul = pvclock->tsc_to_system_mul;
         shift = pvclock->tsc_shift;
 
-        arch_memory_fence();
+        arch_memory_fence(ARCH_MEMORY_FENCE_FULL);
 
         if(version == pvclock->version && !(version & 1)) {
             tsc = arch_tsc_read();

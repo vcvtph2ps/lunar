@@ -87,7 +87,7 @@ if opt_build_type == "release" then
     })
 elseif opt_build_type == "debug" then
     table.extend(c_flags, {
-        "-O1",
+        "-Og",
         "-g",
         "-fno-lto",
         "-fno-omit-frame-pointer",
@@ -107,7 +107,7 @@ if opt_arch == "x86_64" then
 elseif opt_arch == "riscv64" then
     table.extend(c_flags, {
         "--target=riscv64-none-elf",
-        "-march=rv64gc",
+        "-march=rv64gc_zihintpause",
         "-mabi=lp64d",
         "-mcmodel=medany",
         "-D__ARCH_RISCV64__"

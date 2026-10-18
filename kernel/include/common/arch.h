@@ -3,6 +3,13 @@
 #include <common/memory.h>
 #include <stdint.h>
 
+typedef enum {
+    ARCH_MEMORY_FENCE_LOAD,
+    ARCH_MEMORY_FENCE_STORE,
+    ARCH_MEMORY_FENCE_MEMORY,
+    ARCH_MEMORY_FENCE_FULL
+} arch_memory_fence_type_t;
+
 /**
  * @brief Hint to the processor that we are in a tight loop and it should relax
  */
@@ -11,7 +18,7 @@ void arch_spin_hint();
 /**
  * @brief Memory fence to ensure that all memory operations before this point are completed
  */
-void arch_memory_fence();
+void arch_memory_fence(arch_memory_fence_type_t type);
 
 /**
  * @brief Waits for the next interrupt

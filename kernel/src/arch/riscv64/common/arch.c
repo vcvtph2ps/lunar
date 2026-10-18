@@ -4,11 +4,21 @@
 #include <common/cpu_local.h>
 #include <common/log.h>
 
-void arch_memory_fence() {
-    __asm__ volatile("fence iorw, iorw" ::: "memory");
+[[gnu::always_inline]] void arch_spin_hint() {
+    asm volatile("pause" ::: "memory");
 }
 
-void arch_wait_for_interrupt() {
+[[gnu::always_inline]] void arch_memory_fence(arch_memory_fence_type_t type) {
+    switch(type) {
+        case ARCH_MEMORY_FENCE_LOAD:   __asm__ volatile("fence r, r" ::: "memory"); return;
+        case ARCH_MEMORY_FENCE_STORE:  __asm__ volatile("fence w, w" ::: "memory"); return;
+        case ARCH_MEMORY_FENCE_MEMORY: __asm__ volatile("fence rw, rw" ::: "memory"); return;
+        case ARCH_MEMORY_FENCE_FULL:   __asm__ volatile("fence iorw, iorw" ::: "memory"); return;
+    }
+}
+
+
+[[gnu::always_inline]] void arch_wait_for_interrupt() {
     __asm__ volatile("wfi" ::: "memory");
 }
 
@@ -31,8 +41,4 @@ void arch_log_init() {
 
 uint64_t arch_get_core_id() {
     return CPU_LOCAL_READ(core_id);
-}
-
-void arch_spin_hint() {
-    asm volatile("nop" ::: "memory");
 }

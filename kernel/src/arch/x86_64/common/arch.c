@@ -5,15 +5,20 @@
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 
-void arch_spin_hint() {
+[[gnu::always_inline]] void arch_spin_hint() {
     __asm__ volatile("pause" ::: "memory");
 }
 
-void arch_memory_fence() {
-    __asm__ volatile("mfence" ::: "memory");
+[[gnu::always_inline]] void arch_memory_fence(arch_memory_fence_type_t type) {
+    switch(type) {
+        case ARCH_MEMORY_FENCE_LOAD:   __asm__ volatile("lfence" ::: "memory"); return;
+        case ARCH_MEMORY_FENCE_STORE:  __asm__ volatile("sfence" ::: "memory"); return;
+        case ARCH_MEMORY_FENCE_MEMORY: __asm__ volatile("mfence" ::: "memory"); return;
+        case ARCH_MEMORY_FENCE_FULL:   __asm__ volatile("mfence" ::: "memory"); return;
+    }
 }
 
-void arch_wait_for_interrupt() {
+[[gnu::always_inline]] void arch_wait_for_interrupt() {
     __asm__ volatile("hlt" ::: "memory");
 }
 
