@@ -29,14 +29,19 @@ init_stage_handler_t g_init_stage_handlers[] = { INIT_STAGE(INIT_STAGE_BASE_MEM,
 #undef INIT_STAGE
 
 static void run_stage(init_stage_t stage, uint32_t core_id) {
+    bool found = false;
     for(size_t i = 0; i < sizeof(g_init_stage_handlers) / sizeof(init_stage_handler_t); i++) {
         if(g_init_stage_handlers[i].stage == stage) {
             g_init_stage_handlers[i].handler(core_id);
             LOG_KTRC("finished stage %s (%i) on core %d (%s)\n", init_stage_to_str(stage), stage, core_id, INIT_CORE_IS_BSP(core_id) ? "bsp" : "ap");
-            return;
+            found = true;
+            break;
         }
     }
-    LOG_WARN("No handler found for stage %s (%i)\n", init_stage_to_str(stage), stage);
+    if(!found) {
+        LOG_WARN("No handler found for stage %s (%i)\n", init_stage_to_str(stage), stage);
+    }
+    init_stage_maybe_halt(stage, core_id);
 }
 
 ATOMIC uint32_t g_init_finished_core_count = 0;

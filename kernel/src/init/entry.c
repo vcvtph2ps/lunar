@@ -1,4 +1,5 @@
 #include <common/arch.h>
+#include <common/cmdline.h>
 #include <common/cpu_local.h>
 #include <common/log.h>
 #include <lib/helpers.h>
@@ -60,6 +61,8 @@ const char* memmap_type_to_string(uint64_t type) {
     g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
+
+    cmdline_parse(boot_info->command_line);
 
     LOG_KTRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
     LOG_KTRC("cmdline=%s\n", boot_info->command_line);
