@@ -26,6 +26,11 @@ void arch_memory_fence(arch_memory_fence_type_t type);
 void arch_wait_for_interrupt();
 
 /**
+ * @brief Halts the current core forever, never returning.
+ */
+[[noreturn]] void arch_halt_cpu();
+
+/**
  * @brief Gets the ID of the current core
  */
 uint64_t arch_get_core_id();

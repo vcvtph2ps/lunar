@@ -88,6 +88,7 @@ static bool g_x2apic_mode = false;
 static phys_addr_t g_lapic_phys_base;
 static virt_addr_t g_lapic_virt_base;
 static bool g_icr_needs_fence = true;
+static bool g_lapic_initialized = false;
 
 static bool internal_x2apic_supported(void) {
     return arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC);
@@ -179,6 +180,13 @@ void arch_lapic_eoi() {
     arch_lapic_write(LAPIC_EOI, 0);
 }
 
+void arch_lapic_mask_all_interrupts() {
+    if(!g_lapic_initialized) {
+        return;
+    }
+    arch_lapic_write(LAPIC_TPR, 0xFF);
+}
+
 static void lapic_configure() {
     arch_lapic_write(LAPIC_TPR, 0);
     if(!g_x2apic_mode) {
@@ -204,6 +212,7 @@ void arch_lapic_init(uint32_t core_id) {
     CPU_LOCAL_WRITE(lapic_id, arch_lapic_get_id());
 
     lapic_configure();
+    g_lapic_initialized = true;
     LOG_OKAY("initialized in %s mode for lapic %d\n", g_x2apic_mode ? "x2APIC" : "xAPIC", arch_lapic_get_id());
 }
 

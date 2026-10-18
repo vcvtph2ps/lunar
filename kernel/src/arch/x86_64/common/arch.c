@@ -22,6 +22,16 @@
     __asm__ volatile("hlt" ::: "memory");
 }
 
+[[noreturn]] void arch_halt_cpu() {
+    (void) arch_interrupt_disable();
+    arch_lapic_mask_all_interrupts();
+
+    while(1) {
+        __asm__ volatile("hlt" ::: "memory");
+    }
+    __builtin_unreachable();
+}
+
 uint64_t arch_get_core_id() {
     return CPU_LOCAL_READ(core_id);
 }

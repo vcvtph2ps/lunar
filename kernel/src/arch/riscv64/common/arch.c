@@ -22,6 +22,13 @@
     __asm__ volatile("wfi" ::: "memory");
 }
 
+[[noreturn]] void arch_halt_cpu() {
+    while(1) {
+        __asm__ volatile("wfi" ::: "memory");
+    }
+    __builtin_unreachable();
+}
+
 static void serial_sink(int c, void* ctx) {
     (void) ctx;
     arch_sbi_console_putchar((char) c);

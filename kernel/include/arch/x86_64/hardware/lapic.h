@@ -25,6 +25,12 @@ bool arch_lapic_is_bsp();
 void arch_lapic_eoi();
 
 /**
+ * @brief Masks all maskable interrupts on the local APIC by raising the task priority register.
+ * @note Prevents the APIC from waking a halted core for a pending but undeliverable interrupt.
+ */
+void arch_lapic_mask_all_interrupts();
+
+/**
  * @brief Sends an interprocessor interrupt with the specified vector to the processor with the specified APIC ID.
  * @param apic_id The APIC ID of the target processor to send the IPI
  * @param vector The interrupt vector to send in the IPI.

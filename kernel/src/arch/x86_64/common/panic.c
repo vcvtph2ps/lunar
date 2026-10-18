@@ -71,15 +71,11 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
 
     if(old_value == core_id) {
         log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %d (recursive panic)\n", core_id);
-        while(1) {
-            arch_wait_for_interrupt();
-        }
+        arch_halt_cpu();
     }
 
     if(old_value != 0xffffffff) {
-        while(1) {
-            arch_wait_for_interrupt();
-        }
+        arch_halt_cpu();
     }
 
     // @note: we set these to false, we need to be able to grab any kind of lock. and it doesn't matter anyway the kernel panicked
