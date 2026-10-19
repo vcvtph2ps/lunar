@@ -235,7 +235,7 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
             continue;
         }
 
-        LOG_KTRC("elf: loading segment %zu: vaddr=0x%lx, size=%zu\n", i, allocation.image_offset + phdr_cache[i].vaddr, allocation.image_offset + phdr_cache[i].file_size);
+        LOG_KTRC("elf: loading segment %zu: vaddr=0x%lx, size=%zu\n", i, allocation.image_offset + phdr_cache[i].vaddr, phdr_cache[i].file_size);
 
         bool success;
 
