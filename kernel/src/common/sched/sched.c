@@ -134,6 +134,7 @@ void sched_thread_kill(thread_t* thread) {
         /// Once the state is dying the scheduler will not pick the thread up again and it will bail out of whatever it was doing on its next state transition
         thread_state_t expected = state;
         if(!ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_DYING, ATOMIC_SEQ_CST, ATOMIC_SEQ_CST)) {
+            arch_spin_hint();
             continue;
         }
 
@@ -179,6 +180,8 @@ void sched_thread_interrupt(thread_t* thread) {
         if(ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_WAITING_ABORTED, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE)) {
             return;
         }
+
+        arch_spin_hint();
     }
 }
 
@@ -270,7 +273,7 @@ void sched_yield() {
     CPU_LOCAL_WRITE(scheduler.preempt_counter, 0u);
     CPU_LOCAL_WRITE(defered_work.counter, 0u);
     sched_yield_internal(THREAD_STATE_DYING);
-    while(1);
+    ASSERT_UNREACHABLE();
 }
 
 void sched_thread_drop(thread_t* thread) {
@@ -298,7 +301,6 @@ void sched_thread_init_common(thread_t* prev) {
 
 [[noreturn]] void sched_thread_exit_kernel() {
     sched_terminate_current_thread();
-    while(1);
 }
 
 [[noreturn]] void sched_arch_handoff() {

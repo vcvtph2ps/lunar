@@ -52,17 +52,21 @@ i8042_port g_i8042_ports[2] = { 0 };
 
 static bool wait_write() {
     int timeout = I8042_PORT_TIMEOUT;
-    while(--timeout)
+    while(--timeout) {
         if(!(arch_io_port_read_u8(I8042_PORT_CMD_STATUS) & I8042_STATUS_RDYWRITE))
             return true;
+        arch_spin_hint();
+    }
     return false;
 }
 
 static bool wait_read() {
     int timeout = I8042_PORT_TIMEOUT;
-    while(--timeout)
+    while(--timeout) {
         if(arch_io_port_read_u8(I8042_PORT_CMD_STATUS) & I8042_STATUS_RDYREAD)
             return true;
+        arch_spin_hint();
+    }
     return false;
 }
 
@@ -165,6 +169,7 @@ static inline bool port_initialize(arch_i8042_port_t port) {
     /// Flush any extra bytes sent during reset
     while(arch_io_port_read_u8(I8042_PORT_CMD_STATUS) & I8042_STATUS_RDYREAD) {
         arch_io_port_read_u8(I8042_PORT_DATA);
+        arch_spin_hint();
     }
 
     if(reset != 0xAA)
@@ -322,6 +327,7 @@ bool arch_i8042_init() {
     /// Flush any leftover bytes in the buffer
     while(arch_io_port_read_u8(I8042_PORT_CMD_STATUS) & I8042_STATUS_RDYREAD) {
         arch_io_port_read_u8(I8042_PORT_DATA);
+        arch_spin_hint();
     }
 
     return true;

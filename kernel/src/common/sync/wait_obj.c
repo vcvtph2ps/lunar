@@ -115,6 +115,7 @@ bool wait_obj_try_consume(wait_obj_t* obj) {
                     success = true;
                     break;
                 }
+                arch_spin_hint();
             }
             break;
         }

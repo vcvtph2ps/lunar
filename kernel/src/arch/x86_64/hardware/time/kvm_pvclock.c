@@ -57,6 +57,8 @@ static uint64_t arch_kvm_pvclock_get_ns(time_timer_t* self) {
 
             return system_time + scaled;
         }
+
+        arch_spin_hint();
     }
 }
 

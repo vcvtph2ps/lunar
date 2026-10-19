@@ -1,5 +1,6 @@
 #include <arch/x86_64/cpu_local.h>
 #include <arch/x86_64/hardware/time/tsc.h>
+#include <common/arch.h>
 #include <common/log.h>
 #include <common/time/time.h>
 #include <memory/heap.h>
@@ -17,7 +18,7 @@ static void arch_tsc_sleep(time_timer_t* self, uint64_t microseconds) {
     uint64_t tsc_start = arch_tsc_read();
     uint64_t tsc_end = tsc_start + (tsc_ticks_per_us * microseconds);
     while(arch_tsc_read() < tsc_end) {
-        __asm__ volatile("pause");
+        arch_spin_hint();
     }
 }
 

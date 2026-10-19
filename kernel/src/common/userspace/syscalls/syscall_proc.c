@@ -28,7 +28,7 @@
     ATOMIC_STORE(&thread->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
 
     process_kill(process, PROCESS_EXITED, (int32_t) args->arg1);
-    while(1);
+    ASSERT_UNREACHABLE();
 }
 
 /// @brief Resolves a pid to a referenced process, accepting UINT32_MAX or a direct child of `parent`

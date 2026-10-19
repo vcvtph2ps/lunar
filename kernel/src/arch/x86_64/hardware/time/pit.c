@@ -1,5 +1,6 @@
 #include <arch/x86_64/hardware/time/pit.h>
 #include <arch/x86_64/io.h>
+#include <common/arch.h>
 #include <memory/heap.h>
 #include <stdint.h>
 
@@ -42,6 +43,7 @@ static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
             if(current > last)
                 break;
             last = current;
+            arch_spin_hint();
         }
     }
 

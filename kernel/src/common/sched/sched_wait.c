@@ -48,6 +48,8 @@ static void sched_wait_resume() {
         if(ATOMIC_COMPARE_EXCHANGE_STRONG(&thread->sched.state, &expected, THREAD_STATE_RUNNING, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE)) {
             return;
         }
+
+        arch_spin_hint();
     }
 }
 

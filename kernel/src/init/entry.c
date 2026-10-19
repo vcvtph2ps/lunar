@@ -30,7 +30,9 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 [[noreturn]] static void kernel_entry_ap(uint64_t core_id) {
-    while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
+    while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0) {
+        arch_spin_hint();
+    }
     cpu_local_init(core_id);
 
     LOG_KTRC("kernel booted on core %ld :3\n", core_id);
