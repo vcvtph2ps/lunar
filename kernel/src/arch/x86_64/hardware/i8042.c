@@ -1,8 +1,10 @@
 #include <arch/x86_64/hardware/i8042.h>
+#include <arch/x86_64/hardware/time/tsc.h>
 #include <arch/x86_64/io.h>
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/log.h>
+#include <common/time/time.h>
 #include <lib/string.h>
 #include <stdint.h>
 #include <uacpi/acpi.h>
@@ -10,7 +12,7 @@
 
 #define I8042_DATA_ACK 0xFA
 
-#define I8042_PORT_TIMEOUT 100000
+#define I8042_PORT_TIMEOUT_ITERATIONS 5000
 
 #define I8042_PORT_CMD_STATUS 0x64
 #define I8042_PORT_DATA 0x60
@@ -51,20 +53,28 @@ typedef struct {
 i8042_port g_i8042_ports[2] = { 0 };
 
 static bool wait_write() {
-    int timeout = I8042_PORT_TIMEOUT;
-    while(--timeout) {
+    time_timer_t* timer = arch_tsc_timer_get();
+
+    for(size_t i = 0; i < I8042_PORT_TIMEOUT_ITERATIONS; i++) {
         if(!(arch_io_port_read_u8(I8042_PORT_CMD_STATUS) & I8042_STATUS_RDYWRITE))
             return true;
+
+        timer->sleep(timer, 100);
+
         arch_spin_hint();
     }
     return false;
 }
 
 static bool wait_read() {
-    int timeout = I8042_PORT_TIMEOUT;
-    while(--timeout) {
+    time_timer_t* timer = arch_tsc_timer_get();
+
+    for(size_t i = 0; i < I8042_PORT_TIMEOUT_ITERATIONS; i++) {
         if(arch_io_port_read_u8(I8042_PORT_CMD_STATUS) & I8042_STATUS_RDYREAD)
             return true;
+
+        timer->sleep(timer, 100);
+
         arch_spin_hint();
     }
     return false;
@@ -287,8 +297,10 @@ bool arch_i8042_init() {
     /// Initialize port one
     if(g_i8042_ports[0].available) {
         I8042_FAIL_WRITE(I8042_PORT_CMD_STATUS, I8042_COMMAND_ENABLE_PORT1);
-        if(!port_initialize(ARCH_I8042_PORT_ONE))
+        if(!port_initialize(ARCH_I8042_PORT_ONE)) {
+            LOG_FAIL("failed to initialize port 1\n");
             g_i8042_ports[0].available = false;
+        }
         I8042_FAIL_WRITE(I8042_PORT_CMD_STATUS, I8042_COMMAND_DISABLE_PORT1);
     }
 
@@ -304,16 +316,12 @@ bool arch_i8042_init() {
 
     if(g_i8042_ports[0].available) {
         LOG_OKAY("successfully initialized port 1 with device id 0x%04x\n", g_i8042_ports[0].device_id);
-    } else {
-        LOG_FAIL("failed to initialize port 1\n");
     }
 
     if(g_i8042_ports[1].available) {
         LOG_OKAY("successfully initialized port 2 with device id 0x%04x\n", g_i8042_ports[1].device_id);
     } else {
-        if(g_i8042_ports[1].exists) {
-            LOG_FAIL("failed to initialize port 2\n");
-        } else {
+        if(!g_i8042_ports[1].exists) {
             LOG_WARN("port 2 does not exist\n");
         }
     }

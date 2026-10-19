@@ -35,7 +35,7 @@ typedef struct ec_device {
 #define EC_CMD_READ 0x80
 #define EC_CMD_WRITE 0x81
 
-#define EC_TIMEOUT_ITERATIONS 100000
+#define EC_TIMEOUT_ITERATIONS 5000
 
 static bool ec_wait_ibf_clear(ec_device_t* device) {
     time_timer_t* timer = arch_tsc_timer_get();
