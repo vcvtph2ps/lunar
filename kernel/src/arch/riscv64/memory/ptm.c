@@ -297,7 +297,7 @@ static void map_kernel(arch_pte_entry_t* boot_top) {
 
 static bool detect_svpbmt(void) {
     for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) {
-        if(string_compare_i((*g_init_boot_info->riscv_extentions)[i], "svpbmt") == 0)
+        if(string_compare_case((*g_init_boot_info->riscv_extentions)[i], "svpbmt") == 0)
             return true;
     }
     return false;
