@@ -199,7 +199,7 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
     x86_64_thread_t* next = CONTAINER_OF(t_next, x86_64_thread_t, common);
 
     CPU_LOCAL_WRITE(current_thread, next);
-    interrupt_set_usermode_stack(next->stack_pointer);
+    interrupt_set_usermode_stack(next->kernel_stack_top);
 
     if(current->common.process) {
         arch_fpu_save(current->fpu_area);
