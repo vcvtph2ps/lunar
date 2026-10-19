@@ -101,7 +101,7 @@ static void process_init_common(process_t* process) {
     ATOMIC_STORE(&process->ref_count, 1, ATOMIC_RELAXED);
     process->children_lock = SPINLOCK_NO_DW_INIT;
     process->children_list = LIST_INIT;
-    process->child_exit_event = WAIT_OBJ_INIT_NOTIFICATION();
+    process->child_exit_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
     process->thread_list_lock = SPINLOCK_NO_DW_INIT;
     process->thread_list = LIST_INIT;
 
