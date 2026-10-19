@@ -11,12 +11,14 @@ static uint32_t pci_legacy_address(uint8_t bus, uint8_t device, uint8_t function
 
 uint32_t pci_device_read_u32(pci_device_access_t* access, uint16_t offset) {
     assert(access != nullptr);
+    assert((offset & 0xfffc) == offset);
+
     if(access->ecam_window == nullptr && access->segment != 0) {
         arch_panic("PCI: Attempted to read from device with no ECAM window\n");
     }
 
     if(access->ecam_window) {
-        return access->ecam_window[offset / 4];
+        return arch_io_mem_read_u32(((uintptr_t) access->ecam_window) + offset);
     } else {
         uint32_t address = pci_legacy_address(access->bus, access->device, access->function, offset);
         arch_io_port_write_u32(PCI_CONFIG_ADDRESS, address);
@@ -26,12 +28,14 @@ uint32_t pci_device_read_u32(pci_device_access_t* access, uint16_t offset) {
 
 void pci_device_write_u32(pci_device_access_t* access, uint16_t offset, uint32_t value) {
     assert(access != nullptr);
+    assert((offset & 0xfffc) == offset);
+
     if(access->ecam_window == nullptr && access->segment != 0) {
         arch_panic("PCI: Attempted to write to device with no ECAM window\n");
     }
 
     if(access->ecam_window) {
-        access->ecam_window[offset / 4] = value;
+        arch_io_mem_write_u32(((uintptr_t) access->ecam_window) + offset, value);
     } else {
         uint32_t address = pci_legacy_address(access->bus, access->device, access->function, offset);
         arch_io_port_write_u32(PCI_CONFIG_ADDRESS, address);

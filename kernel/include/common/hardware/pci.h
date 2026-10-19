@@ -97,7 +97,7 @@ typedef struct {
     uint8_t bus;
     uint8_t device;
     uint8_t function;
-    uint32_t* ecam_window;
+    void* ecam_window;
 } pci_device_access_t;
 
 static inline uint64_t pci_ecam_offset(uint8_t bus, uint8_t device, uint8_t function) {

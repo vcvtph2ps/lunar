@@ -66,7 +66,7 @@ void pci_device_write_u16(pci_device_access_t* access, uint16_t offset, uint16_t
 #define PCI_REGISTER_TYPE1_SECONDARY_BUS 0x18
 
 #define PCI_REGISTER_BAR_BASE 0x10
-#define PCI_REGISTER_BAR(x) (PCI_REGISTER_BAR_BASE + (x * 4))
+#define PCI_REGISTER_BAR(x) (PCI_REGISTER_BAR_BASE + ((x) * 4))
 
 #define PCI_REGISTER_INTERRUPT_LINE 0x3C
 

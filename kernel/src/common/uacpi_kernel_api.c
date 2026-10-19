@@ -188,7 +188,7 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handl
 
         handle->allocated = false;
         handle->access = &device->access;
-        *out_handle = (uacpi_handle) device;
+        *out_handle = (uacpi_handle) handle;
     }
 
     return UACPI_STATUS_OK;
