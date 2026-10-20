@@ -14,47 +14,47 @@
 #include <nanoprintf/nanoprintf.h>
 #include <stdint.h>
 
-static void dump_fs_recursive(const char* path, int depth) {
-    size_t offset = 0;
-    vfs_dentry_t* dirent;
+// static void dump_fs_recursive(const char* path, int depth) {
+//     size_t offset = 0;
+//     vfs_dentry_t* dirent;
 
-    while(true) {
-        vfs_result_t res = vfs_read_dir(&VFS_MAKE_ABS_PATH(path), &offset, &dirent);
+//     while(true) {
+//         vfs_result_t res = vfs_read_dir(&VFS_MAKE_ABS_PATH(path), &offset, &dirent);
 
-        if(res != VFS_RESULT_OK) {
-            arch_panic("Failed to read directory %s (%d)\n", path, res);
-        }
+//         if(res != VFS_RESULT_OK) {
+//             arch_panic("Failed to read directory %s (%d)\n", path, res);
+//         }
 
-        if(dirent == nullptr)
-            break;
+//         if(dirent == nullptr)
+//             break;
 
-        for(int i = 0; i < depth; i++) log_print(LOG_LEVEL_INFO, "  ");
+//         for(int i = 0; i < depth; i++) log_print(LOG_LEVEL_INFO, "  ");
 
-        if(dirent->negative) {
-            continue;
-        }
+//         if(dirent->negative) {
+//             continue;
+//         }
 
-        log_print(LOG_LEVEL_INFO, "%s\n", dirent->name);
+//         log_print(LOG_LEVEL_INFO, "%s\n", dirent->name);
 
-        if(dirent->node->type == VFS_NODE_TYPE_DIR) {
-            char child_path[255];
+//         if(dirent->node->type == VFS_NODE_TYPE_DIR) {
+//             char child_path[255];
 
-            if(string_compare(path, "/") == 0)
-                npf_snprintf(child_path, sizeof(child_path), "/%s", dirent->name);
-            else
-                npf_snprintf(child_path, sizeof(child_path), "%s/%s", path, dirent->name);
+//             if(string_compare(path, "/") == 0)
+//                 npf_snprintf(child_path, sizeof(child_path), "/%s", dirent->name);
+//             else
+//                 npf_snprintf(child_path, sizeof(child_path), "%s/%s", path, dirent->name);
 
-            dump_fs_recursive(child_path, depth + 1);
-        }
+//             dump_fs_recursive(child_path, depth + 1);
+//         }
 
-        vfs_dentry_put(dirent);
-    }
-}
+//         vfs_dentry_put(dirent);
+//     }
+// }
 
-static void dump_fs(const char* root) {
-    log_print(LOG_LEVEL_INFO, "%s\n", root);
-    dump_fs_recursive(root, 1);
-}
+// static void dump_fs(const char* root) {
+//     log_print(LOG_LEVEL_INFO, "%s\n", root);
+//     dump_fs_recursive(root, 1);
+// }
 
 typedef enum {
     INITRAMFS_TYPE_GZIP,
@@ -137,5 +137,5 @@ void init_stage_vfs(uint32_t core_id) {
     }
     LOG_OKAY("mounted devfs at /dev\n");
 
-    dump_fs("/");
+    // dump_fs("/");
 }

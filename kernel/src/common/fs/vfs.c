@@ -1,8 +1,8 @@
 #include <common/fs/dentry.h>
 #include <common/fs/io.h>
 #include <common/fs/vfs.h>
-#include <common/sync/mutex.h>
-#include <common/sync/rwlock.h>
+#include <common/sync/lock.h>
+#include <common/sync/rwspinlock.h>
 #include <lib/string.h>
 #include <memory/heap.h>
 
@@ -32,11 +32,11 @@ static vfs_result_t lookup_component(vfs_dentry_t* current, const char* componen
         return VFS_RESULT_OK;
     }
 
-    rwlock_write_t* dir_lock = rwlock_lock_write(&current->rwlock);
+    rwspinlock_write_t* dir_lock = rwspinlock_lock_write(&current->rwspinlock);
 
     dentry = vfs_dcache_lookup(current, component);
     if(dentry != nullptr) {
-        rwlock_unlock_write(dir_lock);
+        rwspinlock_unlock_write(dir_lock);
         if(dentry->negative) {
             vfs_dentry_put(dentry);
             return VFS_RESULT_ERR_NOT_FOUND;
@@ -46,9 +46,9 @@ static vfs_result_t lookup_component(vfs_dentry_t* current, const char* componen
     }
 
     vfs_node_t* next_node;
-    mutex_acquire(&current->node->lock);
+    lock_acquire(&current->node->lock);
     vfs_result_t res = current->node->ops->lookup(current->node, component, &next_node);
-    mutex_release(&current->node->lock);
+    lock_release(&current->node->lock);
 
     if(res == VFS_RESULT_OK && next_node == nullptr)
         res = VFS_RESULT_ERR_NOT_FOUND;
@@ -68,18 +68,18 @@ static vfs_result_t lookup_component(vfs_dentry_t* current, const char* componen
         }
     }
 
-    rwlock_unlock_write(dir_lock);
+    rwspinlock_unlock_write(dir_lock);
     return res;
 }
 
 static vfs_dentry_t* dentry_for_node(vfs_node_t* node) {
-    mutex_acquire(&node->lock);
+    lock_acquire(&node->lock);
     vfs_dentry_t* dentry = nullptr;
     if(node->dentries.head != nullptr) {
         dentry = CONTAINER_OF(node->dentries.head, vfs_dentry_t, alias_node);
         vfs_dentry_get(dentry);
     }
-    mutex_release(&node->lock);
+    lock_release(&node->lock);
 
     if(dentry != nullptr)
         return dentry;
@@ -148,18 +148,18 @@ vfs_result_t vfs_mount(const vfs_ops_t* ops, const vfs_path_t* mount_point, void
         return res;
     }
 
-    rwlock_write_t* write_lock = rwlock_lock_write(&dentry->rwlock);
+    rwspinlock_write_t* write_lock = rwspinlock_lock_write(&dentry->rwspinlock);
 
     if(dentry->node == nullptr || dentry->node->type != VFS_NODE_TYPE_DIR) {
         heap_free(vfs, sizeof(vfs_t));
-        rwlock_unlock_write(write_lock);
+        rwspinlock_unlock_write(write_lock);
         vfs_dentry_put(dentry);
         return VFS_RESULT_ERR_NOT_DIR;
     }
 
     if(dentry->mounted_vfs != nullptr) {
         heap_free(vfs, sizeof(vfs_t));
-        rwlock_unlock_write(write_lock);
+        rwspinlock_unlock_write(write_lock);
         vfs_dentry_put(dentry);
         return VFS_RESULT_ERR_EXISTS;
     }
@@ -167,7 +167,7 @@ vfs_result_t vfs_mount(const vfs_ops_t* ops, const vfs_path_t* mount_point, void
     dentry->mounted_vfs = vfs;
     vfs->mount_point = dentry;
     vfs->ops->mount(vfs);
-    rwlock_unlock_write(write_lock);
+    rwspinlock_unlock_write(write_lock);
 
     spinlock_lock(&g_vfs_list_lock);
     list_push_back(&g_vfs_list, &vfs->global_list_node);
@@ -215,10 +215,10 @@ vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
     if(res != VFS_RESULT_OK)
         return res;
 
-    // @todo: read/write mutex
-    mutex_acquire(&node->lock);
+    // @todo: read/write lock
+    lock_acquire(&node->lock);
     res = node->ops->perform_io(node, request);
-    mutex_release(&node->lock);
+    lock_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -228,10 +228,10 @@ vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request) {
     vfs_node_get(node);
     vfs_result_t res;
 
-    // @todo: read/write mutex
-    mutex_acquire(&node->lock);
+    // @todo: read/write lock
+    lock_acquire(&node->lock);
     res = node->ops->perform_io(node, request);
-    mutex_release(&node->lock);
+    lock_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -243,10 +243,10 @@ vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_att
     if(res != VFS_RESULT_OK)
         return res;
 
-    // @todo: read/write mutex
-    mutex_acquire(&node->lock);
+    // @todo: read/write lock
+    lock_acquire(&node->lock);
     res = node->ops->get_attributes(node, out_attr);
-    mutex_release(&node->lock);
+    lock_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -255,10 +255,10 @@ vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_att
 vfs_result_t vfs_get_attributes_node(vfs_node_t* node, vfs_node_attr_t* out_attr) {
     vfs_node_get(node);
 
-    // @todo: read/write mutex
-    mutex_acquire(&node->lock);
+    // @todo: read/write lock
+    lock_acquire(&node->lock);
     vfs_result_t res = node->ops->get_attributes(node, out_attr);
-    mutex_release(&node->lock);
+    lock_release(&node->lock);
 
     vfs_node_put(node);
     return res;
@@ -418,9 +418,9 @@ vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_d
     vfs_node_t* child_node = nullptr;
     const char* child_name = nullptr;
 
-    mutex_acquire(&node->lock);
+    lock_acquire(&node->lock);
     res = node->ops->read_dir(node, offset, &child_node, &child_name);
-    mutex_release(&node->lock);
+    lock_release(&node->lock);
 
     if(res != VFS_RESULT_OK) {
         vfs_dentry_put(dir_dentry);
@@ -435,7 +435,7 @@ vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_d
         return VFS_RESULT_OK;
     }
 
-    rwlock_write_t* dir_lock = rwlock_lock_write(&dir_dentry->rwlock);
+    rwspinlock_write_t* dir_lock = rwspinlock_lock_write(&dir_dentry->rwspinlock);
 
     vfs_dentry_t* child_dentry = vfs_dcache_lookup(dir_dentry, child_name);
     if(child_dentry == nullptr) {
@@ -456,7 +456,7 @@ vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_d
         }
     }
 
-    rwlock_unlock_write(dir_lock);
+    rwspinlock_unlock_write(dir_lock);
 
     vfs_dentry_put(dir_dentry);
     vfs_node_put(node);

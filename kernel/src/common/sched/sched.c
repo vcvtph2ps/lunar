@@ -163,7 +163,7 @@ void sched_thread_interrupt(thread_t* thread) {
             return;
         }
 
-        /// Only userspace facing waits may be aborted by a signal. Kernel internal waits (mutexes and the like) must run to completion, the signal is delivered once the thread returns.
+        /// Only userspace facing waits may be aborted by a signal. Kernel internal waits (lockes and the like) must run to completion, the signal is delivered once the thread returns.
         wait_entry_t* entry = thread->sched.wait_entry;
         if(entry == nullptr || !ATOMIC_LOAD(&entry->interruptible, ATOMIC_ACQUIRE)) {
             return;

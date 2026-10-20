@@ -1,6 +1,6 @@
 #include <common/fs/devfs.h>
 #include <common/fs/vfs.h>
-#include <common/sync/mutex.h>
+#include <common/sync/lock.h>
 #include <common/sync/spinlock.h>
 #include <lib/list.h>
 #include <lib/string.h>
@@ -58,7 +58,7 @@ static vfs_result_t root_lookup(vfs_node_t* node, const char* name, vfs_node_t**
 
     vfs_node_t* dev_node = heap_alloc(sizeof(vfs_node_t));
     memory_zero(dev_node, sizeof(vfs_node_t));
-    dev_node->lock = MUTEX_INIT;
+    dev_node->lock = LOCK_INIT;
     ATOMIC_STORE(&dev_node->refcount, 1, ATOMIC_RELAXED);
     dev_node->type = VFS_NODE_TYPE_FILE;
     dev_node->current_vfs = g_devfs_vfs;
@@ -170,7 +170,7 @@ static vfs_result_t devfs_vfs_mount(vfs_t* vfs) {
 
     if(!g_root_node_initialised) {
         memory_zero(&g_root_node, sizeof(vfs_node_t));
-        g_root_node.lock = MUTEX_INIT;
+        g_root_node.lock = LOCK_INIT;
 
         ATOMIC_STORE(&g_root_node.refcount, 1, ATOMIC_RELAXED);
         g_root_node.type = VFS_NODE_TYPE_DIR;

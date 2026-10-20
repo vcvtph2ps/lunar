@@ -1,7 +1,7 @@
 #include <common/fs/dentry.h>
 #include <common/fs/vfs.h>
-#include <common/sync/mutex.h>
-#include <common/sync/rwlock.h>
+#include <common/sync/lock.h>
+#include <common/sync/rwspinlock.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
@@ -112,9 +112,9 @@ void vfs_dentry_put(vfs_dentry_t* dentry) {
             return;
 
         if(dentry->node != nullptr) {
-            mutex_acquire(&dentry->node->lock);
+            lock_acquire(&dentry->node->lock);
             list_node_delete(&dentry->node->dentries, &dentry->alias_node);
-            mutex_release(&dentry->node->lock);
+            lock_release(&dentry->node->lock);
             vfs_node_put(dentry->node);
         }
 
@@ -132,7 +132,7 @@ void vfs_dentry_put(vfs_dentry_t* dentry) {
 
 vfs_result_t vfs_dentry_create(vfs_dentry_t* parent, const char* name, vfs_node_t* node, bool negative, vfs_dentry_t** out_dentry) {
     vfs_dentry_t* dentry = heap_zalloc(sizeof(vfs_dentry_t));
-    rwlock_init(&dentry->rwlock);
+    rwspinlock_init(&dentry->rwspinlock);
 
     size_t name_length = string_length(name);
     dentry->name = heap_alloc(name_length + 1);
@@ -160,9 +160,9 @@ vfs_result_t vfs_dentry_create(vfs_dentry_t* parent, const char* name, vfs_node_
 
     if(node != nullptr) {
         vfs_node_get(node);
-        mutex_acquire(&node->lock);
+        lock_acquire(&node->lock);
         list_push_back(&node->dentries, &dentry->alias_node);
-        mutex_release(&node->lock);
+        lock_release(&node->lock);
     }
 
     *out_dentry = dentry;

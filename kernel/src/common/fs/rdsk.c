@@ -1,5 +1,5 @@
 #include <common/fs/vfs.h>
-#include <common/sync/mutex.h>
+#include <common/sync/lock.h>
 #include <lib/string.h>
 #include <memory/heap.h>
 
@@ -90,7 +90,7 @@ static vfs_node_t* create_vfs_dir_node(vfs_t* vfs, rdsk_index_t index) {
         return vfs_node_get(info->dir_cache[index - 1]);
     vfs_node_t* node = heap_alloc(sizeof(vfs_node_t));
     memory_set(node, 0, sizeof(vfs_node_t));
-    node->lock = MUTEX_INIT;
+    node->lock = LOCK_INIT;
     ATOMIC_STORE(&node->refcount, 1, ATOMIC_RELAXED);
     node->current_vfs = vfs;
     node->type = VFS_NODE_TYPE_DIR;
@@ -108,7 +108,7 @@ static vfs_node_t* create_vfs_file_node(vfs_t* vfs, rdsk_index_t index) {
         return vfs_node_get(info->file_cache[index - 1]);
     vfs_node_t* node = heap_alloc(sizeof(vfs_node_t));
     memory_set(node, 0, sizeof(vfs_node_t));
-    node->lock = MUTEX_INIT;
+    node->lock = LOCK_INIT;
     ATOMIC_STORE(&node->refcount, 1, ATOMIC_RELAXED);
     node->current_vfs = vfs;
     node->type = VFS_NODE_TYPE_FILE;

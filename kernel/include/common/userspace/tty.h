@@ -2,7 +2,7 @@
 
 #include <common/fs/devfs.h>
 #include <common/fs/io.h>
-#include <common/sync/mutex.h>
+#include <common/sync/lock.h>
 #include <common/sync/wait_obj.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,7 +10,7 @@
 #define TTY_RB_SIZE 256
 
 typedef struct tty {
-    mutex_t mutex;
+    lock_t lock;
     wait_obj_t wait_obj;
 
     uint8_t buf[TTY_RB_SIZE];

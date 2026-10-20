@@ -11,7 +11,7 @@ struct vfs_dentry_ops {
 };
 
 typedef struct vfs_dentry {
-    rwlock_t rwlock;
+    rwspinlock_t rwspinlock;
 
     /// The dentry operations for this dentry
     const vfs_dentry_ops_t* ops;

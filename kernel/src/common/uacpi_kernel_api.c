@@ -6,7 +6,7 @@
 #include <common/interrupts/dw.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
-#include <common/sync/mutex.h>
+#include <common/sync/lock.h>
 #include <common/sync/wait_obj.h>
 #include <common/time/time.h>
 #include <lib/list.h>

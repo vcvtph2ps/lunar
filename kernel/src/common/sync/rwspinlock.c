@@ -2,18 +2,18 @@
 #include <common/assert.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
-#include <common/sync/rwlock.h>
+#include <common/sync/rwspinlock.h>
 #include <lib/helpers.h>
 #include <stdatomic.h>
 #include <stdint.h>
 
-void rwlock_init(rwlock_t* lock) {
+void rwspinlock_init(rwspinlock_t* lock) {
     lock->read_lock.inner = lock;
     lock->write_lock.inner = lock;
     ATOMIC_STORE(&lock->value, 0, ATOMIC_RELAXED);
 }
 
-rwlock_write_t* rwlock_lock_write(rwlock_t* lock) {
+rwspinlock_write_t* rwspinlock_lock_write(rwspinlock_t* lock) {
     sched_preempt_disable();
     uint32_t expected;
 
@@ -30,7 +30,7 @@ rwlock_write_t* rwlock_lock_write(rwlock_t* lock) {
     return &lock->write_lock;
 }
 
-rwlock_read_t* rwlock_lock_read(rwlock_t* lock) {
+rwspinlock_read_t* rwspinlock_lock_read(rwspinlock_t* lock) {
     sched_preempt_disable();
     uint32_t old = ATOMIC_LOAD(&lock->value, ATOMIC_RELAXED);
 
@@ -48,12 +48,12 @@ rwlock_read_t* rwlock_lock_read(rwlock_t* lock) {
     }
 }
 
-void rwlock_unlock_write(rwlock_write_t* lock) {
+void rwspinlock_unlock_write(rwspinlock_write_t* lock) {
     ATOMIC_STORE(&lock->inner->value, 0, ATOMIC_RELEASE);
     sched_preempt_enable();
 }
 
-void rwlock_unlock_read(rwlock_read_t* lock) {
+void rwspinlock_unlock_read(rwspinlock_read_t* lock) {
     uint32_t value = ATOMIC_LOAD_SUB(&lock->inner->value, 1, ATOMIC_RELEASE);
     (void) value;
     assert(value != 0);

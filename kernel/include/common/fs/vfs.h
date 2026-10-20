@@ -1,7 +1,7 @@
 #pragma once
 #include <common/fs/io.h>
-#include <common/sync/mutex.h>
-#include <common/sync/rwlock.h>
+#include <common/sync/lock.h>
+#include <common/sync/rwspinlock.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
@@ -106,7 +106,7 @@ struct vfs_node_ops {
 };
 
 struct vfs_node {
-    mutex_t lock;
+    lock_t lock;
 
     ATOMIC size_t refcount;
 

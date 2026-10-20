@@ -5,7 +5,7 @@
 #include <common/sched/process.h>
 #include <common/sched/process_group.h>
 #include <common/sched/sched.h>
-#include <common/sync/mutex.h>
+#include <common/sync/lock.h>
 #include <common/sync/wait_obj.h>
 #include <common/userspace/signal.h>
 #include <common/userspace/tty.h>
@@ -49,7 +49,7 @@ tty_t* tty_get_default() {
 
 tty_t* tty_create() {
     tty_t* tty = heap_alloc(sizeof(tty_t));
-    tty->mutex = MUTEX_INIT;
+    tty->lock = LOCK_INIT;
     tty->wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
     tty->head = 0;
     tty->tail = 0;
@@ -169,7 +169,7 @@ static int tty_echo_cols(uint8_t c) {
     return 1;
 }
 
-/// @note must hold the tty mutex
+/// @note must hold the tty lock
 static bool tty_put_raw(tty_t* tty, uint8_t c) {
     if(tty_full(tty)) {
         return false;
@@ -179,7 +179,7 @@ static bool tty_put_raw(tty_t* tty, uint8_t c) {
     return true;
 }
 
-/// @note must hold the tty mutex. erases the last pending byte, undoing its echo
+/// @note must hold the tty lock. erases the last pending byte, undoing its echo
 static void tty_erase_one(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         return;
@@ -197,7 +197,7 @@ static void tty_erase_one(tty_t* tty) {
     }
 }
 
-/// @note must hold the tty mutex
+/// @note must hold the tty lock
 static void tty_erase_char(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         tty_echo(tty, '\a');
@@ -206,14 +206,14 @@ static void tty_erase_char(tty_t* tty) {
     tty_erase_one(tty);
 }
 
-/// @note must hold the tty mutex
+/// @note must hold the tty lock
 static void tty_kill_line(tty_t* tty) {
     while(!tty_pending_empty(tty)) {
         tty_erase_one(tty);
     }
 }
 
-/// @note must hold the tty mutex
+/// @note must hold the tty lock
 static void tty_erase_word(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         tty_echo(tty, '\a');
@@ -235,7 +235,7 @@ static void tty_erase_word(tty_t* tty) {
     }
 }
 
-/// @note must hold the tty mutex
+/// @note must hold the tty lock
 static void tty_handle_eof(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         tty->eof = true;
@@ -246,7 +246,7 @@ static void tty_handle_eof(tty_t* tty) {
     ATOMIC_LOAD_ADD(&tty->line_count, 1, ATOMIC_RELEASE);
 }
 
-/// @note must hold the tty mutex
+/// @note must hold the tty lock
 static void tty_handle_intr(tty_t* tty) {
     tty_kill_line(tty);
     tty_echo_ctrl(tty, CHAR_INTR);
@@ -298,11 +298,11 @@ static bool tty_put_canonical(tty_t* tty, uint8_t c) {
 }
 
 bool tty_put(tty_t* tty, uint8_t c) {
-    mutex_acquire(&tty->mutex);
+    lock_acquire(&tty->lock);
 
     if(tty->mode.canonical) {
         bool res = tty_put_canonical(tty, c);
-        mutex_release(&tty->mutex);
+        lock_release(&tty->lock);
         tty_flush(tty);
         return res;
     }
@@ -314,7 +314,7 @@ bool tty_put(tty_t* tty, uint8_t c) {
         tty->eof = false;
         tty_echo_char(tty, c);
     }
-    mutex_release(&tty->mutex);
+    lock_release(&tty->lock);
 
     tty_flush(tty);
 
@@ -324,7 +324,7 @@ bool tty_put(tty_t* tty, uint8_t c) {
     return ok;
 }
 
-/// @note must hold the tty mutex, only consumes bytes up to commit.
+/// @note must hold the tty lock, only consumes bytes up to commit.
 static bool tty_read_lockless(tty_t* tty, uint8_t* c) {
     if(!tty_readable(tty)) {
         return false;
@@ -337,9 +337,9 @@ static bool tty_read_lockless(tty_t* tty, uint8_t* c) {
 }
 
 bool tty_read(tty_t* tty, uint8_t* c) {
-    mutex_acquire(&tty->mutex);
+    lock_acquire(&tty->lock);
     bool result = tty_read_lockless(tty, c);
-    mutex_release(&tty->mutex);
+    lock_release(&tty->lock);
 
     return result;
 }
@@ -387,18 +387,18 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
     uint8_t* read_buffer = request->read.buffer;
     size_t count = request->read.count;
 
-    mutex_acquire(&tty->mutex);
+    lock_acquire(&tty->lock);
 
     // wait until there is committed data, or EOF.
     while(!tty_readable(tty)) {
         if(tty->eof) {
             request->read.bytes_read = 0;
             tty->eof = false;
-            mutex_release(&tty->mutex);
+            lock_release(&tty->lock);
             return VFS_RESULT_OK;
         }
 
-        mutex_release(&tty->mutex);
+        lock_release(&tty->lock);
 
         if(request->no_block) {
             return VFS_RESULT_ERR_WOULD_BLOCK;
@@ -406,11 +406,11 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
 
         sched_wait_single_interruptible(&tty->wait_obj, UINT64_MAX);
         bool interrupted = sched_thread_interrupted();
-        mutex_acquire(&tty->mutex);
+        lock_acquire(&tty->lock);
 
         /// a signal arrived while we were blocked, report EINTR if there is still nothing to read
         if(!tty_readable(tty) && interrupted) {
-            mutex_release(&tty->mutex);
+            lock_release(&tty->lock);
             return VFS_RESULT_ERR_INTERRUPTED;
         }
     }
@@ -435,7 +435,7 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
         ATOMIC_LOAD_SUB(&tty->line_count, 1, ATOMIC_RELEASE);
     }
 
-    mutex_release(&tty->mutex);
+    lock_release(&tty->lock);
     return VFS_RESULT_OK;
 }
 
