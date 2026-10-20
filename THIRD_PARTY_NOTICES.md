@@ -32,6 +32,16 @@ under `LICENSES/`.
 
 ---
 
+## libfdt (from dtc)
+
+- Upstream: https://github.com/dgibson/dtc
+- License: [BSD 2-Clause](https://github.com/dgibson/dtc/blob/main/BSD-2-Clause) / GPL-2.0
+- License text: `LICENSES/libfdt-BSD-2-Clause.txt`
+
+See: https://github.com/dgibson/dtc/blob/main/README.license
+
+---
+
 ## nanoprintf
 
 - Upstream: https://github.com/charlesnicholson/nanoprintf

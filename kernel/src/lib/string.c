@@ -164,6 +164,30 @@ int string_length(const char* str) {
     return length;
 }
 
+size_t string_length_n(const char* str, size_t maxlen) {
+    size_t length = 0;
+    while(length < maxlen && str[length] != '\0') length++;
+    return length;
+}
+
+char* string_find_last_instance(const char* str, int c) {
+    const char* last = nullptr;
+    for(;;) {
+        if(*str == (char) c) last = str;
+        if(*str == '\0') break;
+        str++;
+    }
+    return (char*) last;
+}
+
+void* memory_find_byte(const void* s, int c, size_t count) {
+    const uint8_t* p = (const uint8_t*) s;
+    for(size_t i = 0; i < count; i++) {
+        if(p[i] == (uint8_t) c) return (void*) (p + i);
+    }
+    return nullptr;
+}
+
 int string_find_first_instance(const char* s, char c, size_t size) {
     int index = -1;
     for(size_t i = 0; i < size; i++) {
@@ -226,3 +250,7 @@ int string_compare_n_case(const char* s1, const char* s2, size_t n) {
 [[gnu::alias("memory_copy")]] void* memcpy(void* restrict dest, const void* restrict src, size_t count);
 [[gnu::alias("memory_move")]] void memmove(void* dest, const void* src, size_t count);
 [[gnu::alias("memory_compare")]] int memcmp(const void* lhs, const void* rhs, size_t count);
+[[gnu::alias("string_length")]] size_t strlen(const char* str);
+[[gnu::alias("string_length_n")]] size_t strnlen(const char* str, size_t maxlen);
+[[gnu::alias("string_find_last_instance")]] char* strrchr(const char* str, int c);
+[[gnu::alias("memory_find_byte")]] void* memchr(const void* s, int c, size_t count);

@@ -32,6 +32,15 @@ local uacpi = fab.git(
     "686a9a52d9ad72690406d7cada82801377d5e2fa"
 )
 
+local libfdt = nil
+if opt_arch == "riscv64" then
+    libfdt = fab.git(
+        "dtc",
+        "https://github.com/dgibson/dtc.git",
+        "8f48565e5cfedc74d3f7512f1e0188e9d85dc1de"
+    )
+end
+
 local function get_kernel_objs(kernel_flags)
     local kernel_sources = sources(fab.glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
     table.extend(kernel_sources, sources(fab.glob(path("kernel/src/arch", opt_arch, "**/*.c"))))
@@ -51,6 +60,12 @@ local function get_kernel_objs(kernel_flags)
         c.include_dir(path(fab.build_dir(), prekernel_protocol.path, "pre_kernel", "public")))
     table.insert(kernel_include_dirs, c.include_dir(path(fab.build_dir(), flanterm.path, "src")))
     table.insert(kernel_include_dirs, c.include_dir(path(fab.build_dir(), uacpi.path, "include")))
+
+    if libfdt ~= nil then
+        -- we need to include libfdt c files to override libfdt_env.h :/
+        table.insert(kernel_include_dirs, c.include_dir(path(fab.build_dir(), libfdt.path, "libfdt")))
+        table.insert(kernel_include_dirs, c.include_dir(path(fab.build_dir(), libfdt.path)))
+    end
 
     local generators = {
         c = function(sources) return clang:generate(sources, kernel_flags, kernel_include_dirs) end

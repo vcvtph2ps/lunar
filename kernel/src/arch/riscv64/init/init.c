@@ -8,6 +8,7 @@
 init_stage_handler_t g_init_stage_handlers[] = {
     INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
     INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
+    INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
 };
 
 #undef INIT_STAGE

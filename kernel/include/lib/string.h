@@ -13,4 +13,7 @@ void memory_move(void* dest, const void* src, size_t count);
 [[nodiscard]] int string_compare_case(const char* s1, const char* s2);
 [[nodiscard]] int string_compare_n_case(const char* s1, const char* s2, size_t n);
 [[nodiscard]] int string_length(const char* str);
+[[nodiscard]] size_t string_length_n(const char* str, size_t maxlen);
+[[nodiscard]] char* string_find_last_instance(const char* str, int c);
+[[nodiscard]] void* memory_find_byte(const void* s, int c, size_t count);
 // NOLINTEND
