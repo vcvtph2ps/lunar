@@ -6,12 +6,11 @@
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
+#include <lib/list.h>
 #include <lib/string.h>
 #include <memory/heap.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
-
-#include "lib/list.h"
 
 void ipi_send(uint32_t core_id, ipi_message_t message) {
     sched_preempt_disable();
@@ -21,7 +20,7 @@ void ipi_send(uint32_t core_id, ipi_message_t message) {
         return;
     }
 
-    ipi_request_t* request = (ipi_request_t*) heap_alloc(sizeof(ipi_request_t));
+    ipi_request_t* request = (ipi_request_t*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_PANIC));
     memory_copy(&request->message, &message, sizeof(ipi_message_t));
     ATOMIC_STORE(&request->next, nullptr, ATOMIC_SEQ_CST);
 
@@ -69,8 +68,7 @@ void ipi_handle(ipi_message_t message) {
     switch(message.type) {
         case IPI_TLB_FLUSH:     ptm_flush_tlb(message.tlb_flush.vaddr, message.tlb_flush.length); break;
         case IPI_TLB_FLUSH_ALL: ptm_flush_tlb_all(); break;
-        case IPI_HALT:
-            arch_halt_cpu();
-        default: arch_panic("Received unknown IPI type %d on core %d", message.type, CPU_LOCAL_READ(core_id));
+        case IPI_HALT:          arch_halt_cpu();
+        default:                arch_panic("Received unknown IPI type %d on core %d", message.type, CPU_LOCAL_READ(core_id));
     }
 }

@@ -4,7 +4,7 @@
 #include <memory/vm.h>
 
 #define PTM_TO_HHDM(x) ((void*) ((uintptr_t) (x) + g_init_boot_info->hhdm_offset))
-#define PTM_FROM_HHDM(x) ((void*) ((uintptr_t) (x) - g_init_boot_info->hhdm_offset))
+#define PTM_FROM_HHDM(x) ((phys_addr_t) ((uintptr_t) (x) - g_init_boot_info->hhdm_offset))
 
 /**
  * @brief Initializes the paging and virtual memory system for the current core

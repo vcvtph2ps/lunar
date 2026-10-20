@@ -11,7 +11,8 @@
 #include <common/sync/spinlock.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
-#include <memory/heap.h>
+#include <memory/pmm.h>
+#include <memory/ptm.h>
 
 uint8_t g_ipi_vector = 0xff;
 
@@ -27,7 +28,7 @@ static void ipi_handle_deferred(void* ctx) {
         }
 
         ipi_request_t* request = CONTAINER_OF(node, ipi_request_t, pending_free_node);
-        heap_free(request, sizeof(ipi_request_t));
+        pmm_free_page(PTM_FROM_HHDM(request));
     }
 }
 
