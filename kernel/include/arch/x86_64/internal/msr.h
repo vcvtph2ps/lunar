@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+#define ARCH_MSR_PAT 0x277
+
 #define ARCH_MSR_EFER 0xC0000080
 
 #define ARCH_MSR_STAR 0xC0000081
