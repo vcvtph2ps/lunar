@@ -219,6 +219,10 @@ wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
             sched_wait_single(&g_serial_wait_obj, UINT64_MAX);
             continue;
         }
+
+        if(g_arch_16550uart_default_uart->on_recv == nullptr)
+            continue;
+
         g_arch_16550uart_default_uart->on_recv(g_arch_16550uart_default_uart->recv_ctx, c);
     }
 }
@@ -262,6 +266,7 @@ void arch_16550uart_early_setup() {
 
     g_arch_16550uart_default_uart = &g_early_uart;
     g_arch_16550uart_default_uart->uart_port = serial_port;
+    g_arch_16550uart_default_uart->on_recv = nullptr;
 
     LOG_OKAY("Serial init\n");
 
