@@ -10,6 +10,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define ARCH_16550UART_RX_BUFFER_SIZE 256
+
 typedef struct {
     void (*on_recv)(void* ctx, char c);
     void* recv_ctx;
@@ -19,6 +21,10 @@ typedef struct {
     uint8_t irq;
     bool irq_low_polarity;
     bool irq_edge_triggered;
+
+    uint8_t rx_buffer[ARCH_16550UART_RX_BUFFER_SIZE];
+    size_t rx_head;
+    size_t rx_tail;
 
     list_node_t uart_list_node;
 } arch_16550uart_t;

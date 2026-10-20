@@ -211,19 +211,49 @@ static void serial_sink(int c, void* ctx) {
 
 wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
-[[noreturn]] static void serial_rx_thread() {
-    sched_wait_single(&g_serial_wait_obj, UINT64_MAX);
-    while(1) {
-        int c = arch_16550uart_read(g_arch_16550uart_default_uart);
-        if(c < 0) {
-            sched_wait_single(&g_serial_wait_obj, UINT64_MAX);
+static dw_item_t* g_serial_rx_dw_item;
+static void serial_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
+    (void) frame;
+    arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
+
+    int c;
+    while((c = arch_16550uart_read(uart)) >= 0) {
+        size_t head = ATOMIC_LOAD(&uart->rx_head, ATOMIC_RELAXED);
+        size_t next = (head + 1) % ARCH_16550UART_RX_BUFFER_SIZE;
+        if(next == ATOMIC_LOAD(&uart->rx_tail, ATOMIC_ACQUIRE)) {
+            // ring buffer is full, but still drain the buffer
             continue;
         }
+        uart->rx_buffer[head] = (uint8_t) c;
+        ATOMIC_STORE(&uart->rx_head, next, ATOMIC_RELEASE);
+    }
 
-        if(g_arch_16550uart_default_uart->on_recv == nullptr)
-            continue;
+    dw_queue(g_serial_rx_dw_item);
+}
 
-        g_arch_16550uart_default_uart->on_recv(g_arch_16550uart_default_uart->recv_ctx, c);
+static void serial_rx_dw_handler(void* ctx) {
+    (void) ctx;
+    wait_obj_signal(&g_serial_wait_obj, 1);
+}
+
+[[noreturn]] static void serial_rx_thread() {
+    while(1) {
+        arch_16550uart_t* uart = g_arch_16550uart_default_uart;
+
+        size_t tail = ATOMIC_LOAD(&uart->rx_tail, ATOMIC_RELAXED);
+        size_t head = ATOMIC_LOAD(&uart->rx_head, ATOMIC_ACQUIRE);
+        while(tail != head) {
+            char c = (char) uart->rx_buffer[tail];
+            tail = (tail + 1) % ARCH_16550UART_RX_BUFFER_SIZE;
+            ATOMIC_STORE(&uart->rx_tail, tail, ATOMIC_RELEASE);
+
+            if(uart->on_recv != nullptr)
+                uart->on_recv(uart->recv_ctx, c);
+
+            head = ATOMIC_LOAD(&uart->rx_head, ATOMIC_ACQUIRE);
+        }
+
+        sched_wait_single(&g_serial_wait_obj, UINT64_MAX);
     }
 }
 
@@ -366,6 +396,8 @@ static uacpi_iteration_decision uart_device_find_callback(void* user, uacpi_name
     uart->irq = crs.irq;
     uart->irq_edge_triggered = crs.irq_edge_triggered;
     uart->irq_low_polarity = crs.irq_low_polarity;
+    uart->rx_head = 0;
+    uart->rx_tail = 0;
 
     list_push_back(&g_uart_list, &uart->uart_list_node);
 
@@ -395,7 +427,10 @@ void arch_16550uart_setup() {
         if(vector == 0) {
             arch_panic("Failed to allocate interrupt vector for 16550uart\n");
         }
-        interrupt_set_waitobj_handler(vector, &g_serial_wait_obj);
+
+        g_serial_rx_dw_item = dw_create(serial_rx_dw_handler, nullptr);
+        g_serial_rx_dw_item->cleanup_fn = nullptr;
+        interrupt_set_hardirq_handler(vector, serial_interrupt_handler, uart);
 
         sched_thread_schedule(serial_thread);
 
