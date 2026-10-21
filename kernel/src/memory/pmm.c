@@ -139,3 +139,20 @@ void pmm_free_page(uintptr_t addr) {
         free_page_to(&g_pmm, addr);
     }
 }
+
+void pmm_reclaim(uintptr_t addr, size_t page_count) {
+    for(size_t i = 0; i < page_count; i++) {
+        uintptr_t address = addr + (i * ARCH_PAGE_SIZE_DEFAULT);
+        uint64_t pfn = address >> 12;
+
+        pagedb_page_t* page = pagedb_get_page(pfn);
+        assert(page != nullptr);
+        pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_FREE);
+
+        spinlock_nodw_lock(&g_pmm.pmm_lock);
+        ATOMIC_STORE(&page->free.next_pfn, g_pmm.free_list_pfn, ATOMIC_RELEASE);
+        g_pmm.free_list_pfn = pfn;
+        g_pmm.num_pages++;
+        spinlock_nodw_unlock(&g_pmm.pmm_lock);
+    }
+}

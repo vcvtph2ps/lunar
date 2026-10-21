@@ -33,3 +33,11 @@ void pmm_init(uint32_t core_id);
  * @param addr The physical address of the page to free. Must be aligned to the page
  */
 void pmm_free_page(uintptr_t addr);
+
+/**
+ * @brief Reclaims a region of physical memory, adding it to the allocator
+ * @note this function ignores all pfndb state, do not use unless the page is being reclaimed from the bootloader, but the pages do need vaild pfndb entries
+ * @param addr The physical address to start of the region to reclaim. Must be aligned to the page
+ * @param size The size of the region to reclaim. Must be aligned to the page
+ */
+void pmm_reclaim(uintptr_t addr, size_t size);

@@ -7,9 +7,12 @@
 #include <common/init.h>
 #include <common/kgz.h>
 #include <common/log.h>
+#include <lib/math.h>
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/heap.h>
+#include <memory/pmm.h>
+#include <memory/ptm.h>
 #include <memory/vm.h>
 #include <nanoprintf/nanoprintf.h>
 #include <stdint.h>
@@ -43,6 +46,9 @@ static void* try_decompress(void* initramfs_data, size_t size) {
     if(decompressed_buffer == nullptr) {
         arch_panic("Failed to decompress initramfs file\n");
     }
+
+    phys_addr_t initramfs_phys = PTM_FROM_HHDM(initramfs_data);
+    pmm_reclaim(ALIGN_UP(initramfs_phys, ARCH_PAGE_SIZE_DEFAULT), ALIGN_DOWN(size, ARCH_PAGE_SIZE_DEFAULT) / ARCH_PAGE_SIZE_DEFAULT);
     return decompressed_buffer;
 }
 
