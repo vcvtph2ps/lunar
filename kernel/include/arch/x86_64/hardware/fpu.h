@@ -21,11 +21,6 @@ void arch_fpu_load(void* ptr);
 void arch_fpu_init(uint32_t core_id);
 
 /**
- * @brief Initializes the FPU for the current core.
- */
-void arch_fpu_init_ap();
-
-/**
  * @brief Allocates an buffer for the correct size to be used with save/load
  * @returns Allocated FPU buffer
  */
