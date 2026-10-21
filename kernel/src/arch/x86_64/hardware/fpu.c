@@ -82,8 +82,9 @@ static void set_fpu_machine_state() {
     cr4 |= (1 << 10) | (1 << 9);
 
     uint64_t xcr0 = 0;
-
+    bool write_xcr0 = false;
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
+        write_xcr0 = true;
         cr4 |= 1 << 18; // CR4.OSXSAVE
 
         xcr0 |= 1 << 0; // XCR0.X87
@@ -96,9 +97,10 @@ static void set_fpu_machine_state() {
             xcr0 |= 1 << 6; // XCR0.ZMM_Hi256
             xcr0 |= 1 << 7; // XCR0.Hi16_ZMM
         }
-        arch_cr_write_cr4(cr4);
-        arch_cr_write_xcr0(xcr0);
     }
+    arch_cr_write_cr4(cr4);
+    if(write_xcr0)
+        arch_cr_write_xcr0(xcr0);
 }
 
 
