@@ -47,7 +47,7 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
         if(flags & PMM_FLAG_PANIC) {
             arch_panic("pmm: out of physical memory!");
         }
-        LOG_WARN("pmm: out of physical memory!!");
+        LOG_WARN("pmm: out of physical memory!!\n");
         return 0;
     }
 
