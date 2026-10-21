@@ -383,7 +383,7 @@ void pci_early_init() {
     uacpi_table mcfg_table;
     uacpi_status status = uacpi_table_find_by_signature("MCFG", &mcfg_table);
     if(uacpi_unlikely_error(status)) {
-        LOG_FAIL("ACPI: failed to find MCFG table, status=%s\n", uacpi_status_to_string(status));
+        LOG_WARN("ACPI: failed to find MCFG table, status=%s\n", uacpi_status_to_string(status));
         return;
     }
 
