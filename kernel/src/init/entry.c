@@ -129,7 +129,7 @@ const char* memmap_type_to_string(uint64_t type) {
         if(entry->type == BOOTINFO_MM_TYPE_USABLE) {
             usable_memory_size += entry->length;
         }
-        if(entry->type == BOOTINFO_MM_TYPE_RECLAIMABLE) {
+        if(entry->type == BOOTINFO_MM_TYPE_RECLAIMABLE || entry->type == BOOTINFO_MM_TYPE_ACPI_RECLAIMABLE || entry->type == BOOTINFO_MM_TYPE_MODULE) {
             reclaimable_memory_size += entry->length;
         }
         if(entry->type != BOOTINFO_MM_TYPE_RESERVED && entry->type != BOOTINFO_MM_TYPE_BAD) {
