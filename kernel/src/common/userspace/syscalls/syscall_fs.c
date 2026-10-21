@@ -4,36 +4,50 @@
 #include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
+#include <common/userspace/userptr.h>
 #include <common/userspace/userspace.h>
 #include <memory/heap.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <uapi/fcntl.h>
+#include <uapi/limits.h>
 
 
 syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
-    uintptr_t pathname_ubuffer = args->arg1;
-    size_t pathname_ubuffer_size = args->arg2;
-    int flags = args->arg3;
-    uint32_t mode = args->arg4;
+    int flags = args->arg2;
+    uint32_t mode = args->arg3;
     (void) mode;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    userptr_t* upath = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
 
-    char* pathname = heap_alloc(pathname_ubuffer_size + 1);
-    vm_copy_from(pathname, process->address_space, pathname_ubuffer, pathname_ubuffer_size);
-    pathname[pathname_ubuffer_size] = '\0';
+    size_t path_size = upath->size + 1;
+    char* path = heap_alloc(path_size);
+    if(path == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read(upath, path)) {
+        heap_free(path, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    path[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
 
     vfs_node_t* out_result_node;
-    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, pathname), (flags & UAPI_O_NOFOLLOW) == 0, &out_result_node);
-    heap_free(pathname, pathname_ubuffer_size + 1);
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, path), (flags & UAPI_O_NOFOLLOW) == 0, &out_result_node);
 
-    LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", pathname, flags, mode, result);
+    LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", path, flags, mode, result);
+    heap_free(path, path_size);
     if(flags & UAPI_O_CREATE) {
         LOG_UTRC("O_CREATE unimplemented\n");
     }
-
-    user_assert(pathname_ubuffer_size <= 1024);
 
     switch(result) {
         case VFS_RESULT_OK:              break;

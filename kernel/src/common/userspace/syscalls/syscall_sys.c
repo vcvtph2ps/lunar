@@ -6,16 +6,33 @@
 #include <common/userspace/syscall_defs.h>
 #include <memory/heap.h>
 
+#include "common/userspace/userptr.h"
+#include "uapi/limits.h"
+
 syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
-    uintptr_t ubuffer = args->arg1;
-    size_t ubuffer_size = args->arg2;
+    userptr_t* ubuffer = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+    if(!ubuffer) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
 
-    char* message = heap_alloc(ubuffer_size);
-    vm_copy_from(message, CPU_LOCAL_GET_CURRENT_THREAD()->common.process->address_space, ubuffer, ubuffer_size);
+    size_t buffer_size = ubuffer->size + 1;
+    char* buffer = heap_alloc(buffer_size);
+    if(buffer == nullptr) {
+        heap_free(ubuffer, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
 
-    LOG_DBGL("%.*s\n", (int) ubuffer_size, message);
+    if(ubuffer->size != 0 && !userptr_read(ubuffer, buffer)) {
+        heap_free(buffer, buffer_size);
+        heap_free(ubuffer, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
 
-    heap_free(message, ubuffer_size);
+    buffer[ubuffer->size] = '\0';
+    heap_free(ubuffer, sizeof(userptr_t));
+
+    LOG_DBGL("%s\n", buffer);
+    heap_free(buffer, buffer_size);
     return SYSCALL_RET_VALUE(0);
 }
 
