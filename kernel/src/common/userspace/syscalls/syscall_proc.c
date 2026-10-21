@@ -280,7 +280,7 @@ static syscall_ret_t read_user_string_array(userptr_t* u_array, size_t* byte_cou
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
 
-    if(!userptr_read(u_array, user_strings)) {
+    if(!userptr_read_full(u_array, user_strings)) {
         heap_free(user_strings, u_array->size);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
@@ -316,7 +316,7 @@ static syscall_ret_t read_user_string_array(userptr_t* u_array, size_t* byte_cou
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
         }
 
-        if(u_string->size != 0 && !userptr_read(u_string, string)) {
+        if(u_string->size != 0 && !userptr_read_full(u_string, string)) {
             heap_free(string, string_size);
             heap_free(u_string, sizeof(userptr_t));
             free_string_array(strings, count);
@@ -412,7 +412,7 @@ syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
 
-    if(upath->size != 0 && !userptr_read(upath, path)) {
+    if(upath->size != 0 && !userptr_read_full(upath, path)) {
         heap_free(path, path_size);
         heap_free(upath, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);

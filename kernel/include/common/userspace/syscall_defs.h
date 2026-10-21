@@ -32,5 +32,7 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args);
 syscall_ret_t syscall_sys_fs_close(syscall_args_t* args);
 syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args);
 syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args);
+syscall_ret_t syscall_sys_fs_getcwd(syscall_args_t* args);
+syscall_ret_t syscall_sys_fs_chdir(syscall_args_t* args);
 
 // NOLINTEND

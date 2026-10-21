@@ -165,7 +165,7 @@ syscall_ret_t syscall_sys_proc_sig_send_return(syscall_args_t* args) {
     }
 
     uapi_signal_ucontext_t context;
-    bool ok = userptr_read(ucontext_pointer, &context);
+    bool ok = userptr_read_full(ucontext_pointer, &context);
     heap_free(ucontext_pointer, sizeof(userptr_t));
 
     if(!ok) {

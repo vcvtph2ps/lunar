@@ -41,6 +41,8 @@ typedef enum : uint64_t {
     SYSCALL_FS_ISATTY = 45,
     SYSCALL_FS_MOUNT = 46,
     SYSCALL_FS_UNMOUNT = 47,
+    SYSCALL_FS_GETCWD = 48,
+    SYSCALL_FS_CHDIR = 49,
 
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;

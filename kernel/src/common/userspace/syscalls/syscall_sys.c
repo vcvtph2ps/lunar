@@ -22,7 +22,7 @@ syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
 
-    if(ubuffer->size != 0 && !userptr_read(ubuffer, buffer)) {
+    if(ubuffer->size != 0 && !userptr_read_full(ubuffer, buffer)) {
         heap_free(buffer, buffer_size);
         heap_free(ubuffer, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);

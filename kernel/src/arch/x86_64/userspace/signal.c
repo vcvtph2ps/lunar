@@ -71,9 +71,9 @@ void signal_arch_setup_frame(arch_interrupt_frame_t* frame, uapi_signal_info_t* 
     uint64_t restorer = handler->restorer;
 
     bool ok = true;
-    ok &= userptr_write(signal_info_pointer, signal_info);
-    ok &= userptr_write(ucontext_pointer, &context);
-    ok &= userptr_write(return_address_pointer, &restorer);
+    ok &= userptr_write_full(signal_info_pointer, signal_info);
+    ok &= userptr_write_full(ucontext_pointer, &context);
+    ok &= userptr_write_full(return_address_pointer, &restorer);
 
     heap_free(signal_info_pointer, sizeof(userptr_t));
     heap_free(ucontext_pointer, sizeof(userptr_t));

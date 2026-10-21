@@ -128,10 +128,36 @@ userptr_t* userptr_create_array(uintptr_t user_pointer, size_t element_size) {
     return userptr;
 }
 
-bool userptr_write(userptr_t* userptr, const void* buffer) {
+static inline bool userptr_in_bounds(const userptr_t* userptr, size_t offset, size_t size) {
+    return offset <= userptr->size && size <= userptr->size - offset;
+}
+
+bool userptr_write_full(userptr_t* userptr, const void* buffer) {
+    assert(userptr != NULL);
+    assert(buffer != NULL);
     return vm_copy_to(userptr->address_space, userptr->user_ptr, buffer, userptr->size) == userptr->size;
 }
 
-bool userptr_read(userptr_t* userptr, void* buffer) {
+bool userptr_read_full(userptr_t* userptr, void* buffer) {
+    assert(userptr != NULL);
+    assert(buffer != NULL);
     return vm_copy_from(buffer, userptr->address_space, userptr->user_ptr, userptr->size) == userptr->size;
+}
+
+bool userptr_write(userptr_t* userptr, const void* buffer, size_t offset, size_t size) {
+    assert(userptr != NULL);
+    assert(buffer != NULL || size == 0);
+    assert(userptr_in_bounds(userptr, offset, size));
+    assert(offset <= UINTPTR_MAX - userptr->user_ptr);
+
+    return vm_copy_to(userptr->address_space, userptr->user_ptr + offset, buffer, size) == size;
+}
+
+bool userptr_read(userptr_t* userptr, void* buffer, size_t offset, size_t size) {
+    assert(userptr != NULL);
+    assert(buffer != NULL || size == 0);
+    assert(userptr_in_bounds(userptr, offset, size));
+    assert(offset <= UINTPTR_MAX - userptr->user_ptr);
+
+    return vm_copy_from(buffer, userptr->address_space, userptr->user_ptr + offset, size) == size;
 }

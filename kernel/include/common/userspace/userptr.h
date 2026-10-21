@@ -22,5 +22,8 @@ userptr_t* userptr_create_string(uintptr_t user_pointer, size_t max_size);
 /// @note: resulting size is in bytes and excludes the terminating element
 userptr_t* userptr_create_array(uintptr_t user_pointer, size_t element_size);
 
-bool userptr_write(userptr_t* userptr, const void* buffer);
-bool userptr_read(userptr_t* userptr, void* buffer);
+bool userptr_write_full(userptr_t* userptr, const void* buffer);
+bool userptr_read_full(userptr_t* userptr, void* buffer);
+
+bool userptr_write(userptr_t* userptr, const void* buffer, size_t offset, size_t size);
+bool userptr_read(userptr_t* userptr, void* buffer, size_t offset, size_t size);

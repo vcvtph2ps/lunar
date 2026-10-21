@@ -31,7 +31,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
 
-    if(upath->size != 0 && !userptr_read(upath, path)) {
+    if(upath->size != 0 && !userptr_read_full(upath, path)) {
         heap_free(path, path_size);
         heap_free(upath, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
@@ -223,5 +223,85 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
 
     entry->offset = new_offset;
     LOG_UTRC("fd=%d offset=%ld whence=%d | result=%ld\n", fd, offset, whence, new_offset);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t syscall_sys_fs_getcwd(syscall_args_t* args) {
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    userptr_t* upath = userptr_create(args->arg1, args->arg2);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    vfs_node_t* cwd = process->current_working_dir;
+
+    if(cwd == nullptr) {
+        if(!userptr_write_full(upath, "/")) {
+            heap_free(upath, sizeof(userptr_t));
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+        }
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    char* path;
+    size_t size;
+    vfs_result_t result = vfs_path_to(cwd, &path, &size);
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        default:                       user_assert(false && "Invalid return value");
+    }
+
+    if(size > args->arg2) {
+        heap_free(path, size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    if(!userptr_write(upath, path, 0, size)) {
+        heap_free(path, size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    heap_free(path, size);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t syscall_sys_fs_chdir(syscall_args_t* args) {
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    userptr_t* upath = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t path_size = upath->size + 1;
+    char* path = heap_alloc(path_size);
+    if(path == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read_full(upath, path)) {
+        heap_free(path, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    path[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
+
+    vfs_node_t* out_result_node;
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, path), true, &out_result_node);
+    LOG_UTRC("pathname=%s | result=%d\n", path, result);
+    heap_free(path, path_size);
+
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        default:                       user_assert(false && "Invalid return value");
+    }
+
+    process->current_working_dir = out_result_node;
     return SYSCALL_RET_VALUE(0);
 }

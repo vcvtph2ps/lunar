@@ -44,6 +44,8 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_FS_ISATTY:  return "SYSCALL_FS_ISATTY";
         case SYSCALL_FS_MOUNT:   return "SYSCALL_FS_MOUNT";
         case SYSCALL_FS_UNMOUNT: return "SYSCALL_FS_UNMOUNT";
+        case SYSCALL_FS_GETCWD:  return "SYSCALL_FS_GETCWD";
+        case SYSCALL_FS_CHDIR:   return "SYSCALL_FS_CHDIR";
 
         default: return "Unknown syscall";
     }
@@ -122,7 +124,8 @@ void syscall_init() {
     SYSCALL_DISPATCHER(SYSCALL_FS_WRITE, syscall_sys_fs_write);
     SYSCALL_DISPATCHER(SYSCALL_FS_SEEK, syscall_sys_fs_seek);
     SYSCALL_DISPATCHER(SYSCALL_FS_ISATTY, syscall_sys_fs_is_a_tty);
-    // SYSCALL_DISPATCHER(SYSCALL_FS_GET_CWD, syscall_sys_fs_get_cwd);
+    SYSCALL_DISPATCHER(SYSCALL_FS_GETCWD, syscall_sys_fs_getcwd);
+    SYSCALL_DISPATCHER(SYSCALL_FS_CHDIR, syscall_sys_fs_chdir);
     // SYSCALL_DISPATCHER(SYSCALL_FS_STAT, syscall_sys_fs_stat);
     // SYSCALL_DISPATCHER(SYSCALL_FS_STAT_AT, syscall_sys_fs_stat_at);
 
