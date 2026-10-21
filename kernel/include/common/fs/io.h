@@ -24,5 +24,5 @@ typedef struct {
         } write;
     };
 
-    bool no_block; // driver must some form of `WOULD_BLOCK` error instead of blocking
+    bool no_block; // driver must return some form of `WOULD_BLOCK` error instead of blocking
 } io_request_t;

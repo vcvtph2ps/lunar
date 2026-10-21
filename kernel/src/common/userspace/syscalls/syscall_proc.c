@@ -94,13 +94,13 @@ syscall_ret_t syscall_sys_proc_setinfo(syscall_args_t* args) {
     }
 
     switch(args->arg2) {
-        case SYSCALL_PROC_INFO_GROUP_ID:         user_assert("SYSCALL_PROC_INFO_GROUP_ID unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_EGROUP_ID:        user_assert("SYSCALL_PROC_INFO_EGROUP_ID unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_USER_ID:          user_assert("SYSCALL_PROC_INFO_USER_ID unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_EUSER_ID:         user_assert("SYSCALL_PROC_INFO_EUSER_ID unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_PROCESS_ID:       user_assert("SYSCALL_PROC_INFO_PROCESS_ID unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_PARENT_PROCESS:   user_assert("SYSCALL_PROC_INFO_PARENT_PROCESS unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_THREAD_ID:        user_assert("SYSCALL_PROC_INFO_THREAD_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_GROUP_ID:         user_assert(false && "SYSCALL_PROC_INFO_GROUP_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_EGROUP_ID:        user_assert(false && "SYSCALL_PROC_INFO_EGROUP_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_USER_ID:          user_assert(false && "SYSCALL_PROC_INFO_USER_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_EUSER_ID:         user_assert(false && "SYSCALL_PROC_INFO_EUSER_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_PROCESS_ID:       user_assert(false && "SYSCALL_PROC_INFO_PROCESS_ID unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_PARENT_PROCESS:   user_assert(false && "SYSCALL_PROC_INFO_PARENT_PROCESS unimplemented!\n"); break;
+        case SYSCALL_PROC_INFO_THREAD_ID:        user_assert(false && "SYSCALL_PROC_INFO_THREAD_ID unimplemented!\n"); break;
         case SYSCALL_PROC_INFO_PROCESS_GROUP_ID: return internal_setpgid(process, args->arg3);
         default:                                 user_assert(false && "unreachable"); break;
     }
@@ -171,7 +171,7 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
     process_t* parent = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
     if(pid == 0 || pid < -1) {
-        user_assert("unimplemented");
+        user_assert(false && "unimplemented");
     }
 
     while(true) {
@@ -435,7 +435,7 @@ syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
         case VFS_RESULT_OK:              break;
         case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
         case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
-        default:                         user_assert("Invalid return value");
+        default:                         user_assert(false && "Invalid return value");
     }
 
     syscall_ret_t ret = execve_internal(node, args->arg2, args->arg3);

@@ -39,7 +39,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
         case VFS_RESULT_OK:              break;
         case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
         case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
-        default:                         user_assert("Invalid return value");
+        default:                         user_assert(false && "Invalid return value");
     }
 
     fd_store_entry_t* entry;
@@ -102,7 +102,7 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
     switch(result) {
         case VFS_RESULT_OK:              break;
         case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
-        default:                         user_assert("Invalid return value");
+        default:                         user_assert(false && "Invalid return value");
     }
 
     entry->offset += io_req.read.bytes_read;
@@ -146,7 +146,7 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
         case VFS_RESULT_OK: break;
-        default:            user_assert("Invalid return value");
+        default:            user_assert(false && "Invalid return value");
     }
 
     entry->offset += io_req.write.bytes_written;
