@@ -10,6 +10,7 @@ typedef enum : uint8_t {
     VFS_RESULT_OK = 0,
     VFS_RESULT_ERR_NOT_FOUND,
     VFS_RESULT_ERR_EXISTS,
+    VFS_RESULT_ERR_LOOP,
 
     VFS_RESULT_ERR_NOT_DIR,
     VFS_RESULT_ERR_NOT_FILE,
@@ -26,7 +27,8 @@ typedef enum : uint8_t {
 
 typedef enum : uint8_t {
     VFS_NODE_TYPE_DIR,
-    VFS_NODE_TYPE_FILE
+    VFS_NODE_TYPE_FILE,
+    VFS_NODE_TYPE_LINK
 } vfs_node_type_t;
 
 typedef struct vfs vfs_t;
@@ -169,16 +171,18 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node);
 /**
  * @brief Looks up the dentry at the specified path and returns a pointer to it in out_result_dentry
  * @param path The path to look up the dentry at.
+ * @param follow_final Whether to follow a symlink in the final path component. Symlinks in intermediate components are always followed.
  * @param out_result_dentry A pointer to a vfs_dentry_t* that will be set to the dentry at the specified path if it exists
  */
-vfs_result_t vfs_lookup_dentry(const vfs_path_t* path, vfs_dentry_t** out_result_dentry);
+vfs_result_t vfs_lookup_dentry(const vfs_path_t* path, bool follow_final, vfs_dentry_t** out_result_dentry);
 
 /**
  * @brief Looks up the node at the specified path and returns a pointer to it in out_result_node
  * @param path The path to look up the node at.
+ * @param follow_symlinks Whether to follow symlinks or not
  * @param out_result_node A pointer to a vfs_node_t* that will be set to the node at the specified path if it exists
  */
-vfs_result_t vfs_lookup(const vfs_path_t* path, vfs_node_t** out_result_node);
+vfs_result_t vfs_lookup(const vfs_path_t* path, bool follow_symlinks, vfs_node_t** out_result_node);
 
 /**
  * @brief Performs IO on the specified node

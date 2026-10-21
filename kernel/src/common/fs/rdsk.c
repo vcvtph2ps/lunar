@@ -1,4 +1,5 @@
 #include <common/fs/vfs.h>
+#include <common/log.h>
 #include <common/sync/lock.h>
 #include <lib/string.h>
 #include <memory/heap.h>
@@ -30,21 +31,22 @@ typedef struct [[gnu::packed]] {
 } rdsk_header_t;
 
 typedef struct [[gnu::packed]] {
-    bool used;
     uint64_t nametable_offset;
     uint64_t data_offset;
     uint64_t size;
     uint64_t next_index;
     uint64_t parent_index;
+    bool used;
+    bool is_symlink;
 } rdsk_file_t;
 
 typedef struct [[gnu::packed]] {
-    bool used;
     uint64_t nametable_offset;
     uint64_t filetable_index;
     uint64_t dirtable_index;
     uint64_t next_index;
     uint64_t parent_index;
+    bool used;
 } rdsk_dir_t;
 
 typedef struct {
@@ -106,13 +108,16 @@ static vfs_node_t* create_vfs_file_node(vfs_t* vfs, rdsk_index_t index) {
     info_t* info = INFO(vfs);
     if(info->file_cache[index - 1])
         return vfs_node_get(info->file_cache[index - 1]);
+
+    rdsk_file_t* file = get_file(vfs, index);
+
     vfs_node_t* node = heap_alloc(sizeof(vfs_node_t));
     memory_set(node, 0, sizeof(vfs_node_t));
     node->lock = LOCK_INIT;
     ATOMIC_STORE(&node->refcount, 1, ATOMIC_RELAXED);
     node->current_vfs = vfs;
-    node->type = VFS_NODE_TYPE_FILE;
-    node->private_data = get_file(vfs, index);
+    node->type = file->is_symlink ? VFS_NODE_TYPE_LINK : VFS_NODE_TYPE_FILE;
+    node->private_data = file;
     node->ops = &g_node_ops;
     info->file_cache[index - 1] = node;
     return vfs_node_get(node);
@@ -143,7 +148,7 @@ static rdsk_file_t* find_file(vfs_t* vfs, rdsk_dir_t* dir, const char* name) {
 }
 
 static vfs_result_t rdsk_node_attr(vfs_node_t* node, vfs_node_attr_t* out_attr) {
-    out_attr->size = node->type == VFS_NODE_TYPE_FILE ? FILE(node)->size : 0;
+    out_attr->size = node->type == VFS_NODE_TYPE_DIR ? 0 : FILE(node)->size;
     out_attr->type = node->type;
 
     out_attr->permissions.user = VFS_PERM_READ | VFS_PERM_EXECUTE;
@@ -215,7 +220,7 @@ static vfs_result_t rdsk_node_readdir(vfs_node_t* node, size_t* offset, vfs_node
 }
 
 static vfs_result_t rdsk_node_read(vfs_node_t* node, void* buffer, size_t size, size_t offset, size_t* read_count) {
-    if(node->type != VFS_NODE_TYPE_FILE)
+    if(node->type != VFS_NODE_TYPE_FILE && node->type != VFS_NODE_TYPE_LINK)
         return VFS_RESULT_ERR_NOT_FILE;
 
     if(buffer == nullptr || size == 0) {
@@ -256,7 +261,8 @@ static vfs_result_t rdsk_umount(vfs_t* vfs) {
 
 static vfs_result_t rdsk_mount(vfs_t* vfs) {
     rdsk_header_t* header = (rdsk_header_t*) vfs->private_data;
-    if(header->revision != MAKE_RDSK_VERSION(1, 1)) {
+    if(header->revision != MAKE_RDSK_VERSION(2, 0)) {
+        LOG_FAIL("Invaild rdsk version %u.%u\n", header->revision >> 8, header->revision & 0xff);
         return VFS_RESULT_ERR_UNSUPPORTED;
     }
 

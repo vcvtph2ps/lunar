@@ -424,7 +424,7 @@ syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
 
     vfs_node_t* node;
     // @todo: this probably shouldn't be VFS_MAKE_ABS_PATH
-    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(path), &node);
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(path), true, &node);
     heap_free(path, path_size);
 
     if(result != VFS_RESULT_OK) {

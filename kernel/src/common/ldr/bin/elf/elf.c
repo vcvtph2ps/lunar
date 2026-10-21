@@ -159,7 +159,7 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, vfs
     LOG_KTRC("interpreter: %s\n", (const char*) phdr_data);
 
     vfs_node_t* vfs_result_node;
-    result = vfs_lookup(&VFS_MAKE_ABS_PATH((const char*) phdr_data), &vfs_result_node);
+    result = vfs_lookup(&VFS_MAKE_ABS_PATH((const char*) phdr_data), true, &vfs_result_node);
     if(result != VFS_RESULT_OK) {
         LOG_FAIL("elf: failed to look up interp path \"%s\", (%d)\n", (const char*) phdr_data, result);
         heap_free(phdr_data, phdr->file_size);

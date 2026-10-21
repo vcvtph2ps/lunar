@@ -66,7 +66,7 @@ void init_stage_userspace(uint32_t core_id) {
 
     for(size_t i = 0; i < num_init_locations; i++) {
         vfs_node_t* node;
-        vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(g_init_search_locations[i]), &node);
+        vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(g_init_search_locations[i]), true, &node);
         if(result != VFS_RESULT_OK)
             continue;
 
@@ -81,7 +81,7 @@ void init_stage_userspace(uint32_t core_id) {
 
 
     vfs_node_t* tty_node;
-    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH("/dev/tty"), &tty_node);
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH("/dev/tty"), true, &tty_node);
     if(result != VFS_RESULT_OK) {
         arch_panic("init: failed to open /dev/tty (%d)\n", result);
     }

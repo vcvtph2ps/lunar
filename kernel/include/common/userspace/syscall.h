@@ -60,6 +60,7 @@ typedef enum : int64_t {
     SYSCALL_ERROR_SPIPE = 29, // Illegal seek
     SYSCALL_ERROR_ROFS = 30, // Read-only file system
     SYSCALL_ERROR_RANGE = 34, // Out of range
+    SYSCALL_ERROR_LOOP = 40, // Too many levels of symbolic links
     SYSCALL_ERROR_BADFD = 77, // Bad file descriptor
     SYSCALL_ERROR_TIMEDOUT = 110, // Connection timed out (ETIMEDOUT)
 } syscall_err_t;
