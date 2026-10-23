@@ -40,7 +40,7 @@ process_t* process_find_by_id(uint32_t id) {
     LIST_FOR_EACH(&g_process_list, node) {
         process_t* process = CONTAINER_OF(node, process_t, list_node_global);
         if(process->process_id == id) {
-            process_ref(process);
+            process = process_try_ref(process);
             spinlock_unlock(&g_process_list_lock);
             return process;
         }
@@ -65,8 +65,28 @@ thread_t* process_find_thread_by_id(process_t* process, uint32_t tid) {
     return found;
 }
 
+/// @brief Links a process into the global process list used for pid lookups.
+static void process_global_list_insert(process_t* process) {
+    spinlock_lock(&g_process_list_lock);
+    process->in_global_list = true;
+    list_push(&g_process_list, &process->list_node_global);
+    spinlock_unlock(&g_process_list_lock);
+}
+
+/// @brief Unlinks a process from the global process list. Safe to call if it was never linked.
+static void process_global_list_remove(process_t* process) {
+    spinlock_lock(&g_process_list_lock);
+    if(process->in_global_list) {
+        process->in_global_list = false;
+        list_node_delete(&g_process_list, &process->list_node_global);
+    }
+    spinlock_unlock(&g_process_list_lock);
+}
+
 /// @brief Frees every resource owned by a process. Only called once its reference count reaches zero.
 static void process_destroy(process_t* process) {
+    process_global_list_remove(process);
+
     if(process->address_space != nullptr) {
         vm_address_space_destroy(process->address_space);
     }
@@ -89,6 +109,18 @@ process_t* process_ref(process_t* process) {
     return process;
 }
 
+process_t* process_try_ref(process_t* process) {
+    assert(process != nullptr);
+
+    uint32_t expected = ATOMIC_LOAD(&process->ref_count, ATOMIC_ACQUIRE);
+    while(expected != 0) {
+        if(ATOMIC_COMPARE_EXCHANGE_WEAK(&process->ref_count, &expected, expected + 1, ATOMIC_ACQ_REL, ATOMIC_ACQUIRE))
+            return process;
+    }
+
+    return nullptr;
+}
+
 void process_deref(process_t* process) {
     assert(process != nullptr);
     if(ATOMIC_LOAD_SUB(&process->ref_count, 1, ATOMIC_ACQ_REL) != 1)
@@ -99,6 +131,7 @@ void process_deref(process_t* process) {
 
 static void process_init_common(process_t* process) {
     ATOMIC_STORE(&process->ref_count, 1, ATOMIC_RELAXED);
+    process->in_global_list = false;
     process->children_lock = SPINLOCK_NO_DW_INIT;
     process->children_list = LIST_INIT;
     process->child_exit_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
@@ -143,9 +176,7 @@ process_t* process_fork(process_t* parent) {
     list_push_back(&parent->children_list, &process->list_node_sibling);
     spinlock_nodw_unlock(&parent->children_lock);
 
-    spinlock_lock(&g_process_list_lock);
-    list_push(&g_process_list, &process->list_node_global);
-    spinlock_unlock(&g_process_list_lock);
+    process_global_list_insert(process);
 
     return process;
 }
@@ -200,9 +231,7 @@ process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_inf
     process_ref(process);
     list_push(&process->thread_list, &thread->list_node_process);
 
-    spinlock_lock(&g_process_list_lock);
-    list_push(&g_process_list, &process->list_node_global);
-    spinlock_unlock(&g_process_list_lock);
+    process_global_list_insert(process);
 
     *out_thread = thread;
     return process;
@@ -275,10 +304,6 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
     process_ref(current);
     list_push(&current->thread_list, &thread->list_node_process);
     *out_thread = thread;
-
-    spinlock_lock(&g_process_list_lock);
-    list_push(&g_process_list, &current->list_node_global);
-    spinlock_unlock(&g_process_list_lock);
 
     return true;
 }

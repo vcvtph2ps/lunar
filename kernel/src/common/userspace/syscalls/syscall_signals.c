@@ -25,7 +25,7 @@ syscall_ret_t syscall_sys_proc_sig_action(syscall_args_t* args) {
 
     LOG_UTRC("signum=%d\n", signal_number);
 
-    if(signal_number > UAPI_SIGNAL_MAX_SIGNAL) {
+    if(signal_number <= 0 || signal_number > UAPI_SIGNAL_MAX_SIGNAL) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 

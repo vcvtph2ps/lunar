@@ -49,6 +49,9 @@ struct process {
     /// The list node for the global process list
     list_node_t list_node_global;
 
+    /// Whether list_node_global is currently linked into the global process list
+    bool in_global_list;
+
     /// The process group this process belongs to, nullptr until it is placed in one
     process_group_t* group;
     /// Node of this process in its group's members list
@@ -130,6 +133,13 @@ void process_kill(process_t* target, process_status_state_t state, int32_t exit_
  * @return The same process
  */
 process_t* process_ref(process_t* process);
+
+/**
+ * @brief Acquires a new reference to a process only if it is still alive.
+ * @param process The process to reference
+ * @return The same process, or nullptr if it is already being destroyed
+ */
+process_t* process_try_ref(process_t* process);
 
 /**
  * @brief Releases a reference to a process, destroying it once the last reference is dropped.
