@@ -14,7 +14,7 @@
 #include <common/cpu_local.h>
 #include <common/hardware/pci.h>
 #include <common/init.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
@@ -77,7 +77,7 @@ void init_stage_acpi(uint32_t core_id) {
     }
 }
 
-dw_item_t* g_shutdown_item = nullptr;
+dpc_t* g_shutdown_item = nullptr;
 
 static void shutdown_deferred(void* ctx) {
     (void) ctx;
@@ -103,7 +103,7 @@ static uacpi_interrupt_ret power_btn(uacpi_handle ctx) {
     (void) ctx;
     LOG_OKAY("power button pressed\n");
 
-    dw_queue(g_shutdown_item);
+    dpc_queue(g_shutdown_item);
 
     return UACPI_INTERRUPT_HANDLED;
 }
@@ -113,7 +113,7 @@ void init_stage_platform(uint32_t core_id) {
         bool pci = pci_init();
         assert(pci && "PCI: Failed to initialize PCI from ACPI");
 
-        g_shutdown_item = dw_create(shutdown_deferred, nullptr);
+        g_shutdown_item = dpc_create(shutdown_deferred, nullptr);
         g_shutdown_item->cleanup_fn = nullptr;
 
         uacpi_status status = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, power_btn, nullptr);

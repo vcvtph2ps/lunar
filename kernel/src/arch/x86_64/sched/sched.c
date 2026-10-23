@@ -5,7 +5,7 @@
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/sched/thread.h>
 #include <common/assert.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/process.h>
@@ -54,9 +54,9 @@ extern x86_64_thread_t* x86_64_context_switch(x86_64_thread_t* t_current, x86_64
 extern void x86_64_userspace_init_sysexit();
 extern void x86_64_userspace_fork_sysexit();
 
-dw_item_t* g_timer_check_dw;
+dpc_t* g_timer_check_dpc;
 
-static void timer_check_dw(void* data) {
+static void timer_check_dpc(void* data) {
     (void) data;
     timer_wait_check();
 }
@@ -65,7 +65,7 @@ static void sched_timer_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
     (void) frame;
     CPU_LOCAL_WRITE(scheduler.yield_pending, true);
-    dw_queue(g_timer_check_dw);
+    dpc_queue(g_timer_check_dpc);
 }
 
 static void arch_thread_init_common(x86_64_thread_t* prev) {
@@ -235,8 +235,8 @@ void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_sta
 void sched_arch_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         interrupt_set_hardirq_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr);
-        g_timer_check_dw = dw_create(timer_check_dw, nullptr);
-        g_timer_check_dw->cleanup_fn = nullptr;
+        g_timer_check_dpc = dpc_create(timer_check_dpc, nullptr);
+        g_timer_check_dpc->cleanup_fn = nullptr;
     }
 }
 #pragma clang diagnostic pop

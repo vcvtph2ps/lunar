@@ -20,7 +20,7 @@ struct slab_magazine {
 };
 
 struct slab_cpu_cache {
-    spinlock_no_dw_t lock;
+    spinlock_no_dpc_t lock;
 
     slab_magazine_t* primary;
     slab_magazine_t* secondary;
@@ -45,12 +45,12 @@ struct slab_cache {
 
     list_node_t list_node;
 
-    spinlock_no_dw_t slab_lock;
+    spinlock_no_dpc_t slab_lock;
     list_t slab_full_list;
     list_t slab_partial_list;
     slab_t* slab_empty;
 
-    spinlock_no_dw_t magazine_lock;
+    spinlock_no_dpc_t magazine_lock;
     list_t magazine_full_list;
     list_t magazine_empty_list;
 

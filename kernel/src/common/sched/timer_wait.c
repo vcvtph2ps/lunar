@@ -7,7 +7,7 @@
 #include <lib/list.h>
 #include <memory/heap.h>
 
-static spinlock_no_dw_t g_timer_wait_lock = SPINLOCK_NO_DW_INIT;
+static spinlock_no_dpc_t g_timer_wait_lock = SPINLOCK_NO_DPC_INIT;
 static list_t g_timer_waits = LIST_INIT;
 
 timer_wait_t* timer_wait_create(uint64_t msec) {
@@ -18,7 +18,7 @@ timer_wait_t* timer_wait_create(uint64_t msec) {
     timer->deadline_ns = time_monotonic_ns() + (msec * 1000000ULL);
     ATOMIC_STORE(&timer->pending, true, ATOMIC_RELEASE);
 
-    spinlock_nodw_lock(&g_timer_wait_lock);
+    spinlock_no_dpc_lock(&g_timer_wait_lock);
     bool inserted = false;
     LIST_FOR_EACH(&g_timer_waits, node) {
         timer_wait_t* current = CONTAINER_OF(node, timer_wait_t, list_node);
@@ -31,16 +31,16 @@ timer_wait_t* timer_wait_create(uint64_t msec) {
     if(!inserted) {
         list_push_back(&g_timer_waits, &timer->list_node);
     }
-    spinlock_nodw_unlock(&g_timer_wait_lock);
+    spinlock_no_dpc_unlock(&g_timer_wait_lock);
 
     return timer;
 }
 
 void timer_wait_free(timer_wait_t* timer) {
     if(ATOMIC_XCHG(&timer->pending, false, ATOMIC_ACQ_REL)) {
-        spinlock_nodw_lock(&g_timer_wait_lock);
+        spinlock_no_dpc_lock(&g_timer_wait_lock);
         list_node_delete(&g_timer_waits, &timer->list_node);
-        spinlock_nodw_unlock(&g_timer_wait_lock);
+        spinlock_no_dpc_unlock(&g_timer_wait_lock);
     }
     heap_free(timer, sizeof(timer_wait_t));
 }
@@ -51,7 +51,7 @@ void timer_wait_check() {
     while(true) {
         timer_wait_t* timer = nullptr;
 
-        spinlock_nodw_lock(&g_timer_wait_lock);
+        spinlock_no_dpc_lock(&g_timer_wait_lock);
         list_node_t* node = g_timer_waits.head;
         if(node != nullptr) {
             timer_wait_t* head = CONTAINER_OF(node, timer_wait_t, list_node);
@@ -61,7 +61,7 @@ void timer_wait_check() {
                 timer = head;
             }
         }
-        spinlock_nodw_unlock(&g_timer_wait_lock);
+        spinlock_no_dpc_unlock(&g_timer_wait_lock);
 
         if(timer == nullptr) {
             return;

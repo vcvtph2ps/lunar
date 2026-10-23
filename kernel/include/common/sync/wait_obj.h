@@ -43,7 +43,7 @@ typedef struct {
 } wait_block_t; // NOLINT
 
 struct wait_obj {
-    spinlock_no_dw_t lock;
+    spinlock_no_dpc_t lock;
 
     wait_obj_type_t type;
     ATOMIC size_t signal_state;
@@ -60,9 +60,9 @@ struct wait_obj {
 
 typedef struct wait_obj wait_obj_t;
 
-#define WAIT_OBJ_INIT_NOTIFICATION() ((wait_obj_t) { .lock = SPINLOCK_NO_DW_INIT, .type = WAIT_OBJ_NOTIFICATION, .signal_state = 0, .wait_blocks = LIST_INIT })
-#define WAIT_OBJ_INIT_SYNCHRONIZATION() ((wait_obj_t) { .lock = SPINLOCK_NO_DW_INIT, .type = WAIT_OBJ_SYNCHRONIZATION, .signal_state = 0, .wait_blocks = LIST_INIT })
-#define WAIT_OBJ_INIT_SEMAPHORE(MAX_SIGNAL_COUNT) ((wait_obj_t) { .lock = SPINLOCK_NO_DW_INIT, .type = WAIT_OBJ_SEMAPHORE, .semaphore = { .max_signals = (MAX_SIGNAL_COUNT) }, .signal_state = 0, .wait_blocks = LIST_INIT })
+#define WAIT_OBJ_INIT_NOTIFICATION() ((wait_obj_t) { .lock = SPINLOCK_NO_DPC_INIT, .type = WAIT_OBJ_NOTIFICATION, .signal_state = 0, .wait_blocks = LIST_INIT })
+#define WAIT_OBJ_INIT_SYNCHRONIZATION() ((wait_obj_t) { .lock = SPINLOCK_NO_DPC_INIT, .type = WAIT_OBJ_SYNCHRONIZATION, .signal_state = 0, .wait_blocks = LIST_INIT })
+#define WAIT_OBJ_INIT_SEMAPHORE(MAX_SIGNAL_COUNT) ((wait_obj_t) { .lock = SPINLOCK_NO_DPC_INIT, .type = WAIT_OBJ_SEMAPHORE, .semaphore = { .max_signals = (MAX_SIGNAL_COUNT) }, .signal_state = 0, .wait_blocks = LIST_INIT })
 
 
 bool wait_obj_signal(wait_obj_t* obj, size_t count);

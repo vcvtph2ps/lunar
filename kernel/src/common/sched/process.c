@@ -52,7 +52,7 @@ process_t* process_find_by_id(uint32_t id) {
 thread_t* process_find_thread_by_id(process_t* process, uint32_t tid) {
     thread_t* found = nullptr;
 
-    spinlock_nodw_lock(&process->thread_list_lock);
+    spinlock_no_dpc_lock(&process->thread_list_lock);
     LIST_FOR_EACH(&process->thread_list, node) {
         thread_t* thread = CONTAINER_OF(node, thread_t, list_node_process);
         if(thread->tid == tid) {
@@ -60,7 +60,7 @@ thread_t* process_find_thread_by_id(process_t* process, uint32_t tid) {
             break;
         }
     }
-    spinlock_nodw_unlock(&process->thread_list_lock);
+    spinlock_no_dpc_unlock(&process->thread_list_lock);
 
     return found;
 }
@@ -132,14 +132,14 @@ void process_deref(process_t* process) {
 static void process_init_common(process_t* process) {
     ATOMIC_STORE(&process->ref_count, 1, ATOMIC_RELAXED);
     process->in_global_list = false;
-    process->children_lock = SPINLOCK_NO_DW_INIT;
+    process->children_lock = SPINLOCK_NO_DPC_INIT;
     process->children_list = LIST_INIT;
     process->child_exit_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
-    process->thread_list_lock = SPINLOCK_NO_DW_INIT;
+    process->thread_list_lock = SPINLOCK_NO_DPC_INIT;
     process->thread_list = LIST_INIT;
 
     memory_zero(&process->status, sizeof(process_status_t));
-    process->status.lock = SPINLOCK_NO_DW_INIT;
+    process->status.lock = SPINLOCK_NO_DPC_INIT;
     process->status.state = PROCESS_RUNNING;
 }
 
@@ -172,9 +172,9 @@ process_t* process_fork(process_t* parent) {
 
     /// Register with the parent so that it can wait on us. The parent's children list holds a reference
     process_ref(process);
-    spinlock_nodw_lock(&parent->children_lock);
+    spinlock_no_dpc_lock(&parent->children_lock);
     list_push_back(&parent->children_list, &process->list_node_sibling);
-    spinlock_nodw_unlock(&parent->children_lock);
+    spinlock_no_dpc_unlock(&parent->children_lock);
 
     process_global_list_insert(process);
 
@@ -260,7 +260,7 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
 
     thread_t* current_thread = sched_arch_thread_current();
 
-    spinlock_nodw_lock(&current->thread_list_lock);
+    spinlock_no_dpc_lock(&current->thread_list_lock);
     size_t sibling_count = current->thread_list.count - 1;
     size_t sibling_capacity = sibling_count > 0 ? sibling_count : 1;
     wait_obj_t** thread_wait_objs = __builtin_alloca(sizeof(wait_obj_t*) * sibling_capacity);
@@ -278,7 +278,7 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
         }
     }
 
-    spinlock_nodw_unlock(&current->thread_list_lock);
+    spinlock_no_dpc_unlock(&current->thread_list_lock);
     sched_wait_multiple(thread_wait_objs, sibling_count, WAIT_OBJ_WAIT_ALL, UINT64_MAX);
 
     for(size_t k = 0; k < sibling_count; k++) {
@@ -317,11 +317,11 @@ void process_kill(process_t* process, process_status_state_t state, int32_t exit
 
     thread_t* current = sched_arch_thread_current();
 
-    spinlock_nodw_lock(&process->status.lock);
+    spinlock_no_dpc_lock(&process->status.lock);
 
     /// The process is already on its way out
     if(process->status.state != PROCESS_RUNNING) {
-        spinlock_nodw_unlock(&process->status.lock);
+        spinlock_no_dpc_unlock(&process->status.lock);
         if(current->process == process) {
             sched_terminate_current_thread();
         }
@@ -335,10 +335,10 @@ void process_kill(process_t* process, process_status_state_t state, int32_t exit
         default:                 ASSERT_UNREACHABLE();
     }
     LOG_INFO("process %u was killed\n", process->process_id);
-    spinlock_nodw_unlock(&process->status.lock);
+    spinlock_no_dpc_unlock(&process->status.lock);
 
     /// Kill every thread of this process
-    spinlock_nodw_lock(&process->thread_list_lock);
+    spinlock_no_dpc_lock(&process->thread_list_lock);
     LIST_FOR_EACH(&process->thread_list, node) {
         thread_t* thread = CONTAINER_OF(node, thread_t, list_node_process);
 
@@ -349,7 +349,7 @@ void process_kill(process_t* process, process_status_state_t state, int32_t exit
 
         sched_thread_kill(thread);
     }
-    spinlock_nodw_unlock(&process->thread_list_lock);
+    spinlock_no_dpc_unlock(&process->thread_list_lock);
 
     /// A killed process leaves its process group, destroying the group once it is the last member
     process_group_leave(process);

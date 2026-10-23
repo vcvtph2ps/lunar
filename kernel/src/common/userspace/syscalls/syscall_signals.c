@@ -116,13 +116,13 @@ syscall_ret_t syscall_sys_proc_sig_send_simple(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_SEARCH);
     }
 
-    spinlock_nodw_lock(&target_process->status.lock);
+    spinlock_no_dpc_lock(&target_process->status.lock);
     if(target_process->status.state != PROCESS_RUNNING) {
-        spinlock_nodw_unlock(&target_process->status.lock);
+        spinlock_no_dpc_unlock(&target_process->status.lock);
         process_deref(target_process);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_SEARCH);
     }
-    spinlock_nodw_unlock(&target_process->status.lock);
+    spinlock_no_dpc_unlock(&target_process->status.lock);
 
     // @todo: permission checks
 

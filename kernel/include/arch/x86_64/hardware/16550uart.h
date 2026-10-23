@@ -5,7 +5,7 @@
 
 #include <arch/x86_64/io.h>
 #include <common/arch.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <lib/list.h>
 #include <stdbool.h>
 #include <stdint.h>

@@ -1,6 +1,6 @@
 #pragma once
 #include <arch/riscv64/sched/thread.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <lib/list.h>
@@ -34,7 +34,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
 
     struct {
         ipi_request_t* queue;
-        dw_item_t* dw_free_item;
+        dpc_t* dpc_free_item;
 
         spinlock_no_int_t lock;
         list_t pending_free_list;

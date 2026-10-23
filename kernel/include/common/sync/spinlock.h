@@ -18,7 +18,7 @@ typedef struct {
  */
 typedef struct {
     ATOMIC uint32_t lock;
-} spinlock_no_dw_t;
+} spinlock_no_dpc_t;
 
 /**
  * @brief A spinlock that also disables interrupts on acquire and restores them on release.
@@ -29,7 +29,7 @@ typedef struct {
 } spinlock_no_int_t;
 
 #define SPINLOCK_INIT ((spinlock_t) { 0 })
-#define SPINLOCK_NO_DW_INIT ((spinlock_no_dw_t) { 0 })
+#define SPINLOCK_NO_DPC_INIT ((spinlock_no_dpc_t) { 0 })
 #define SPINLOCK_NO_INT_INIT ((spinlock_no_int_t) { 0 })
 
 /**
@@ -49,14 +49,14 @@ void spinlock_unlock(spinlock_t* lock);
  * counters
  * @param lock Pointer to the spinlock to acquire.
  */
-void spinlock_nodw_lock(spinlock_no_dw_t* lock);
+void spinlock_no_dpc_lock(spinlock_no_dpc_t* lock);
 
 /**
  * @brief Releases a spinlock and decrements the preemption and deferred work
  * counters
  * @param lock Pointer to the spinlock to release.
  */
-void spinlock_nodw_unlock(spinlock_no_dw_t* lock);
+void spinlock_no_dpc_unlock(spinlock_no_dpc_t* lock);
 
 /**
  * @brief Acquires a spinlock, hard disables interrupts

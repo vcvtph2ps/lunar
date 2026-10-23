@@ -18,7 +18,7 @@ static pmm_t g_pmm;
 static void populate_global() {
     g_pmm.num_pages = 0;
     g_pmm.free_list_pfn = 0;
-    g_pmm.pmm_lock = SPINLOCK_NO_DW_INIT;
+    g_pmm.pmm_lock = SPINLOCK_NO_DPC_INIT;
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
@@ -41,9 +41,9 @@ static void populate_global() {
 }
 
 static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
-    spinlock_nodw_lock(&pmm->pmm_lock);
+    spinlock_no_dpc_lock(&pmm->pmm_lock);
     if(pmm->num_pages == 0) {
-        spinlock_nodw_unlock(&pmm->pmm_lock);
+        spinlock_no_dpc_unlock(&pmm->pmm_lock);
         if(flags & PMM_FLAG_PANIC) {
             arch_panic("pmm: out of physical memory!");
         }
@@ -58,7 +58,7 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
     pmm->free_list_pfn = ATOMIC_LOAD(&page->free.next_pfn, ATOMIC_ACQUIRE);
     pmm->num_pages--;
 
-    spinlock_nodw_unlock(&pmm->pmm_lock);
+    spinlock_no_dpc_unlock(&pmm->pmm_lock);
 
     uintptr_t addr = (uintptr_t) pfn << 12;
     pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_ALLOCATED);
@@ -91,11 +91,11 @@ static void free_page_to(pmm_t* pmm, uintptr_t addr) {
     assert(page != nullptr);
     pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_FREE);
 
-    spinlock_nodw_lock(&pmm->pmm_lock);
+    spinlock_no_dpc_lock(&pmm->pmm_lock);
     ATOMIC_STORE(&page->free.next_pfn, pmm->free_list_pfn, ATOMIC_RELEASE);
     pmm->free_list_pfn = pfn;
     pmm->num_pages++;
-    spinlock_nodw_unlock(&pmm->pmm_lock);
+    spinlock_no_dpc_unlock(&pmm->pmm_lock);
 }
 
 static void transfer_pages_from(pmm_t* src, pmm_t* dest, size_t num_pages) {
@@ -116,7 +116,7 @@ void pmm_init(uint32_t core_id) {
 
     CPU_LOCAL_WRITE(pmm.num_pages, 0ul);
     CPU_LOCAL_WRITE(pmm.free_list_pfn, 0ul);
-    CPU_LOCAL_GET_SELF()->pmm.pmm_lock = SPINLOCK_NO_DW_INIT;
+    CPU_LOCAL_GET_SELF()->pmm.pmm_lock = SPINLOCK_NO_DPC_INIT;
 }
 
 
@@ -149,10 +149,10 @@ void pmm_reclaim(uintptr_t addr, size_t page_count) {
         assert(page != nullptr);
         pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_FREE);
 
-        spinlock_nodw_lock(&g_pmm.pmm_lock);
+        spinlock_no_dpc_lock(&g_pmm.pmm_lock);
         ATOMIC_STORE(&page->free.next_pfn, g_pmm.free_list_pfn, ATOMIC_RELEASE);
         g_pmm.free_list_pfn = pfn;
         g_pmm.num_pages++;
-        spinlock_nodw_unlock(&g_pmm.pmm_lock);
+        spinlock_no_dpc_unlock(&g_pmm.pmm_lock);
     }
 }

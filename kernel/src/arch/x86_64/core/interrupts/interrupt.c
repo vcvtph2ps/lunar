@@ -3,7 +3,7 @@
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/assert.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
@@ -53,20 +53,20 @@ void interrupt_set_hardirq_handler(uint8_t vector, interrupt_handler_fn_t handle
 
 static void softirq_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) frame;
-    dw_queue(ctx);
+    dpc_queue(ctx);
 }
 
-void interrupt_set_softirq_handler(uint8_t vector, dw_item_t* dw_item) {
-    assert(dw_item->cleanup_fn == nullptr);
+void interrupt_set_softirq_handler(uint8_t vector, dpc_t* dpc) {
+    assert(dpc->cleanup_fn == nullptr);
 
     arch_interrupt_state_t state = spinlock_noint_lock(&g_interrupt_handler_lock);
     assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
     g_handlers[vector] = softirq_handler;
-    g_handler_contexts[vector] = dw_item;
+    g_handler_contexts[vector] = dpc;
     spinlock_noint_unlock(&g_interrupt_handler_lock, state);
 }
 
-static void signal_wake_obj_handler_dw(void* ctx) {
+static void signal_wake_obj_handler_dpc(void* ctx) {
     wait_obj_signal(ctx, 1);
 }
 
@@ -75,7 +75,7 @@ void interrupt_set_waitobj_handler(uint8_t vector, wait_obj_t* wait_obj) {
         ASSERT_TODO();
     }
 
-    dw_item_t* item = dw_create(signal_wake_obj_handler_dw, wait_obj);
+    dpc_t* item = dpc_create(signal_wake_obj_handler_dpc, wait_obj);
     item->cleanup_fn = nullptr;
     interrupt_set_softirq_handler(vector, item);
 }
@@ -106,7 +106,7 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         }
 
         sched_preempt_disable();
-        dw_status_disable();
+        dpc_disable();
     }
 
     CPU_LOCAL_WRITE(in_hardirq, true);
@@ -125,7 +125,7 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
     if(is_threaded) {
         CPU_LOCAL_WRITE(in_softirq, false);
         (void) arch_interrupt_enable();
-        dw_status_enable();
+        dpc_enable();
         CPU_LOCAL_WRITE(in_softirq, false);
 
         sched_preempt_enable();

@@ -1,7 +1,7 @@
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/cpu_local.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>
@@ -42,26 +42,26 @@ void spinlock_unlock(spinlock_t* lock) {
     sched_preempt_enable();
 }
 
-void spinlock_nodw_lock(spinlock_no_dw_t* lock) {
-    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_no_dw_t cannot be used in hardirq context");
+void spinlock_no_dpc_lock(spinlock_no_dpc_t* lock) {
+    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_no_dpc_t cannot be used in hardirq context");
 
     sched_preempt_disable();
-    dw_status_disable();
+    dpc_disable();
     spinlock_lock_raw(&lock->lock);
 }
 
-void spinlock_nodw_unlock(spinlock_no_dw_t* lock) {
-    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_no_dw_t cannot be used in hardirq context");
+void spinlock_no_dpc_unlock(spinlock_no_dpc_t* lock) {
+    assert(!CPU_LOCAL_READ(in_hardirq) && "spinlock_no_dpc_t cannot be used in hardirq context");
 
     spinlock_unlock_raw(&lock->lock);
-    dw_status_enable();
+    dpc_enable();
     sched_preempt_enable();
 }
 
 
 [[nodiscard]] arch_interrupt_state_t spinlock_noint_lock(spinlock_no_int_t* lock) {
     sched_preempt_disable();
-    dw_status_disable();
+    dpc_disable();
     arch_interrupt_state_t state = arch_interrupt_disable();
     spinlock_lock_raw(&lock->lock);
     return state;
@@ -70,6 +70,6 @@ void spinlock_nodw_unlock(spinlock_no_dw_t* lock) {
 void spinlock_noint_unlock(spinlock_no_int_t* lock, arch_interrupt_state_t interrupt_state) {
     spinlock_unlock_raw(&lock->lock);
     arch_interrupt_restore(interrupt_state);
-    dw_status_enable();
+    dpc_enable();
     sched_preempt_enable();
 }

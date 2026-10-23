@@ -13,14 +13,14 @@ static size_t process_group_value_of_node(rb_node_t* node) {
     return CONTAINER_OF(node, process_group_t, rb_node)->pgid;
 }
 
-static spinlock_no_dw_t g_process_group_lock = SPINLOCK_NO_DW_INIT;
+static spinlock_no_dpc_t g_process_group_lock = SPINLOCK_NO_DPC_INIT;
 static rb_tree_t g_process_group_tree = {
     .value_of_node = process_group_value_of_node,
     .root = nullptr,
 };
 
 process_group_t* process_group_lookup(uint32_t pgid) {
-    spinlock_nodw_lock(&g_process_group_lock);
+    spinlock_no_dpc_lock(&g_process_group_lock);
 
     rb_node_t* node = rb_find(&g_process_group_tree, pgid, RB_SEARCH_TYPE_EXACT);
     process_group_t* group = node != nullptr ? CONTAINER_OF(node, process_group_t, rb_node) : nullptr;
@@ -28,7 +28,7 @@ process_group_t* process_group_lookup(uint32_t pgid) {
         ATOMIC_LOAD_ADD(&group->ref_count, 1, ATOMIC_ACQ_REL);
     }
 
-    spinlock_nodw_unlock(&g_process_group_lock);
+    spinlock_no_dpc_unlock(&g_process_group_lock);
     return group;
 }
 
@@ -46,20 +46,20 @@ process_group_t* process_group_get_or_create(uint32_t pgid) {
     ATOMIC_STORE(&new_group->ref_count, 1, ATOMIC_RELAXED);
     new_group->members = LIST_INIT;
 
-    spinlock_nodw_lock(&g_process_group_lock);
+    spinlock_no_dpc_lock(&g_process_group_lock);
 
     /// Another core may have created the group while we were allocating
     rb_node_t* existing = rb_find(&g_process_group_tree, pgid, RB_SEARCH_TYPE_EXACT);
     if(existing != nullptr) {
         process_group_t* other = CONTAINER_OF(existing, process_group_t, rb_node);
         ATOMIC_LOAD_ADD(&other->ref_count, 1, ATOMIC_ACQ_REL);
-        spinlock_nodw_unlock(&g_process_group_lock);
+        spinlock_no_dpc_unlock(&g_process_group_lock);
         heap_free(new_group, sizeof(process_group_t));
         return other;
     }
 
     rb_insert(&g_process_group_tree, &new_group->rb_node);
-    spinlock_nodw_unlock(&g_process_group_lock);
+    spinlock_no_dpc_unlock(&g_process_group_lock);
     return new_group;
 }
 
@@ -82,11 +82,11 @@ bool process_group_join(process_t* process, uint32_t pgid) {
         return false;
     }
 
-    spinlock_nodw_lock(&g_process_group_lock);
+    spinlock_no_dpc_lock(&g_process_group_lock);
 
     process_group_t* old_group = process->group;
     if(old_group == group) {
-        spinlock_nodw_unlock(&g_process_group_lock);
+        spinlock_no_dpc_unlock(&g_process_group_lock);
         process_group_deref(group);
         return true;
     }
@@ -102,7 +102,7 @@ bool process_group_join(process_t* process, uint32_t pgid) {
     list_push_back(&group->members, &process->list_node_group);
     process_ref(process);
 
-    spinlock_nodw_unlock(&g_process_group_lock);
+    spinlock_no_dpc_unlock(&g_process_group_lock);
 
     if(old_group != nullptr) {
         /// Drop the old group's reference on the process and the process' reference on the old group
@@ -116,11 +116,11 @@ bool process_group_join(process_t* process, uint32_t pgid) {
 void process_group_leave(process_t* process) {
     assert(process != nullptr);
 
-    spinlock_nodw_lock(&g_process_group_lock);
+    spinlock_no_dpc_lock(&g_process_group_lock);
 
     process_group_t* group = process->group;
     if(group == nullptr) {
-        spinlock_nodw_unlock(&g_process_group_lock);
+        spinlock_no_dpc_unlock(&g_process_group_lock);
         return;
     }
 
@@ -130,7 +130,7 @@ void process_group_leave(process_t* process) {
         rb_remove(&g_process_group_tree, &group->rb_node);
     }
 
-    spinlock_nodw_unlock(&g_process_group_lock);
+    spinlock_no_dpc_unlock(&g_process_group_lock);
 
     /// Drop the process' reference on the group and the group's reference on the process
     process_group_deref(group);
@@ -140,9 +140,9 @@ void process_group_leave(process_t* process) {
 uint32_t process_group_id(process_t* process) {
     assert(process != nullptr);
 
-    spinlock_nodw_lock(&g_process_group_lock);
+    spinlock_no_dpc_lock(&g_process_group_lock);
     uint32_t pgid = process->group != nullptr ? process->group->pgid : 0;
-    spinlock_nodw_unlock(&g_process_group_lock);
+    spinlock_no_dpc_unlock(&g_process_group_lock);
     return pgid;
 }
 
@@ -150,24 +150,24 @@ process_t** process_group_find_processes(uint32_t pgid, size_t* out_count) {
     assert(out_count != nullptr);
     *out_count = 0;
 
-    spinlock_nodw_lock(&g_process_group_lock);
+    spinlock_no_dpc_lock(&g_process_group_lock);
 
     rb_node_t* node = rb_find(&g_process_group_tree, pgid, RB_SEARCH_TYPE_EXACT);
     if(node == nullptr) {
-        spinlock_nodw_unlock(&g_process_group_lock);
+        spinlock_no_dpc_unlock(&g_process_group_lock);
         return nullptr;
     }
 
     process_group_t* group = CONTAINER_OF(node, process_group_t, rb_node);
     size_t count = group->members.count;
     if(count == 0) {
-        spinlock_nodw_unlock(&g_process_group_lock);
+        spinlock_no_dpc_unlock(&g_process_group_lock);
         return nullptr;
     }
 
     process_t** processes = heap_alloc(sizeof(process_t*) * count);
     if(processes == nullptr) {
-        spinlock_nodw_unlock(&g_process_group_lock);
+        spinlock_no_dpc_unlock(&g_process_group_lock);
         return nullptr;
     }
 
@@ -176,7 +176,7 @@ process_t** process_group_find_processes(uint32_t pgid, size_t* out_count) {
         processes[index++] = process_ref(CONTAINER_OF(member_node, process_t, list_node_group));
     }
 
-    spinlock_nodw_unlock(&g_process_group_lock);
+    spinlock_no_dpc_unlock(&g_process_group_lock);
 
     *out_count = count;
     return processes;

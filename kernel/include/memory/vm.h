@@ -92,7 +92,7 @@ typedef struct {
 } vm_region_t;
 
 typedef struct {
-    spinlock_no_dw_t ptm_lock;
+    spinlock_no_dpc_t ptm_lock;
     phys_addr_t top_level_page_table;
 } vm_ptm_t;
 
@@ -102,7 +102,7 @@ struct vm_address_space {
 
     virt_addr_t start, end;
     rb_tree_t regions_tree;
-    spinlock_no_dw_t lock;
+    spinlock_no_dpc_t lock;
 };
 
 extern vm_address_space_t* g_vm_global_address_space;

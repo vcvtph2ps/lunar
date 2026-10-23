@@ -12,7 +12,7 @@ typedef uint8_t pmm_flag_t;
 typedef struct {
     size_t num_pages;
     uint64_t free_list_pfn;
-    spinlock_no_dw_t pmm_lock;
+    spinlock_no_dpc_t pmm_lock;
 } pmm_t;
 
 /**

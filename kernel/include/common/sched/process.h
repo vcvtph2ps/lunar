@@ -21,7 +21,7 @@ typedef enum {
 } process_status_state_t;
 
 typedef struct {
-    spinlock_no_dw_t lock;
+    spinlock_no_dpc_t lock;
     process_status_state_t state;
 
     union {
@@ -59,13 +59,13 @@ struct process {
 
     /// Node of this process in its parent's children_list
     list_node_t list_node_sibling;
-    spinlock_no_dw_t children_lock;
+    spinlock_no_dpc_t children_lock;
     list_t children_list;
 
     /// Signaled whenever one of this process' children transitions to a zombie
     wait_obj_t child_exit_event;
 
-    spinlock_no_dw_t thread_list_lock;
+    spinlock_no_dpc_t thread_list_lock;
     list_t thread_list;
 
     vm_address_space_t* address_space;

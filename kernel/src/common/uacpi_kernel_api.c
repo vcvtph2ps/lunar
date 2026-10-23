@@ -3,7 +3,7 @@
 #include <common/cpu_local.h>
 #include <common/hardware/pci.h>
 #include <common/init.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/sched/sched.h>
 #include <common/sync/lock.h>
@@ -435,7 +435,7 @@ typedef struct {
     uint8_t gsi;
     uacpi_interrupt_handler handler;
     uacpi_handle ctx;
-    dw_item_t* work_item;
+    dpc_t* work_item;
 } uacpi_kernel_interrupt_ctx_t;
 
 #if defined(__x86_64__)
@@ -444,7 +444,7 @@ static void uacpi_kernel_interrupt_handler(arch_interrupt_frame_t* frame, void* 
     ATOMIC_LOAD_ADD(&g_uacpi_interrupt_count, 1, ATOMIC_ACQUIRE);
     uacpi_kernel_interrupt_ctx_t* ctx = (uacpi_kernel_interrupt_ctx_t*) p_ctx;
     arch_ioapic_mask_gsi(ctx->gsi, true);
-    dw_queue(ctx->work_item);
+    dpc_queue(ctx->work_item);
 }
 
 static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
@@ -470,7 +470,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     kernel_ctx->gsi = arch_ioapic_gsi_of_irq(irq);
     kernel_ctx->handler = handler;
     kernel_ctx->ctx = ctx;
-    kernel_ctx->work_item = dw_create(uacpi_kernel_interrupt_handler_deferred, kernel_ctx);
+    kernel_ctx->work_item = dpc_create(uacpi_kernel_interrupt_handler_deferred, kernel_ctx);
 
     // @todo: every interrupt will be routed to the bsp :/
     arch_ioapic_map_legacy_irq(irq, CPU_LOCAL_READ(lapic_id), false, true, vector);

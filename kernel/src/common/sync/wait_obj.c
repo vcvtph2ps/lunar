@@ -8,7 +8,7 @@
 #include <lib/math.h>
 
 bool wait_obj_signal(wait_obj_t* obj, size_t count) {
-    spinlock_nodw_lock(&obj->lock);
+    spinlock_no_dpc_lock(&obj->lock);
     list_node_t* node = obj->wait_blocks.head;
 
     // sync and notifcation ignore the count
@@ -24,7 +24,7 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count) {
 
     while(node != nullptr) {
         if(!wait_obj_is_signaled(obj)) {
-            spinlock_nodw_unlock(&obj->lock);
+            spinlock_no_dpc_unlock(&obj->lock);
             return signaled_any;
         }
 
@@ -83,7 +83,7 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count) {
         }
     }
 
-    spinlock_nodw_unlock(&obj->lock);
+    spinlock_no_dpc_unlock(&obj->lock);
     return signaled_any;
 }
 

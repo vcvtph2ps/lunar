@@ -1,7 +1,7 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
 #include <common/init.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/reaper.h>
@@ -244,9 +244,9 @@ void sched_yield_internal(thread_state_t yield_state) {
                 break;
             }
             wait_block_t* wb = CONTAINER_OF(node, wait_block_t, thread_node);
-            spinlock_nodw_lock(&wb->obj->lock);
+            spinlock_no_dpc_lock(&wb->obj->lock);
             list_node_delete(&wb->obj->wait_blocks, &wb->wait_object_node);
-            spinlock_nodw_unlock(&wb->obj->lock);
+            spinlock_no_dpc_unlock(&wb->obj->lock);
             heap_free(wb, sizeof(wait_block_t));
         }
         spinlock_unlock(&current->sched.wait_entry->lock);
@@ -319,7 +319,7 @@ void sched_thread_init_common(thread_t* prev) {
 
     CPU_LOCAL_WRITE(scheduler.threaded, true);
     (void) arch_interrupt_enable();
-    dw_status_enable();
+    dpc_enable();
     sched_preempt_enable();
 
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);

@@ -4,7 +4,7 @@
 #include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <common/arch.h>
 #include <common/init.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
@@ -39,7 +39,7 @@ static void ipi_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     while(ipi_pop(&message)) {
         ipi_handle(message);
     }
-    dw_queue(CPU_LOCAL_GET_SELF()->ipi.dw_free_item);
+    dpc_queue(CPU_LOCAL_GET_SELF()->ipi.dpc_free_item);
 }
 
 void ipi_init(uint32_t core_id) {
@@ -47,8 +47,8 @@ void ipi_init(uint32_t core_id) {
         g_ipi_vector = arch_interrupt_alloc_allocate();
         interrupt_set_hardirq_handler(g_ipi_vector, ipi_interrupt_handler, nullptr);
     }
-    CPU_LOCAL_GET_SELF()->ipi.dw_free_item = dw_create(ipi_handle_deferred, nullptr);
-    CPU_LOCAL_GET_SELF()->ipi.dw_free_item->cleanup_fn = nullptr;
+    CPU_LOCAL_GET_SELF()->ipi.dpc_free_item = dpc_create(ipi_handle_deferred, nullptr);
+    CPU_LOCAL_GET_SELF()->ipi.dpc_free_item->cleanup_fn = nullptr;
 }
 
 void arch_send_ipi(uint32_t core_id) {

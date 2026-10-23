@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-static spinlock_no_dw_t g_reap_lock = SPINLOCK_NO_DW_INIT;
+static spinlock_no_dpc_t g_reap_lock = SPINLOCK_NO_DPC_INIT;
 static list_t g_reap_queue = LIST_INIT;
 static wait_obj_t g_reap_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
@@ -29,10 +29,10 @@ static void reaper_process_thread(thread_t* thread) {
         return;
     }
 
-    spinlock_nodw_lock(&process->thread_list_lock);
+    spinlock_no_dpc_lock(&process->thread_list_lock);
     list_node_delete(&process->thread_list, &thread->list_node_process);
     bool last_thread = process->thread_list.count == 0;
-    spinlock_nodw_unlock(&process->thread_list_lock);
+    spinlock_no_dpc_unlock(&process->thread_list_lock);
 
     LOG_OKAY("reaper: processed thread %u of process %u (exit code %d, %zu threads left)\n", tid, process->process_id, exit_code, process->thread_list.count);
 
@@ -52,9 +52,9 @@ static void reaper_process_thread(thread_t* thread) {
 
 [[noreturn]] static void reaper_entry() {
     while(true) {
-        spinlock_nodw_lock(&g_reap_lock);
+        spinlock_no_dpc_lock(&g_reap_lock);
         list_node_t* node = list_pop(&g_reap_queue);
-        spinlock_nodw_unlock(&g_reap_lock);
+        spinlock_no_dpc_unlock(&g_reap_lock);
 
         if(node == nullptr) {
             sched_wait_single(&g_reap_event, UINT64_MAX);
@@ -81,17 +81,17 @@ void reaper_queue_thread(thread_t* thread) {
         return;
     }
 
-    spinlock_nodw_lock(&g_reap_lock);
+    spinlock_no_dpc_lock(&g_reap_lock);
     list_push_back(&g_reap_queue, &thread->list_node_reap_queue);
-    spinlock_nodw_unlock(&g_reap_lock);
+    spinlock_no_dpc_unlock(&g_reap_lock);
 
     wait_obj_signal(&thread->thread_termination_object, 1);
     wait_obj_signal(&g_reap_event, 1);
 }
 
 size_t reaper_pending_count() {
-    spinlock_nodw_lock(&g_reap_lock);
+    spinlock_no_dpc_lock(&g_reap_lock);
     size_t count = g_reap_queue.count;
-    spinlock_nodw_unlock(&g_reap_lock);
+    spinlock_no_dpc_unlock(&g_reap_lock);
     return count;
 }

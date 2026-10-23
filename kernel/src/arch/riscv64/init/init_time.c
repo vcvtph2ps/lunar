@@ -3,7 +3,7 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
 #include <common/init.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/time/time.h>

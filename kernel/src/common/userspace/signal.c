@@ -32,7 +32,7 @@ void signal_process(process_t* process, int signal_number, uapi_signal_info_t* i
     /// A process directed signal is delivered to a single thread
     /// we pick first one that does not block it
     uapi_signal_set_t signal_set = signal_mask_set(0, signal_number);
-    spinlock_nodw_lock(&process->thread_list_lock);
+    spinlock_no_dpc_lock(&process->thread_list_lock);
     LIST_FOR_EACH(&process->thread_list, node) {
         thread_t* thread = CONTAINER_OF(node, thread_t, list_node_process);
 
@@ -47,7 +47,7 @@ void signal_process(process_t* process, int signal_number, uapi_signal_info_t* i
         sched_thread_interrupt(thread);
         break;
     }
-    spinlock_nodw_unlock(&process->thread_list_lock);
+    spinlock_no_dpc_unlock(&process->thread_list_lock);
 }
 
 void signal_thread(thread_t* thread, int signal_number, uapi_signal_info_t* info) {

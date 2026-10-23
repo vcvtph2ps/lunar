@@ -85,7 +85,7 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
 
     if(!prot.read)
         LOG_WARN("Mapping with no read permission is not supported, ignoring\n");
-    spinlock_nodw_lock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_lock(&address_space->ptm.ptm_lock);
 
     arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     for(size_t i = 0; i < length;) {
@@ -96,14 +96,14 @@ bool ptm_map(vm_address_space_t* address_space, virt_addr_t vaddr, phys_addr_t p
             cursize = ARCH_PAGE_SIZE_1G;
 
         if(!map_page(top, vaddr + i, paddr + i, cursize, prot, cache, privilege, global, no_pagedb)) {
-            spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+            spinlock_no_dpc_unlock(&address_space->ptm.ptm_lock);
             return false;
         }
         i += cursize;
     }
 
     ptm_flush_tlb(vaddr, length);
-    spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_unlock(&address_space->ptm.ptm_lock);
     return true;
 }
 
@@ -111,7 +111,7 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
-    spinlock_nodw_lock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_lock(&address_space->ptm.ptm_lock);
 
     for(size_t i = 0; i < length;) {
         arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
@@ -133,7 +133,7 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
             if((vaddr + i) % ps != 0 || length - i < ps) {
                 entry = pt_radix_break_large(table, index, level);
                 if(entry == 0) {
-                    spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+                    spinlock_no_dpc_unlock(&address_space->ptm.ptm_lock);
                     return false;
                 }
                 continue;
@@ -151,7 +151,7 @@ bool ptm_rewrite(vm_address_space_t* address_space, uintptr_t vaddr, size_t leng
         .type = IPI_TLB_FLUSH,
         .tlb_flush = { .vaddr = vaddr, .length = length },
     });
-    spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_unlock(&address_space->ptm.ptm_lock);
     return true;
 }
 
@@ -159,7 +159,7 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
     assert(vaddr % ARCH_PAGE_SIZE_4K == 0);
     assert(length % ARCH_PAGE_SIZE_4K == 0);
 
-    spinlock_nodw_lock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_lock(&address_space->ptm.ptm_lock);
 
     for(size_t i = 0; i < length;) {
         arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
@@ -223,14 +223,14 @@ void ptm_unmap(vm_address_space_t* address_space, uintptr_t vaddr, size_t length
         .type = IPI_TLB_FLUSH,
         .tlb_flush = { .vaddr = vaddr, .length = length },
     });
-    spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_unlock(&address_space->ptm.ptm_lock);
 }
 
 bool ptm_physical(vm_address_space_t* address_space, uintptr_t vaddr, uintptr_t* paddr) {
-    spinlock_nodw_lock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_lock(&address_space->ptm.ptm_lock);
     arch_pte_entry_t* top = (arch_pte_entry_t*) PTM_TO_HHDM(address_space->ptm.top_level_page_table);
     bool result = internal_ptm_physical(top, vaddr, paddr);
-    spinlock_nodw_unlock(&address_space->ptm.ptm_lock);
+    spinlock_no_dpc_unlock(&address_space->ptm.ptm_lock);
     return result;
 }
 
@@ -345,8 +345,8 @@ void ptm_init_kernel(uint32_t core_id) {
 
     g_vm_global_address_space = (void*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC));
     g_vm_global_address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
-    g_vm_global_address_space->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
-    g_vm_global_address_space->lock = SPINLOCK_NO_DW_INIT;
+    g_vm_global_address_space->ptm.ptm_lock = SPINLOCK_NO_DPC_INIT;
+    g_vm_global_address_space->lock = SPINLOCK_NO_DPC_INIT;
     g_vm_global_address_space->regions_tree = vm_create_regions();
     g_vm_global_address_space->start = MEMORY_KERNELSPACE_START;
     g_vm_global_address_space->end = MEMORY_KERNELSPACE_END;
@@ -380,9 +380,9 @@ bool ptm_init_user(vm_address_space_t* address_space) {
     if(address_space->ptm.top_level_page_table == 0)
         return false;
 
-    address_space->ptm.ptm_lock = SPINLOCK_NO_DW_INIT;
+    address_space->ptm.ptm_lock = SPINLOCK_NO_DPC_INIT;
     address_space->is_user = true;
-    address_space->lock = SPINLOCK_NO_DW_INIT;
+    address_space->lock = SPINLOCK_NO_DPC_INIT;
     address_space->regions_tree = vm_create_regions();
     address_space->start = MEMORY_USERSPACE_START;
     address_space->end = MEMORY_USERSPACE_END;

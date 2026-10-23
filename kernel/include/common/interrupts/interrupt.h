@@ -12,7 +12,7 @@
 
 typedef void (*interrupt_handler_fn_t)(arch_interrupt_frame_t* frame, void* ctx);
 
-typedef struct dw_item dw_item_t; // NOLINT
+typedef struct dpc dpc_t; // NOLINT
 typedef struct thread thread_t; // NOLINT
 typedef struct wait_obj wait_obj_t; // NOLINT
 
@@ -41,10 +41,10 @@ void interrupt_set_hardirq_handler(uint8_t vector, interrupt_handler_fn_t handle
 
 /**
  * @brief Register an interrupt handler for the given interrupt vector.
- * @param dw_item The deferred work item to enqueue on interrupt
+ * @param dpc The deferred work item to enqueue on interrupt
  * @note handler will run in a softirq context
  */
-void interrupt_set_softirq_handler(uint8_t vector, dw_item_t* dw_item);
+void interrupt_set_softirq_handler(uint8_t vector, dpc_t* dpc);
 
 /**
  * @brief Register an interrupt handler for the given interrupt vector.

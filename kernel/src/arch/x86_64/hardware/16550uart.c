@@ -6,7 +6,7 @@
 #include <arch/x86_64/interrupts/interrupt.h>
 #include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <arch/x86_64/io.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <common/sched/sched.h>
@@ -211,7 +211,7 @@ static void serial_sink(int c, void* ctx) {
 
 wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
-static dw_item_t* g_serial_rx_dw_item;
+static dpc_t* g_serial_rx_dpc;
 static void serial_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) frame;
     arch_16550uart_t* uart = (arch_16550uart_t*) ctx;
@@ -228,10 +228,10 @@ static void serial_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
         ATOMIC_STORE(&uart->rx_head, next, ATOMIC_RELEASE);
     }
 
-    dw_queue(g_serial_rx_dw_item);
+    dpc_queue(g_serial_rx_dpc);
 }
 
-static void serial_rx_dw_handler(void* ctx) {
+static void serial_rx_dpc_handler(void* ctx) {
     (void) ctx;
     wait_obj_signal(&g_serial_wait_obj, 1);
 }
@@ -428,8 +428,8 @@ void arch_16550uart_setup() {
             arch_panic("Failed to allocate interrupt vector for 16550uart\n");
         }
 
-        g_serial_rx_dw_item = dw_create(serial_rx_dw_handler, nullptr);
-        g_serial_rx_dw_item->cleanup_fn = nullptr;
+        g_serial_rx_dpc = dpc_create(serial_rx_dpc_handler, nullptr);
+        g_serial_rx_dpc->cleanup_fn = nullptr;
         interrupt_set_hardirq_handler(vector, serial_interrupt_handler, uart);
 
         sched_thread_schedule(serial_thread);

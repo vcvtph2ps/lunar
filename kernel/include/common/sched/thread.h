@@ -1,5 +1,5 @@
 #pragma once
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/sync/spinlock.h>
 #include <common/sync/wait_obj.h>
 #include <common/userspace/signal.h>
@@ -41,7 +41,7 @@ struct thread {
         bool in_process;
         vm_fault_reason_t reason;
         virt_addr_t address;
-        dw_item_t dw_item;
+        dpc_t dpc;
     } vm_fault;
 
     struct {

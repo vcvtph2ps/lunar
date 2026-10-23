@@ -21,9 +21,9 @@ static void sched_wait_abort() {
             break;
         }
         wait_block_t* wb = CONTAINER_OF(node, wait_block_t, thread_node);
-        spinlock_nodw_lock(&wb->obj->lock);
+        spinlock_no_dpc_lock(&wb->obj->lock);
         list_node_delete(&wb->obj->wait_blocks, &wb->wait_object_node);
-        spinlock_nodw_unlock(&wb->obj->lock);
+        spinlock_no_dpc_unlock(&wb->obj->lock);
         heap_free(wb, sizeof(wait_block_t));
     }
     spinlock_unlock(&thread->sched.wait_entry->lock);
@@ -59,10 +59,10 @@ static bool sched_wait_any(wait_obj_t** objects, size_t count) {
     for(size_t i = 0; i < count; i++) {
         wait_obj_t* obj = objects[i];
 
-        spinlock_nodw_lock(&obj->lock);
+        spinlock_no_dpc_lock(&obj->lock);
 
         if(wait_obj_try_consume(obj)) {
-            spinlock_nodw_unlock(&obj->lock);
+            spinlock_no_dpc_unlock(&obj->lock);
             return true;
         }
 
@@ -77,7 +77,7 @@ static bool sched_wait_any(wait_obj_t** objects, size_t count) {
 
         list_push_back(&obj->wait_blocks, &wb->wait_object_node);
 
-        spinlock_nodw_unlock(&obj->lock);
+        spinlock_no_dpc_unlock(&obj->lock);
     }
     return false;
 }
@@ -106,7 +106,7 @@ static bool sched_wait_all(wait_obj_t** objects, size_t count) {
     /// Lock every object
     for(size_t i = 0; i < count; i++) {
         wait_obj_t* obj = objects[i];
-        spinlock_nodw_lock(&obj->lock);
+        spinlock_no_dpc_lock(&obj->lock);
     }
 
     /// Look at every object, if all are signaled we can skip wait blocks and consume
@@ -141,7 +141,7 @@ static bool sched_wait_all(wait_obj_t** objects, size_t count) {
     /// Unlock every object
     for(size_t i = 0; i < count; i++) {
         wait_obj_t* obj = objects[i];
-        spinlock_nodw_unlock(&obj->lock);
+        spinlock_no_dpc_unlock(&obj->lock);
     }
 
     return abort_wait;
@@ -150,10 +150,10 @@ static bool sched_wait_all(wait_obj_t** objects, size_t count) {
 static bool sched_wait_on_timer(timer_wait_t* timer) {
     thread_t* thread = sched_arch_thread_current();
 
-    spinlock_nodw_lock(&timer->obj.lock);
+    spinlock_no_dpc_lock(&timer->obj.lock);
 
     if(wait_obj_try_consume(&timer->obj)) {
-        spinlock_nodw_unlock(&timer->obj.lock);
+        spinlock_no_dpc_unlock(&timer->obj.lock);
         return true;
     }
 
@@ -168,7 +168,7 @@ static bool sched_wait_on_timer(timer_wait_t* timer) {
 
     list_push_back(&timer->obj.wait_blocks, &wb->wait_object_node);
 
-    spinlock_nodw_unlock(&timer->obj.lock);
+    spinlock_no_dpc_unlock(&timer->obj.lock);
     return false;
 }
 

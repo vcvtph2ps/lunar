@@ -10,7 +10,7 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
 #include <common/init.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
@@ -34,7 +34,7 @@ void init_stage_arch_cpu(uint32_t core_id) {
     }
 
     if(INIT_CORE_IS_BSP(core_id)) {
-        dw_init();
+        dpc_init();
     }
 
     arch_gdt_init();

@@ -38,7 +38,7 @@ static process_t* find_self_or_child(process_t* parent, uint32_t pid) {
     }
 
     process_t* found = nullptr;
-    spinlock_nodw_lock(&parent->children_lock);
+    spinlock_no_dpc_lock(&parent->children_lock);
     LIST_FOR_EACH(&parent->children_list, node) {
         process_t* candidate = CONTAINER_OF(node, process_t, list_node_sibling);
         if(candidate->process_id == pid) {
@@ -46,7 +46,7 @@ static process_t* find_self_or_child(process_t* parent, uint32_t pid) {
             break;
         }
     }
-    spinlock_nodw_unlock(&parent->children_lock);
+    spinlock_no_dpc_unlock(&parent->children_lock);
     return found;
 }
 
@@ -177,7 +177,7 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
     while(true) {
         process_t* child = nullptr;
 
-        spinlock_nodw_lock(&parent->children_lock);
+        spinlock_no_dpc_lock(&parent->children_lock);
         LIST_FOR_EACH(&parent->children_list, node) {
             process_t* candidate = CONTAINER_OF(node, process_t, list_node_sibling);
 
@@ -185,14 +185,14 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
                 continue;
             }
 
-            spinlock_nodw_lock(&candidate->status.lock);
+            spinlock_no_dpc_lock(&candidate->status.lock);
             if(candidate->status.state != PROCESS_RUNNING) {
-                spinlock_nodw_unlock(&candidate->status.lock);
+                spinlock_no_dpc_unlock(&candidate->status.lock);
                 list_node_delete(&parent->children_list, &candidate->list_node_sibling);
                 child = candidate;
                 break;
             }
-            spinlock_nodw_unlock(&candidate->status.lock);
+            spinlock_no_dpc_unlock(&candidate->status.lock);
         }
 
         /// Determine whether any child matching the request is still alive so we know whether to wait or to fail with ECHILD
@@ -206,13 +206,13 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
                 }
             }
         }
-        spinlock_nodw_unlock(&parent->children_lock);
+        spinlock_no_dpc_unlock(&parent->children_lock);
 
         if(child != nullptr) {
             uint32_t status = 0;
             uint32_t child_pid = child->process_id;
 
-            spinlock_nodw_lock(&child->status.lock);
+            spinlock_no_dpc_lock(&child->status.lock);
 
             switch(child->status.state) {
                 case PROCESS_EXITED:     status = ((uint32_t) child->status.exited.exit_code & 0xffu) << 8; break;
@@ -221,7 +221,7 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
             }
 
             child->status.state = PROCESS_PENDING_REAP;
-            spinlock_nodw_unlock(&child->status.lock);
+            spinlock_no_dpc_unlock(&child->status.lock);
 
             /// The parent's children list held a reference, it was taken off the list above
             process_deref(child);

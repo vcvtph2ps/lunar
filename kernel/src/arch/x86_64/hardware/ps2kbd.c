@@ -2,7 +2,7 @@
 #include <arch/x86_64/hardware/ioapic.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
 
 #include "arch/x86_64/interrupts/interrupt_alloc.h"
@@ -40,7 +40,7 @@ static bool g_rshift_pressed = false;
 static bool g_lctrl_pressed = false;
 static bool g_rctrl_pressed = false;
 
-static dw_item_t* g_ps2kbd_dw_item;
+static dpc_t* g_ps2kbd_dpc;
 
 static char translate_next_scancode() {
     if(g_scancode_ring_buffer_tail == g_scancode_ring_buffer_head) {
@@ -97,10 +97,10 @@ static void ps2kbd_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     }
     g_scancode_ring_buffer[g_scancode_ring_buffer_head] = scancode;
     g_scancode_ring_buffer_head = (g_scancode_ring_buffer_head + 1) % SCANCODE_RING_BUFFER_SIZE;
-    dw_queue(g_ps2kbd_dw_item);
+    dpc_queue(g_ps2kbd_dpc);
 }
 
-static void ps2kbd_dw_handler(void* data) {
+static void ps2kbd_dpc_handler(void* data) {
     (void) data;
     if(!tty_get_default()) {
         g_scancode_ring_buffer_tail = g_scancode_ring_buffer_head;
@@ -128,8 +128,8 @@ void arch_ps2kbd_init(arch_i8042_port_t port) {
     }
     LOG_INFO("interrupt vector @ 0x%x\n", vector);
 
-    g_ps2kbd_dw_item = dw_create(ps2kbd_dw_handler, nullptr);
-    g_ps2kbd_dw_item->cleanup_fn = nullptr;
+    g_ps2kbd_dpc = dpc_create(ps2kbd_dpc_handler, nullptr);
+    g_ps2kbd_dpc->cleanup_fn = nullptr;
     interrupt_set_hardirq_handler(vector, ps2kbd_interrupt_handler, nullptr);
 
     uint8_t irq = ARCH_I8042_PORT_ONE_IRQ;

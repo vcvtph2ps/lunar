@@ -1,7 +1,7 @@
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/cpu_local.h>
-#include <common/interrupts/dw.h>
+#include <common/interrupts/dpc.h>
 #include <common/log.h>
 #include <common/sched/process.h>
 #include <common/sched/sched.h>
@@ -30,7 +30,7 @@ static size_t vm_value_of_node(rb_node_t* node) {
     return CONTAINER_OF(node, vm_region_t, region_tree_node)->base;
 }
 
-static spinlock_no_dw_t g_region_cache_lock = SPINLOCK_NO_DW_INIT;
+static spinlock_no_dpc_t g_region_cache_lock = SPINLOCK_NO_DPC_INIT;
 static list_t g_region_cache = LIST_INIT;
 
 [[clang::always_inline]] static bool address_in_bounds(virt_addr_t address, virt_addr_t start, virt_addr_t end) {
@@ -233,14 +233,14 @@ static bool regions_mergeable(vm_region_t* left, vm_region_t* right) {
 /// Allocate a region from the internal vm region pool.
 static vm_region_t* region_alloc(bool global_lock_acquired) {
     sched_preempt_disable();
-    dw_status_disable();
-    spinlock_nodw_lock(&g_region_cache_lock);
+    dpc_disable();
+    spinlock_no_dpc_lock(&g_region_cache_lock);
     if(g_region_cache.count == 0) {
-        spinlock_nodw_unlock(&g_region_cache_lock);
+        spinlock_no_dpc_unlock(&g_region_cache_lock);
 
         phys_addr_t page = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
         if(!global_lock_acquired) {
-            spinlock_nodw_lock(&g_vm_global_address_space->lock);
+            spinlock_no_dpc_lock(&g_vm_global_address_space->lock);
         }
 
         uintptr_t address;
@@ -263,24 +263,24 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
 
         region_insert(g_vm_global_address_space, &region[0]);
         if(!global_lock_acquired)
-            spinlock_nodw_unlock(&g_vm_global_address_space->lock);
+            spinlock_no_dpc_unlock(&g_vm_global_address_space->lock);
 
-        spinlock_nodw_lock(&g_region_cache_lock);
+        spinlock_no_dpc_lock(&g_region_cache_lock);
         for(unsigned int i = 1; i < PAGE_SIZE_DEFAULT / sizeof(vm_region_t); i++) list_push(&g_region_cache, &region[i].region_cache_node);
     }
 
     list_node_t* node = list_pop(&g_region_cache);
-    spinlock_nodw_unlock(&g_region_cache_lock);
-    dw_status_enable();
+    spinlock_no_dpc_unlock(&g_region_cache_lock);
+    dpc_enable();
     sched_preempt_enable();
     return CONTAINER_OF(node, vm_region_t, region_cache_node);
 }
 
 /// Free region into the internal vm region pool.
 static void region_free(vm_region_t* region) {
-    spinlock_nodw_lock(&g_region_cache_lock);
+    spinlock_no_dpc_lock(&g_region_cache_lock);
     list_push(&g_region_cache, &region->region_cache_node);
-    spinlock_nodw_unlock(&g_region_cache_lock);
+    spinlock_no_dpc_unlock(&g_region_cache_lock);
 }
 
 /// Create a region by cloning another to a new region.
@@ -399,7 +399,7 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
     assert(length % PAGE_SIZE_DEFAULT == 0);
     assert(segment_in_bounds((uintptr_t) address, length, address_space->start, address_space->end));
 
-    spinlock_nodw_lock(&address_space->lock);
+    spinlock_no_dpc_lock(&address_space->lock);
 
     uintptr_t current_address = (uintptr_t) address;
 
@@ -512,7 +512,7 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
 
     r_skip:
     }
-    spinlock_nodw_unlock(&address_space->lock);
+    spinlock_no_dpc_unlock(&address_space->lock);
 }
 
 
@@ -538,13 +538,13 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
     }
 
     vm_region_t* region = region_alloc(false);
-    spinlock_nodw_lock(&address_space->lock);
+    spinlock_no_dpc_lock(&address_space->lock);
 
     if(!(flags & VM_FLAG_FIXED)) {
         bool result = find_hole(address_space, address, length, align, &address);
         if(!result) {
             region_free(region);
-            spinlock_nodw_unlock(&address_space->lock);
+            spinlock_no_dpc_unlock(&address_space->lock);
             return nullptr;
         }
     }
@@ -573,13 +573,13 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
     if(!region->dynamically_backed) {
         if(!region_map(region, region->base, region->length)) {
             region_free(region);
-            spinlock_nodw_unlock(&address_space->lock);
+            spinlock_no_dpc_unlock(&address_space->lock);
             return nullptr;
         }
     }
 
     region_insert(address_space, region);
-    spinlock_nodw_unlock(&address_space->lock);
+    spinlock_no_dpc_unlock(&address_space->lock);
     return (void*) address;
 }
 
@@ -729,14 +729,14 @@ void vm_init_kernel() {
     rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_bitmap_region.region_tree_node);
 }
 
-static void vm_fault_dw(void* data) {
+static void vm_fault_dpc(void* data) {
     thread_t* thread = data;
     assert(thread->vm_fault.in_process);
     assert(thread->process != nullptr);
 
     bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.reason, thread->vm_fault.address);
     if(EXPECT_UNLIKELY(!ok)) {
-        LOG_WARN("vm_fault_dw: page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
+        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
         process_kill(thread->process, PROCESS_TERMINATED, UAPI_SIGNAL_SEGV);
     }
 
@@ -759,20 +759,20 @@ bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
     current_thread->vm_fault.in_process = true;
     current_thread->vm_fault.reason = fault;
     current_thread->vm_fault.address = address;
-    current_thread->vm_fault.dw_item.data = current_thread;
-    current_thread->vm_fault.dw_item.fn = vm_fault_dw;
-    current_thread->vm_fault.dw_item.cleanup_fn = nullptr;
+    current_thread->vm_fault.dpc.data = current_thread;
+    current_thread->vm_fault.dpc.fn = vm_fault_dpc;
+    current_thread->vm_fault.dpc.cleanup_fn = nullptr;
 
-    dw_queue(&current_thread->vm_fault.dw_item);
+    dpc_queue(&current_thread->vm_fault.dpc);
 
     return true;
 }
 
 vm_address_space_t* vm_fork(vm_address_space_t* parent_as) {
     vm_address_space_t* new_as = heap_zalloc(sizeof(vm_address_space_t));
-    new_as->lock = SPINLOCK_NO_DW_INIT;
+    new_as->lock = SPINLOCK_NO_DPC_INIT;
 
-    spinlock_nodw_lock(&parent_as->lock);
+    spinlock_no_dpc_lock(&parent_as->lock);
 
     new_as->start = parent_as->start;
     new_as->end = parent_as->end;
@@ -800,7 +800,7 @@ vm_address_space_t* vm_fork(vm_address_space_t* parent_as) {
 
     ptm_fork_user(new_as, parent_as);
 
-    spinlock_nodw_unlock(&parent_as->lock);
+    spinlock_no_dpc_unlock(&parent_as->lock);
     return new_as;
 }
 
@@ -808,7 +808,7 @@ void vm_address_space_destroy(vm_address_space_t* address_space) {
     assert(address_space != nullptr);
     assert(address_space != g_vm_global_address_space);
 
-    spinlock_nodw_lock(&address_space->lock);
+    spinlock_no_dpc_lock(&address_space->lock);
 
     rb_node_t* node;
     while((node = rb_find_first(&address_space->regions_tree)) != nullptr) {
@@ -818,7 +818,7 @@ void vm_address_space_destroy(vm_address_space_t* address_space) {
         region_free(region);
     }
 
-    spinlock_nodw_unlock(&address_space->lock);
+    spinlock_no_dpc_unlock(&address_space->lock);
 
     /// @note: we **shouldn't** leak any memory from the page tables here since it *should* all be freed when we free the regions
     // I fucking hope

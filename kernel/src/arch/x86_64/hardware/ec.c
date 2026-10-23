@@ -25,7 +25,7 @@ static list_t g_ec_devices = LIST_INIT;
 typedef struct ec_device {
     uint16_t command_port;
     uint16_t data_port;
-    spinlock_no_dw_t lock;
+    spinlock_no_dpc_t lock;
     list_node_t list_node;
 } ec_device_t;
 
@@ -134,10 +134,10 @@ static uacpi_status ec_region_handler(uacpi_region_op op, uacpi_handle op_data) 
             ec_device_t* ec = (ec_device_t*) data->region_context;
             uint8_t addr = (uint8_t) data->address;
 
-            spinlock_nodw_lock(&ec->lock);
+            spinlock_no_dpc_lock(&ec->lock);
             uint8_t value = 0;
             bool status = ec_read(ec, addr, &value);
-            spinlock_nodw_unlock(&ec->lock);
+            spinlock_no_dpc_unlock(&ec->lock);
 
             if(!status) {
                 arch_panic("ec: read failed for address 0x%02x\n", addr);
@@ -154,9 +154,9 @@ static uacpi_status ec_region_handler(uacpi_region_op op, uacpi_handle op_data) 
 
             LOG_KTRC("ec: write addr=0x%02x <- 0x%02x\n", addr, (uint8_t) data->value);
 
-            spinlock_nodw_lock(&ec->lock);
+            spinlock_no_dpc_lock(&ec->lock);
             bool status = ec_write(ec, addr, (uint8_t) data->value);
-            spinlock_nodw_unlock(&ec->lock);
+            spinlock_no_dpc_unlock(&ec->lock);
             if(!status) {
                 arch_panic("ec: write failed for address 0x%02x\n", addr);
             }
@@ -216,7 +216,7 @@ static uacpi_iteration_decision ec_find_callback(void* user, uacpi_namespace_nod
         return UACPI_ITERATION_DECISION_CONTINUE;
     }
 
-    device->lock = SPINLOCK_NO_DW_INIT;
+    device->lock = SPINLOCK_NO_DPC_INIT;
 
     if(!ec_setup_device(device, node)) {
         LOG_FAIL("ec(%s): failed to setup device\n", uacpi_namespace_node_generate_absolute_path(node));
