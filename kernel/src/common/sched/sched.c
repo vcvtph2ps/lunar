@@ -213,6 +213,7 @@ void sched_sleep(uint64_t msec) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 void sched_yield_internal(thread_state_t yield_state) {
+    (void) arch_interrupt_disable();
     thread_t* current = sched_arch_thread_current();
 
     /// The wait blocks live on the kernel stack of the thread and point at the wait entry of the thread, they have to come down no matter which state the thread ends up in
