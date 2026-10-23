@@ -47,6 +47,8 @@ typedef enum : uint64_t {
     SYSCALL_FS_STAT_AT = 51,
     SYSCALL_FS_DUP = 52,
     SYSCALL_FS_DUP2 = 53,
+    SYSCALL_FS_GETDENTS = 54,
+    SYSCALL_FS_READLINKAT = 55,
 
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;
@@ -55,13 +57,14 @@ typedef enum : int64_t {
     SYSCALL_ERROR_NOENT = 2, // No such file or directory
     SYSCALL_ERROR_SEARCH = 3, // No such process (ESRCH)
     SYSCALL_ERROR_INTR = 4, // Interrupted system call (EINTR)
-    SYSCALL_ERROR_ISDIR = 21, // Resource is directory (EISDIR)
     SYSCALL_ERROR_TOO_BIG = 7, // Argument list too long
     SYSCALL_ERROR_NO_EXEC = 8, // Exec format error
     SYSCALL_ERROR_CHILD = 10, // No child processes (ECHILD)
     SYSCALL_ERROR_AGAIN = 11, // Try again (EAGAIN)
     SYSCALL_ERROR_NOMEM = 12, // Out of memory
     SYSCALL_ERROR_FAULT = 14, // Bad address
+    SYSCALL_ERROR_NOTDIR = 20, // Not a directory (ENOTDIR)
+    SYSCALL_ERROR_ISDIR = 21, // Resource is directory (EISDIR)
     SYSCALL_ERROR_INVAL = 22, // Invalid argument
     SYSCALL_ERROR_NOTTY = 25, // Not a TTY
     SYSCALL_ERROR_SPIPE = 29, // Illegal seek

@@ -29,4 +29,10 @@
 
 #define UAPI_AT_FDCWD (-100)
 
+#define UAPI_AT_SYMLINK_NOFOLLOW (1 << 8)
+#define UAPI_AT_SYMLINK_FOLLOW (1 << 9)
+#define UAPI_AT_REMOVEDIR (1 << 10)
+#define UAPI_AT_EACCESS (1 << 11)
+#define UAPI_AT_EMPTY_PATH (1 << 12)
+
 // NOLINTEND

@@ -6,14 +6,16 @@
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userptr.h>
 #include <common/userspace/userspace.h>
+#include <lib/math.h>
+#include <lib/string.h>
 #include <memory/heap.h>
 #include <stdatomic.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <uapi/dirent.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
-
-#include "uapi/stat.h"
-
+#include <uapi/stat.h>
 
 syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     int flags = args->arg2;
@@ -314,7 +316,7 @@ syscall_ret_t syscall_sys_fs_chdir(syscall_args_t* args) {
 }
 
 static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
-    vfs_node_attr_t attr;
+    vfs_node_attr_t attr = { 0 };
     vfs_result_t res = target->ops->get_attributes(target, &attr);
     if(res != VFS_RESULT_OK) {
         assert(false);
@@ -334,6 +336,7 @@ static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
     stat.st_mode |= (attr.permissions.user) << 6;
     stat.st_mode |= (attr.permissions.group) << 3;
     stat.st_mode |= (attr.permissions.other) << 0;
+    stat.st_ino = attr.inode;
 
     if(!userptr_write_full(stat_buf, &stat)) {
         vfs_node_put(target);
@@ -345,7 +348,6 @@ static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
     heap_free(stat_buf, sizeof(userptr_t*));
     return SYSCALL_RET_VALUE(0);
 }
-
 
 syscall_ret_t syscall_sys_fs_stat(syscall_args_t* args) {
     uint32_t fd = args->arg1;
@@ -415,7 +417,7 @@ syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args) {
     }
 
     vfs_node_t* result_node;
-    vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_O_NOFOLLOW) == 0, &result_node);
+    vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_AT_SYMLINK_NOFOLLOW) == 0, &result_node);
     switch(result) {
         case VFS_RESULT_OK:            break;
         case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
@@ -460,4 +462,227 @@ syscall_ret_t syscall_sys_fs_dup2(syscall_args_t* args) {
     }
 
     return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t syscall_sys_fs_getdents(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    uintptr_t ubuffer = args->arg2;
+    size_t ubuffer_size = args->arg3;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_UTRC("fd=%d | result=BADFD\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    if(entry->node->type != VFS_NODE_TYPE_DIR) {
+        LOG_UTRC("fd=%d | result=NOTDIR\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
+    }
+
+    if(ubuffer_size == 0) {
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    char* buffer = heap_alloc(ubuffer_size);
+    if(buffer == nullptr) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+    memory_set(buffer, 0, ubuffer_size);
+
+    vfs_path_t dir_path = VFS_MAKE_REL_PATH(entry->node, "");
+    size_t offset = entry->offset;
+    size_t used = 0;
+
+    while(used < ubuffer_size) {
+        size_t prev_offset = offset;
+        vfs_dentry_t* child = nullptr;
+        vfs_result_t result = vfs_read_dir(&dir_path, &offset, &child);
+        if(result != VFS_RESULT_OK) {
+            heap_free(buffer, ubuffer_size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+        }
+
+        if(child == nullptr) {
+            break;
+        }
+
+        size_t name_len = (size_t) string_length(child->name);
+        if(name_len > UAPI_DIRENT_NAME_MAX) {
+            name_len = UAPI_DIRENT_NAME_MAX;
+        }
+
+        size_t reclen;
+        {
+            size_t raw = offsetof(uapi_dirent_t, d_name) + name_len + 1;
+            reclen = MATH_ALIGN_UP(raw, alignof(uapi_dirent_t));
+        }
+        if(used + reclen > ubuffer_size) {
+            offset = prev_offset;
+            vfs_dentry_put(child);
+
+            if(used == 0) {
+                heap_free(buffer, ubuffer_size);
+                return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+            }
+            break;
+        }
+
+        uapi_dirent_t* dent = (uapi_dirent_t*) (buffer + used);
+        if(child->node != nullptr) {
+            vfs_node_attr_t attr = { 0 };
+
+            lock_acquire(&child->node->lock);
+            vfs_result_t res = child->node->ops->get_attributes(child->node, &attr);
+            lock_release(&child->node->lock);
+
+            dent->d_ino = res == VFS_RESULT_OK ? attr.inode : 0;
+
+            switch(child->node->type) {
+                case VFS_NODE_TYPE_DIR:  dent->d_type = UAPI_DIRENT_DIR; break;
+                case VFS_NODE_TYPE_FILE: dent->d_type = UAPI_DIRENT_REG; break;
+                case VFS_NODE_TYPE_LINK: dent->d_type = UAPI_DIRENT_LNK; break;
+                default:                 dent->d_type = UAPI_DIRENT_UNKNOWN; break;
+            }
+        } else {
+            dent->d_ino = 0;
+            dent->d_type = UAPI_DIRENT_UNKNOWN;
+        }
+        dent->d_off = (int64_t) offset;
+        dent->d_reclen = reclen;
+        memory_copy(dent->d_name, child->name, name_len);
+        dent->d_name[name_len] = '\0';
+
+        vfs_dentry_put(child);
+        used += reclen;
+    }
+
+    entry->offset = offset;
+
+    if(used == 0) {
+        heap_free(buffer, ubuffer_size);
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    vm_copy_to(process->address_space, ubuffer, buffer, used);
+    heap_free(buffer, ubuffer_size);
+
+    LOG_UTRC("fd=%d, ubuffer=0x%lx, max_size=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, entry->offset, used);
+    return SYSCALL_RET_VALUE(used);
+}
+
+syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    uintptr_t ubuffer = args->arg3;
+    size_t ubuffer_size = args->arg4;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    userptr_t* upath = userptr_create_string(args->arg2, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t path_size = upath->size + 1;
+    char* pathname = heap_alloc(path_size);
+    if(pathname == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read_full(upath, pathname)) {
+        heap_free(pathname, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    pathname[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
+
+    vfs_path_t vfs_path;
+    vfs_path.rel_path = pathname;
+
+    if(pathname[0] == '/') {
+        vfs_path.node = nullptr;
+    } else if(fd == (uint32_t) UAPI_AT_FDCWD) {
+        vfs_node_get(process->current_working_dir);
+        vfs_path.node = process->current_working_dir;
+    } else {
+        fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+        if(entry == nullptr) {
+            LOG_UTRC("fd=%d | result=BADFD\n", fd);
+            heap_free(pathname, path_size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        }
+        vfs_node_get(entry->node);
+        vfs_path.node = entry->node;
+    }
+
+    vfs_node_t* node;
+    vfs_result_t result = vfs_lookup(&vfs_path, false, &node);
+
+    if(vfs_path.node) {
+        vfs_node_put(vfs_path.node);
+    }
+    heap_free(pathname, path_size);
+
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        case VFS_RESULT_ERR_NOT_DIR:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
+        case VFS_RESULT_ERR_LOOP:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_LOOP);
+        default:                       user_assert(false && "Invalid return value");
+    }
+
+    if(node->type != VFS_NODE_TYPE_LINK) {
+        vfs_node_put(node);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    vfs_node_attr_t attr = { 0 };
+    result = vfs_get_attributes_node(node, &attr);
+    if(result != VFS_RESULT_OK) {
+        vfs_node_put(node);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    size_t count = attr.size;
+    if(count > ubuffer_size) {
+        count = ubuffer_size;
+    }
+
+    if(count == 0) {
+        vfs_node_put(node);
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    char* buffer = heap_alloc(count);
+    if(buffer == nullptr) {
+        vfs_node_put(node);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    io_request_t io_req;
+    io_req.type = IO_REQUEST_READ;
+    io_req.read.buffer = buffer;
+    io_req.read.count = count;
+    io_req.read.offset = 0;
+    io_req.read.bytes_read = 0;
+    io_req.no_block = false;
+
+    result = vfs_perform_io_node(node, &io_req);
+    vfs_node_put(node);
+
+    if(result != VFS_RESULT_OK) {
+        heap_free(buffer, count);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    vm_copy_to(process->address_space, ubuffer, buffer, io_req.read.bytes_read);
+    heap_free(buffer, count);
+
+    LOG_UTRC("fd=%d, ubuffer=0x%lx, max_size=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.bytes_read);
+    return SYSCALL_RET_VALUE(io_req.read.bytes_read);
 }

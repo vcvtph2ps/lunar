@@ -151,6 +151,12 @@ static vfs_result_t rdsk_node_attr(vfs_node_t* node, vfs_node_attr_t* out_attr) 
     out_attr->size = node->type == VFS_NODE_TYPE_DIR ? 0 : FILE(node)->size;
     out_attr->type = node->type;
 
+    if(node->type == VFS_NODE_TYPE_DIR) {
+        out_attr->inode = get_dir_index(node->current_vfs, DIR(node));
+    } else {
+        out_attr->inode = get_file_index(node->current_vfs, FILE(node)) + INFO(node->current_vfs)->header->dir_table.entry_count;
+    }
+
     out_attr->permissions.user = VFS_PERM_READ | VFS_PERM_EXECUTE;
     out_attr->permissions.group = VFS_PERM_READ | VFS_PERM_EXECUTE;
     out_attr->permissions.other = VFS_PERM_READ | VFS_PERM_EXECUTE;

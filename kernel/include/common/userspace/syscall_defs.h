@@ -38,5 +38,7 @@ syscall_ret_t syscall_sys_fs_stat(syscall_args_t* args);
 syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args);
 syscall_ret_t syscall_sys_fs_dup(syscall_args_t* args);
 syscall_ret_t syscall_sys_fs_dup2(syscall_args_t* args);
+syscall_ret_t syscall_sys_fs_getdents(syscall_args_t* args);
+syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args);
 
 // NOLINTEND

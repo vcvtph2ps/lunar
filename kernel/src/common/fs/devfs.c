@@ -6,10 +6,17 @@
 #include <lib/string.h>
 #include <memory/heap.h>
 
+#include <lib/helpers.h>
+
 // @todo: rewrite this, currently it doesn't support directories at all, and just isn't a good way to do this...
 // but it will work for now
 
+ATOMIC uint64_t g_devfs_inode = 1;
+static uint64_t g_devfs_root_inode = 0;
+
 typedef struct devfs_entry {
+    uint64_t inode;
+
     char* name;
     size_t name_len;
 
@@ -115,6 +122,7 @@ static vfs_result_t root_get_attributes(vfs_node_t* node, vfs_node_attr_t* out_a
     (void) node;
     out_attr->size = 0;
     out_attr->type = VFS_NODE_TYPE_DIR;
+    out_attr->inode = g_devfs_root_inode;
     out_attr->permissions.user = VFS_PERM_READ | VFS_PERM_WRITE | VFS_PERM_EXECUTE;
     out_attr->permissions.group = VFS_PERM_READ | VFS_PERM_EXECUTE;
     out_attr->permissions.other = VFS_PERM_READ | VFS_PERM_EXECUTE;
@@ -139,6 +147,9 @@ static vfs_result_t device_perform_io(vfs_node_t* node, io_request_t* request) {
 
 static vfs_result_t device_get_attributes(vfs_node_t* node, vfs_node_attr_t* out_attr) {
     devfs_node_priv_t* priv = (devfs_node_priv_t*) node->private_data;
+
+    out_attr->inode = priv->entry->inode;
+
     if(priv->entry->ops != nullptr && priv->entry->ops->get_attributes != nullptr) {
         return priv->entry->ops->get_attributes(priv->entry->ctx, out_attr);
     }
@@ -177,6 +188,7 @@ static vfs_result_t devfs_vfs_mount(vfs_t* vfs) {
         g_root_node.current_vfs = vfs;
         g_root_node.ops = &g_root_ops;
         g_root_node.private_data = nullptr;
+        g_devfs_root_inode = ATOMIC_LOAD_ADD(&g_devfs_inode, 1, ATOMIC_ACQ_REL);
         g_root_node_initialised = true;
     } else {
         g_root_node.current_vfs = vfs;
@@ -213,6 +225,7 @@ vfs_result_t devfs_bind(const char* name, const devfs_device_ops_t* ops, void* c
     }
 
     devfs_entry_t* entry = heap_alloc(sizeof(devfs_entry_t));
+    entry->inode = ATOMIC_LOAD_ADD(&g_devfs_inode, 1, ATOMIC_ACQ_REL);
     entry->name_len = (size_t) string_length(name);
     entry->name = heap_alloc(entry->name_len + 1);
     memory_copy(entry->name, name, entry->name_len + 1);

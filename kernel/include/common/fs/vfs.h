@@ -51,6 +51,9 @@ typedef struct {
     /// The type of the node (file or directory)
     vfs_node_type_t type;
 
+    /// The filesystem's inode number for this vnode
+    uint64_t inode;
+
     struct {
         vfs_permissions_t user;
         vfs_permissions_t group;

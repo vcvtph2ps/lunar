@@ -46,6 +46,8 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_FS_UNMOUNT: return "SYSCALL_FS_UNMOUNT";
         case SYSCALL_FS_GETCWD:  return "SYSCALL_FS_GETCWD";
         case SYSCALL_FS_CHDIR:   return "SYSCALL_FS_CHDIR";
+        case SYSCALL_FS_GETDENTS: return "SYSCALL_FS_GETDENTS";
+        case SYSCALL_FS_READLINKAT: return "SYSCALL_FS_READLINKAT";
 
         default: return "Unknown syscall";
     }
@@ -62,6 +64,7 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_NOMEM:  return "ERROR_NOMEM";
         case SYSCALL_ERROR_FAULT:  return "ERROR_FAULT";
         case SYSCALL_ERROR_INVAL:  return "ERROR_INVAL";
+        case SYSCALL_ERROR_NOTDIR: return "ERROR_NOTDIR";
         case SYSCALL_ERROR_SPIPE:  return "ERROR_SPIPE";
         case SYSCALL_ERROR_ROFS:   return "ERROR_ROFS";
         case SYSCALL_ERROR_RANGE:  return "ERROR_RANGE";
@@ -130,6 +133,8 @@ void syscall_init() {
     SYSCALL_DISPATCHER(SYSCALL_FS_STAT_AT, syscall_sys_fs_stat_at);
     SYSCALL_DISPATCHER(SYSCALL_FS_DUP, syscall_sys_fs_dup);
     SYSCALL_DISPATCHER(SYSCALL_FS_DUP2, syscall_sys_fs_dup2);
+    SYSCALL_DISPATCHER(SYSCALL_FS_GETDENTS, syscall_sys_fs_getdents);
+    SYSCALL_DISPATCHER(SYSCALL_FS_READLINKAT, syscall_sys_fs_readlinkat);
 
     // SYSCALL_DISPATCHER(SYSCALL_FUTEX, syscall_sys_futex);
     // SYSCALL_DISPATCHER(SYSCALL_GET_CLOCK, syscall_sys_get_clock);
