@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-
 typedef struct arch_cpu_local arch_cpu_local_t;
 
 struct [[gnu::aligned(64)]] arch_cpu_local {
@@ -19,11 +18,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     uint32_t core_id;
     uint32_t hart_id;
 
-    struct {
-        uint32_t counter;
-        bool yield_pending;
-        list_t queue;
-    } defered_work;
+    dpc_queue_t dpc_queue;
 
     bool in_hardirq;
     bool in_softirq;

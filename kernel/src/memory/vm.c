@@ -761,7 +761,6 @@ bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
     current_thread->vm_fault.address = address;
     current_thread->vm_fault.dpc.data = current_thread;
     current_thread->vm_fault.dpc.fn = vm_fault_dpc;
-    current_thread->vm_fault.dpc.cleanup_fn = nullptr;
 
     dpc_queue(&current_thread->vm_fault.dpc);
 

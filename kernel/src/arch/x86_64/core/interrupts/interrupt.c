@@ -57,8 +57,6 @@ static void softirq_handler(arch_interrupt_frame_t* frame, void* ctx) {
 }
 
 void interrupt_set_softirq_handler(uint8_t vector, dpc_t* dpc) {
-    assert(dpc->cleanup_fn == nullptr);
-
     arch_interrupt_state_t state = spinlock_noint_lock(&g_interrupt_handler_lock);
     assert(g_handlers[vector] == nullptr && "Interrupt handler already registered for vector");
     g_handlers[vector] = softirq_handler;
@@ -76,7 +74,6 @@ void interrupt_set_waitobj_handler(uint8_t vector, wait_obj_t* wait_obj) {
     }
 
     dpc_t* item = dpc_create(signal_wake_obj_handler_dpc, wait_obj);
-    item->cleanup_fn = nullptr;
     interrupt_set_softirq_handler(vector, item);
 }
 

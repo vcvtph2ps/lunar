@@ -12,7 +12,7 @@ void cpu_local_init_bsp(uintptr_t cpu_local_ptr) {
     cpu_local->online = false;
 
     // Set to 1 to prevent preemption and deferred work until the scheduler is initialized
-    cpu_local->defered_work.counter = 1;
+    cpu_local->dpc_queue.counter = 1;
     ATOMIC_STORE(&cpu_local->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
 }
 
@@ -23,7 +23,7 @@ void cpu_local_init(uint32_t core_id) {
     cpu_local->online = false;
 
     // Set to 1 to prevent preemption and deferred work until the scheduler is initialized
-    cpu_local->defered_work.counter = 1;
+    cpu_local->dpc_queue.counter = 1;
     ATOMIC_STORE(&cpu_local->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
 }
 

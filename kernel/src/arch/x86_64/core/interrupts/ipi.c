@@ -48,7 +48,6 @@ void ipi_init(uint32_t core_id) {
         interrupt_set_hardirq_handler(g_ipi_vector, ipi_interrupt_handler, nullptr);
     }
     CPU_LOCAL_GET_SELF()->ipi.dpc_free_item = dpc_create(ipi_handle_deferred, nullptr);
-    CPU_LOCAL_GET_SELF()->ipi.dpc_free_item->cleanup_fn = nullptr;
 }
 
 void arch_send_ipi(uint32_t core_id) {

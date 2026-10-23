@@ -24,11 +24,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     uint32_t core_id;
     uint32_t lapic_id;
 
-    struct {
-        uint32_t counter;
-        bool yield_pending;
-        list_t queue;
-    } defered_work;
+    dpc_queue_t dpc_queue;
 
     bool in_hardirq;
     bool in_softirq;

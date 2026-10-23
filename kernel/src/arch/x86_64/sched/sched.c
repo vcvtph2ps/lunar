@@ -236,7 +236,6 @@ void sched_arch_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         interrupt_set_hardirq_handler(LAPIC_TIMER_VECTOR, sched_timer_handler, nullptr);
         g_timer_check_dpc = dpc_create(timer_check_dpc, nullptr);
-        g_timer_check_dpc->cleanup_fn = nullptr;
     }
 }
 #pragma clang diagnostic pop

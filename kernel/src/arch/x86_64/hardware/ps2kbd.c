@@ -129,7 +129,6 @@ void arch_ps2kbd_init(arch_i8042_port_t port) {
     LOG_INFO("interrupt vector @ 0x%x\n", vector);
 
     g_ps2kbd_dpc = dpc_create(ps2kbd_dpc_handler, nullptr);
-    g_ps2kbd_dpc->cleanup_fn = nullptr;
     interrupt_set_hardirq_handler(vector, ps2kbd_interrupt_handler, nullptr);
 
     uint8_t irq = ARCH_I8042_PORT_ONE_IRQ;

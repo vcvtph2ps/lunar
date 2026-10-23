@@ -114,7 +114,6 @@ void init_stage_platform(uint32_t core_id) {
         assert(pci && "PCI: Failed to initialize PCI from ACPI");
 
         g_shutdown_item = dpc_create(shutdown_deferred, nullptr);
-        g_shutdown_item->cleanup_fn = nullptr;
 
         uacpi_status status = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, power_btn, nullptr);
         if(uacpi_unlikely_error(status)) {

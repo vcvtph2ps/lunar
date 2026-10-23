@@ -33,10 +33,7 @@ void init_stage_arch_cpu(uint32_t core_id) {
         LOG_INFO("x2apic: %s\n", arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_X2APIC) ? "supported" : "not supported");
     }
 
-    if(INIT_CORE_IS_BSP(core_id)) {
-        dpc_init();
-    }
-
+    dpc_init(core_id);
     arch_gdt_init();
     interrupt_init(core_id);
     arch_lapic_init(core_id);

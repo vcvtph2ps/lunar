@@ -429,7 +429,6 @@ void arch_16550uart_setup() {
         }
 
         g_serial_rx_dpc = dpc_create(serial_rx_dpc_handler, nullptr);
-        g_serial_rx_dpc->cleanup_fn = nullptr;
         interrupt_set_hardirq_handler(vector, serial_interrupt_handler, uart);
 
         sched_thread_schedule(serial_thread);

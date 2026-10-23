@@ -262,7 +262,7 @@ void sched_yield() {
 
     // @todo: figure out a cleaner way to do this, because this sucks
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
-    assert(CPU_LOCAL_READ(defered_work.counter) == 0);
+    assert(CPU_LOCAL_READ(dpc_queue.counter) == 0);
     assert(previous_state.enabled == true);
 
     sched_yield_internal(THREAD_STATE_READY);
@@ -272,7 +272,7 @@ void sched_yield() {
     (void) arch_interrupt_disable();
 
     CPU_LOCAL_WRITE(scheduler.preempt_counter, 0u);
-    CPU_LOCAL_WRITE(defered_work.counter, 0u);
+    CPU_LOCAL_WRITE(dpc_queue.counter, 0u);
     sched_yield_internal(THREAD_STATE_DYING);
     ASSERT_UNREACHABLE();
 }
@@ -323,7 +323,7 @@ void sched_thread_init_common(thread_t* prev) {
     sched_preempt_enable();
 
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
-    assert(CPU_LOCAL_READ(defered_work.counter) == 0);
+    assert(CPU_LOCAL_READ(dpc_queue.counter) == 0);
 
     sched_arch_context_switch(bsp_thread, idle_thread, THREAD_STATE_TERMINATED);
     while(1) {
