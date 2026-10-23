@@ -5,6 +5,16 @@
 #define IS_ALIGNED(x, align) (((uint64_t) (x) & ((align) - 1)) == 0)
 #define MISALIGNMENT(x, align) (((uint64_t) (x) & ((align) - 1)))
 
+int memory_compare(const void* lhs, const void* rhs, size_t count) {
+    for(size_t i = 0; i < count; i++) {
+        if(*((uint8_t*) lhs + i) < *((uint8_t*) rhs + i))
+            return -1;
+        if(*((uint8_t*) lhs + i) > *((uint8_t*) rhs + i))
+            return 1;
+    }
+    return 0;
+}
+
 // taken from https://git.evalyngoemer.com/evalynOS/evalynOS/src/commit/54fc9102b75f853f05f3326c2a3ad84f082ff31e/kernel/src/libc/string.c
 // thanks evalyn :3
 [[gnu::weak]] void* memory_copy(void* restrict dest, const void* restrict src, size_t n) {
@@ -72,6 +82,24 @@
     return dest;
 }
 
+void* memory_find_byte(const void* s, int c, size_t count) {
+    const uint8_t* p = (const uint8_t*) s;
+    for(size_t i = 0; i < count; i++) {
+        if(p[i] == (uint8_t) c) return (void*) (p + i);
+    }
+    return nullptr;
+}
+
+[[gnu::weak]] void memory_move(void* dest, const void* src, size_t count) {
+    if(src == dest)
+        return;
+    if(src > dest) {
+        for(size_t i = 0; i < count; i++) ((uint8_t*) dest)[i] = ((uint8_t*) src)[i];
+    } else {
+        for(size_t i = count; i > 0; i--) ((uint8_t*) dest)[i - 1] = ((uint8_t*) src)[i - 1];
+    }
+}
+
 [[gnu::weak]] void* memory_set(void* s, int c, size_t n) {
 // on x86 do a rep stosb if setting more than 2kb
 #if defined(__x86_64__)
@@ -134,69 +162,8 @@
     return s;
 }
 
-[[gnu::weak]] void memory_move(void* dest, const void* src, size_t count) {
-    if(src == dest)
-        return;
-    if(src > dest) {
-        for(size_t i = 0; i < count; i++) ((uint8_t*) dest)[i] = ((uint8_t*) src)[i];
-    } else {
-        for(size_t i = count; i > 0; i--) ((uint8_t*) dest)[i - 1] = ((uint8_t*) src)[i - 1];
-    }
-}
-
 void* memory_zero(void* dest, size_t count) {
     return memory_set(dest, 0, count);
-}
-
-int memory_compare(const void* lhs, const void* rhs, size_t count) {
-    for(size_t i = 0; i < count; i++) {
-        if(*((uint8_t*) lhs + i) < *((uint8_t*) rhs + i))
-            return -1;
-        if(*((uint8_t*) lhs + i) > *((uint8_t*) rhs + i))
-            return 1;
-    }
-    return 0;
-}
-
-int string_length(const char* str) {
-    int length = 0;
-    while(str[length] != '\0') length++;
-    return length;
-}
-
-size_t string_length_n(const char* str, size_t maxlen) {
-    size_t length = 0;
-    while(length < maxlen && str[length] != '\0') length++;
-    return length;
-}
-
-char* string_find_last_instance(const char* str, int c) {
-    const char* last = nullptr;
-    for(;;) {
-        if(*str == (char) c) last = str;
-        if(*str == '\0') break;
-        str++;
-    }
-    return (char*) last;
-}
-
-void* memory_find_byte(const void* s, int c, size_t count) {
-    const uint8_t* p = (const uint8_t*) s;
-    for(size_t i = 0; i < count; i++) {
-        if(p[i] == (uint8_t) c) return (void*) (p + i);
-    }
-    return nullptr;
-}
-
-int string_find_first_instance(const char* s, char c, size_t size) {
-    int index = -1;
-    for(size_t i = 0; i < size; i++) {
-        if(s[i] == c) {
-            index = i;
-            break;
-        }
-    }
-    return index;
 }
 
 int string_compare(const char* s1, const char* s2) {
@@ -246,11 +213,44 @@ int string_compare_n_case(const char* s1, const char* s2, size_t n) {
     return 0;
 }
 
-[[gnu::alias("memory_set")]] void* memset(void* dest, int ch, size_t count);
-[[gnu::alias("memory_copy")]] void* memcpy(void* restrict dest, const void* restrict src, size_t count);
-[[gnu::alias("memory_move")]] void memmove(void* dest, const void* src, size_t count);
+int string_find_first_instance(const char* s, char c, size_t size) {
+    int index = -1;
+    for(size_t i = 0; i < size; i++) {
+        if(s[i] == c) {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+
+char* string_find_last_instance(const char* str, int c) {
+    const char* last = nullptr;
+    for(;;) {
+        if(*str == (char) c) last = str;
+        if(*str == '\0') break;
+        str++;
+    }
+    return (char*) last;
+}
+
+int string_length(const char* str) {
+    int length = 0;
+    while(str[length] != '\0') length++;
+    return length;
+}
+
+size_t string_length_n(const char* str, size_t maxlen) {
+    size_t length = 0;
+    while(length < maxlen && str[length] != '\0') length++;
+    return length;
+}
+
 [[gnu::alias("memory_compare")]] int memcmp(const void* lhs, const void* rhs, size_t count);
+[[gnu::alias("memory_copy")]] void* memcpy(void* restrict dest, const void* restrict src, size_t count);
+[[gnu::alias("memory_find_byte")]] void* memchr(const void* s, int c, size_t count);
+[[gnu::alias("memory_move")]] void memmove(void* dest, const void* src, size_t count);
+[[gnu::alias("memory_set")]] void* memset(void* dest, int ch, size_t count);
+[[gnu::alias("string_find_last_instance")]] char* strrchr(const char* str, int c);
 [[gnu::alias("string_length")]] size_t strlen(const char* str);
 [[gnu::alias("string_length_n")]] size_t strnlen(const char* str, size_t maxlen);
-[[gnu::alias("string_find_last_instance")]] char* strrchr(const char* str, int c);
-[[gnu::alias("memory_find_byte")]] void* memchr(const void* s, int c, size_t count);
