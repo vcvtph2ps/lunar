@@ -12,7 +12,7 @@
 #include <lib/list.h>
 #include <stdint.h>
 
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
 #include <arch/x86_64/hardware/ioapic.h>
 #include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <arch/x86_64/io.h>
@@ -250,7 +250,7 @@ void uacpi_kernel_io_unmap(uacpi_handle handle) {
     LOG_KTRC("uacpi: unmapping io port handle=%p\n", handle);
 }
 
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
 uacpi_status uacpi_kernel_io_read8(uacpi_handle handle, uacpi_size offset, uacpi_u8* out_value) {
     uacpi_io_addr io_base = (uacpi_io_addr) handle;
     LOG_KTRC("uacpi: reading 8-bit value from io port 0x%04lx\n", io_base + offset);
@@ -292,7 +292,7 @@ uacpi_status uacpi_kernel_io_write32(uacpi_handle handle, uacpi_size offset, uac
     arch_io_port_write_u32(io_base + offset, in_value);
     return UACPI_STATUS_OK;
 }
-#elif defined(__ARCH_RISCV64__)
+#elif defined(__riscv) && __riscv_xlen == 64
 uacpi_status uacpi_kernel_io_read8(uacpi_handle handle, uacpi_size offset, uacpi_u8* out_value) {
     (void) handle;
     (void) offset;
@@ -438,7 +438,7 @@ typedef struct {
     dw_item_t* work_item;
 } uacpi_kernel_interrupt_ctx_t;
 
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
 static void uacpi_kernel_interrupt_handler(arch_interrupt_frame_t* frame, void* p_ctx) {
     (void) frame;
     ATOMIC_LOAD_ADD(&g_uacpi_interrupt_count, 1, ATOMIC_ACQUIRE);
@@ -460,7 +460,7 @@ static void uacpi_kernel_interrupt_handler_deferred(void* p_ctx) {
 
 
 uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interrupt_handler handler, uacpi_handle ctx, uacpi_handle* out_irq_handle) {
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
     uacpi_kernel_interrupt_ctx_t* kernel_ctx = (uacpi_kernel_interrupt_ctx_t*) heap_alloc(sizeof(uacpi_kernel_interrupt_ctx_t));
 
     uint8_t vector = arch_interrupt_alloc_allocate();
@@ -477,7 +477,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     interrupt_set_hardirq_handler(vector, uacpi_kernel_interrupt_handler, kernel_ctx);
     *out_irq_handle = (uacpi_handle) kernel_ctx;
     return UACPI_STATUS_OK;
-#elif defined(__ARCH_RISCV64__)
+#elif defined(__riscv) && __riscv_xlen == 64
     (void) irq;
     (void) handler;
     (void) ctx;

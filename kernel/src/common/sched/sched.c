@@ -310,7 +310,7 @@ void sched_thread_init_common(thread_t* prev) {
     scheduler_t* sched = &CPU_LOCAL_READ(self)->scheduler;
     thread_t* idle_thread = sched->idle_thread;
 
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
     CPU_LOCAL_WRITE(current_thread, CONTAINER_OF(idle_thread, x86_64_thread_t, common));
 #else
     arch_panic("unimplemented");

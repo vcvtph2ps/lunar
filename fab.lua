@@ -116,16 +116,14 @@ if opt_arch == "x86_64" then
         "-mno-red-zone",
         "-mgeneral-regs-only",
         "-mabi=sysv",
-        "-mcmodel=kernel",
-        "-D__ARCH_X86_64__"
+        "-mcmodel=kernel"
     })
 elseif opt_arch == "riscv64" then
     table.extend(c_flags, {
         "--target=riscv64-none-elf",
         "-march=rv64gc_zihintpause",
         "-mabi=lp64d",
-        "-mcmodel=medany",
-        "-D__ARCH_RISCV64__"
+        "-mcmodel=medany"
     })
 end
 

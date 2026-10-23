@@ -9,7 +9,7 @@
 // thanks evalyn :3
 [[gnu::weak]] void* memory_copy(void* restrict dest, const void* restrict src, size_t n) {
 // on x86 do a rep movsb if copying 2kb+
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
     if(n >= 2048) {
         void* tmp = dest;
         asm volatile("rep movsb" : "+D"(dest), "+S"(src), "+c"(n) : : "memory");
@@ -74,7 +74,7 @@
 
 [[gnu::weak]] void* memory_set(void* s, int c, size_t n) {
 // on x86 do a rep stosb if setting more than 2kb
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
     if(n >= 2048) {
         void* tmp = s;
         asm volatile("rep stosb" : "+D"(s), "+c"(n) : "a"(c) : "memory");

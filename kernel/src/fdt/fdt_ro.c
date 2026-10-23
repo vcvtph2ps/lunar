@@ -1,4 +1,4 @@
-#ifdef __ARCH_RISCV64__
+#if defined(__riscv) && __riscv_xlen == 64
 #include <common/libfdt.h>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"

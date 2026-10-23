@@ -1,7 +1,7 @@
 #pragma once
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
 #include <arch/x86_64/cpu_local.h>
-#elif defined(__ARCH_RISCV64__)
+#elif defined(__riscv) && __riscv_xlen == 64
 #include <arch/riscv64/cpu_local.h>
 #else
 #error "Unknown architecture"

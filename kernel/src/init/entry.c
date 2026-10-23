@@ -9,17 +9,17 @@
 #include <protocol/bootinfo.h>
 #include <stddef.h>
 #include <stdint.h>
-#ifdef __ARCH_X86_64__
+#ifdef __x86_64__
 #include <arch/x86_64/internal/cpuid.h>
 #endif
 
-#ifdef __ARCH_RISCV64__
+#if defined(__riscv) && __riscv_xlen == 64
 extern char __global_pointer[] __asm__("__global_pointer$"); // NOLINT
 #endif
 [[gnu::used, gnu::section("prekernel_boot_info")]] static const bootinfo_kernel_info_t g_prekernel_boot_info = {
     .pagedb_entry_size = sizeof(pagedb_page_t),
     .cpu_local_size = sizeof(arch_cpu_local_t),
-#ifdef __ARCH_RISCV64__
+#if defined(__riscv) && __riscv_xlen == 64
     .global_pointer = (uintptr_t) __global_pointer,
 #endif
 };
@@ -69,7 +69,7 @@ const char* memmap_type_to_string(uint64_t type) {
     LOG_KTRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
     LOG_KTRC("cmdline=%s\n", boot_info->command_line);
 
-#ifdef __ARCH_RISCV64__
+#if defined(__riscv) && __riscv_xlen == 64
     LOG_INFO("Platform: %s (riscv64)\n", boot_info->riscv_base_isa_string);
 #else
     arch_cpuid_vendor_t vendor = arch_cpuid_get_vendor();
@@ -85,7 +85,7 @@ const char* memmap_type_to_string(uint64_t type) {
     LOG_INFO("Has acpi: %s\n", g_init_boot_info->rdsp_physical ? "true" : "false");
     LOG_INFO("Has dtb: %s\n", g_init_boot_info->dtb_physical ? "true" : "false");
 
-#ifdef __ARCH_RISCV64__
+#if defined(__riscv) && __riscv_xlen == 64
     LOG_INFO("%zu extensions: ", g_init_boot_info->riscv_extension_count);
     for(size_t i = 0; i < g_init_boot_info->riscv_extension_count; i++) {
         if(i == 0)

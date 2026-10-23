@@ -36,7 +36,7 @@ syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(0);
 }
 
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
 #include <arch/x86_64/internal/msr.h>
 
 syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args) {

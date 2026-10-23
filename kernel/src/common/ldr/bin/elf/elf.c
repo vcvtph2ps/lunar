@@ -12,10 +12,10 @@
 #include "memory/vm.h"
 
 
-#if defined(__ARCH_X86_64__)
+#if defined(__x86_64__)
 #define ELF_MACHINE_EXPECTED ELF_MACHINE_X86_64
 #define ELF_MACHINE_EXPECTED_NAME "ELF_MACHINE_X86_64"
-#elif defined(__ARCH_RISCV64__)
+#elif defined(__riscv) && __riscv_xlen == 64
 #define ELF_MACHINE_EXPECTED ELF_MACHINE_RISCV
 #define ELF_MACHINE_EXPECTED_NAME "ELF_MACHINE_RISCV"
 #endif
