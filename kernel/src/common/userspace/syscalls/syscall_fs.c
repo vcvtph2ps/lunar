@@ -12,6 +12,8 @@
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
 
+#include "uapi/stat.h"
+
 
 syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     int flags = args->arg2;
@@ -48,6 +50,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     if(flags & UAPI_O_CREATE) {
         LOG_UTRC("O_CREATE unimplemented\n");
     }
+    // @todo: UAPI_O_DIRECTORY
 
     switch(result) {
         case VFS_RESULT_OK:              break;
@@ -55,6 +58,7 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
         case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
         default:                         user_assert(false && "Invalid return value");
     }
+
 
     fd_store_entry_t* entry;
     uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, &entry);
@@ -64,7 +68,8 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     int access_flags = flags & UAPI_O_RDWR;
     entry->access.read = (access_flags & UAPI_O_RDONLY) != 0;
     entry->access.write = (access_flags & UAPI_O_WRONLY) != 0;
-    entry->non_blocking = (flags & UAPI_O_NONBLOCK) != 0;
+    entry->flags.non_blocking = (flags & UAPI_O_NONBLOCK) != 0;
+    entry->flags.close_on_execute = (flags & UAPI_O_CLOEXEC) != 0;
     return SYSCALL_RET_VALUE(fd);
 }
 
@@ -110,11 +115,12 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
     io_req.read.count = ubuffer_size;
     io_req.read.offset = entry->offset;
     io_req.read.bytes_read = 0;
-    io_req.no_block = entry->non_blocking;
+    io_req.no_block = entry->flags.non_blocking;
 
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
         case VFS_RESULT_OK:              break;
+        case VFS_RESULT_ERR_NOT_FILE:    return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
         case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
         default:                         user_assert(false && "Invalid return value");
     }
@@ -155,7 +161,7 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
     io_req.write.count = ubuffer_size;
     io_req.write.offset = entry->offset;
     io_req.write.bytes_written = 0;
-    io_req.no_block = entry->non_blocking;
+    io_req.no_block = entry->flags.non_blocking;
 
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
@@ -196,6 +202,7 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
     uint32_t fd = args->arg1;
     uint64_t offset = args->arg2;
     int whence = args->arg3;
+
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
     if(fd == 0 || fd == 1 || fd == 2) {
@@ -303,5 +310,154 @@ syscall_ret_t syscall_sys_fs_chdir(syscall_args_t* args) {
     }
 
     process->current_working_dir = out_result_node;
+    return SYSCALL_RET_VALUE(0);
+}
+
+static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
+    vfs_node_attr_t attr;
+    vfs_result_t res = target->ops->get_attributes(target, &attr);
+    if(res != VFS_RESULT_OK) {
+        assert(false);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    uapi_stat_t stat = { 0 };
+    stat.st_size = attr.size;
+    stat.st_nlink = 1; // @todo: implement hardlink support
+    switch(attr.type) {
+        case VFS_NODE_TYPE_DIR:  stat.st_mode = UAPI_STAT_IFDIR; break;
+        case VFS_NODE_TYPE_FILE: stat.st_mode = UAPI_STAT_IFREG; break;
+        case VFS_NODE_TYPE_LINK: stat.st_mode = UAPI_STAT_IFLNK; break;
+        default:                 user_assert(false && "Invalid return value");
+    }
+
+    stat.st_mode |= (attr.permissions.user) << 6;
+    stat.st_mode |= (attr.permissions.group) << 3;
+    stat.st_mode |= (attr.permissions.other) << 0;
+
+    if(!userptr_write_full(stat_buf, &stat)) {
+        vfs_node_put(target);
+        heap_free(stat_buf, sizeof(userptr_t*));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    vfs_node_put(target);
+    heap_free(stat_buf, sizeof(userptr_t*));
+    return SYSCALL_RET_VALUE(0);
+}
+
+
+syscall_ret_t syscall_sys_fs_stat(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    userptr_t* stat_buf = userptr_create(args->arg2, sizeof(uapi_stat_t));
+    if(!stat_buf) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_UTRC("fd=%d | result=BADFD\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    vfs_node_get(entry->node);
+    return stat_internal(stat_buf, entry->node);
+}
+
+syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args) {
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    userptr_t* stat_buf = userptr_create(args->arg3, sizeof(uapi_stat_t));
+    if(!stat_buf) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    userptr_t* upath = userptr_create_string(args->arg2, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t path_size = upath->size + 1;
+    char* pathname = heap_alloc(path_size);
+    if(pathname == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read_full(upath, pathname)) {
+        heap_free(pathname, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    pathname[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
+
+    uint32_t fd = args->arg1;
+    uint32_t flags = args->arg4;
+
+    vfs_path_t vfs_path;
+    vfs_path.rel_path = pathname;
+
+    if(pathname[0] == '/') {
+        vfs_path.node = nullptr;
+    } else if(fd == (uint32_t) UAPI_AT_FDCWD) {
+        vfs_node_get(process->current_working_dir);
+        vfs_path.node = process->current_working_dir;
+    } else {
+        fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+        if(entry == nullptr) {
+            LOG_UTRC("fd=%d | result=BADFD\n", fd);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        }
+        vfs_node_get(entry->node);
+        vfs_path.node = entry->node;
+    }
+
+    vfs_node_t* result_node;
+    vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_O_NOFOLLOW) == 0, &result_node);
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        default:                       user_assert(false && "Invalid return value");
+    }
+
+    if(vfs_path.node) {
+        vfs_node_put(vfs_path.node);
+    }
+
+    return stat_internal(stat_buf, result_node);
+}
+
+syscall_ret_t syscall_sys_fs_dup(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    // @note: unused, always passed as 0 from mlibc
+    // uint32_t flags = args->arg2;
+    //
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    uint32_t new_fd;
+    vfs_result_t result = fd_store_duplicate(process->fd_store, fd, &new_fd);
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        default:                       user_assert(false && "Invalid return value");
+    }
+
+    return SYSCALL_RET_VALUE(new_fd);
+}
+
+syscall_ret_t syscall_sys_fs_dup2(syscall_args_t* args) {
+    uint32_t fd = args->arg1;
+    uint32_t flags = args->arg2;
+    uint32_t newfd = args->arg3;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    vfs_result_t result = fd_store_duplicate_to(process->fd_store, fd, newfd, (flags & UAPI_O_CLOEXEC) != 0);
+    switch(result) {
+        case VFS_RESULT_OK:            break;
+        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        default:                       user_assert(false && "Invalid return value");
+    }
+
     return SYSCALL_RET_VALUE(0);
 }

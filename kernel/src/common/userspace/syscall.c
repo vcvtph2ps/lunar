@@ -126,8 +126,10 @@ void syscall_init() {
     SYSCALL_DISPATCHER(SYSCALL_FS_ISATTY, syscall_sys_fs_is_a_tty);
     SYSCALL_DISPATCHER(SYSCALL_FS_GETCWD, syscall_sys_fs_getcwd);
     SYSCALL_DISPATCHER(SYSCALL_FS_CHDIR, syscall_sys_fs_chdir);
-    // SYSCALL_DISPATCHER(SYSCALL_FS_STAT, syscall_sys_fs_stat);
-    // SYSCALL_DISPATCHER(SYSCALL_FS_STAT_AT, syscall_sys_fs_stat_at);
+    SYSCALL_DISPATCHER(SYSCALL_FS_STAT, syscall_sys_fs_stat);
+    SYSCALL_DISPATCHER(SYSCALL_FS_STAT_AT, syscall_sys_fs_stat_at);
+    SYSCALL_DISPATCHER(SYSCALL_FS_DUP, syscall_sys_fs_dup);
+    SYSCALL_DISPATCHER(SYSCALL_FS_DUP2, syscall_sys_fs_dup2);
 
     // SYSCALL_DISPATCHER(SYSCALL_FUTEX, syscall_sys_futex);
     // SYSCALL_DISPATCHER(SYSCALL_GET_CLOCK, syscall_sys_get_clock);

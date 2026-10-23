@@ -13,7 +13,10 @@ typedef struct {
         bool write : 1;
     } access;
 
-    bool non_blocking;
+    struct {
+        bool close_on_execute : 1;
+        bool non_blocking     : 1;
+    } flags;
 } fd_store_entry_t;
 
 typedef struct {
@@ -33,3 +36,6 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_
 uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_entry_t** out_entry);
 fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd);
 bool fd_store_free_fd(fd_store_t* store, uint32_t fd);
+
+vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd);
+vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute);

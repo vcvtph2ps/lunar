@@ -66,7 +66,8 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_
     store->fds[fd].offset = 0;
     store->fds[fd].access.read = false;
     store->fds[fd].access.write = false;
-    store->fds[fd].non_blocking = false;
+    store->fds[fd].flags.non_blocking = false;
+    store->fds[fd].flags.close_on_execute = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
@@ -85,7 +86,8 @@ uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd,
     store->fds[fd].offset = 0;
     store->fds[fd].access.read = false;
     store->fds[fd].access.write = false;
-    store->fds[fd].non_blocking = false;
+    store->fds[fd].flags.non_blocking = false;
+    store->fds[fd].flags.close_on_execute = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
@@ -107,9 +109,7 @@ fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd) {
     return &store->fds[fd];
 }
 
-bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
-    spinlock_lock(&store->lock);
-
+static vfs_result_t fd_store_free_lockless(fd_store_t* store, uint32_t fd) {
     bool valid = bitmap_get(store->bitmap, fd);
     if(!valid) {
         spinlock_unlock(&store->lock);
@@ -125,7 +125,62 @@ bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
 
     vfs_node_put(node->node);
     bitmap_set(store->bitmap, false, fd);
+    return VFS_RESULT_OK;
+}
+
+bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
+    spinlock_lock(&store->lock);
+    bool res = fd_store_free_lockless(store, fd);
+    spinlock_unlock(&store->lock);
+    return res;
+}
+
+vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd) {
+    fd_store_entry_t* entry = fd_store_get_fd(store, fd);
+    if(entry == nullptr) {
+        return VFS_RESULT_ERR_NOT_FOUND;
+    }
+
+    spinlock_lock(&store->lock);
+
+    size_t new_fd = bitmap_find_free(store->bitmap);
+    if(new_fd == SIZE_MAX) {
+        // @todo: reallocate
+        user_assert(false && "fd_store out of size");
+    }
+
+    vfs_node_get(entry->node);
+    memory_copy(&store->fds[new_fd], entry, sizeof(fd_store_entry_t));
+
+    bitmap_set(store->bitmap, true, new_fd);
+    spinlock_unlock(&store->lock);
+
+    *out_new_fd = (uint32_t) new_fd;
+    return VFS_RESULT_OK;
+}
+
+vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute) {
+    fd_store_entry_t* entry = fd_store_get_fd(store, fd);
+    if(entry == nullptr) {
+        return VFS_RESULT_ERR_NOT_FOUND;
+    }
+
+    spinlock_lock(&store->lock);
+    if(fd != target) {
+        fd_store_free_lockless(store, target);
+    }
+
+    vfs_node_get(entry->node);
+
+    memory_copy(&store->fds[target], entry, sizeof(fd_store_entry_t));
+    bitmap_set(store->bitmap, true, target);
+
+    if(fd == target) {
+        store->fds[target].flags.close_on_execute = false;
+    } else {
+        store->fds[target].flags.close_on_execute = close_on_execute;
+    }
 
     spinlock_unlock(&store->lock);
-    return true;
+    return VFS_RESULT_OK;
 }

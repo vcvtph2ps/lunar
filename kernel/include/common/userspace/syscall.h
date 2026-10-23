@@ -43,6 +43,10 @@ typedef enum : uint64_t {
     SYSCALL_FS_UNMOUNT = 47,
     SYSCALL_FS_GETCWD = 48,
     SYSCALL_FS_CHDIR = 49,
+    SYSCALL_FS_STAT = 50,
+    SYSCALL_FS_STAT_AT = 51,
+    SYSCALL_FS_DUP = 52,
+    SYSCALL_FS_DUP2 = 53,
 
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;
@@ -51,6 +55,7 @@ typedef enum : int64_t {
     SYSCALL_ERROR_NOENT = 2, // No such file or directory
     SYSCALL_ERROR_SEARCH = 3, // No such process (ESRCH)
     SYSCALL_ERROR_INTR = 4, // Interrupted system call (EINTR)
+    SYSCALL_ERROR_ISDIR = 21, // Resource is directory (EISDIR)
     SYSCALL_ERROR_TOO_BIG = 7, // Argument list too long
     SYSCALL_ERROR_NO_EXEC = 8, // Exec format error
     SYSCALL_ERROR_CHILD = 10, // No child processes (ECHILD)

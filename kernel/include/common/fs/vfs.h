@@ -40,9 +40,9 @@ typedef struct vfs_dentry_ops vfs_dentry_ops_t;
 
 typedef uint8_t vfs_permissions_t;
 
-#define VFS_PERM_READ (1 << 0)
+#define VFS_PERM_READ (1 << 2)
 #define VFS_PERM_WRITE (1 << 1)
-#define VFS_PERM_EXECUTE (1 << 2)
+#define VFS_PERM_EXECUTE (1 << 0)
 
 typedef struct {
     /// The size of the node in bytes, or 0 for directories
