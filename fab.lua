@@ -17,7 +17,7 @@ assert(ld ~= nil, "No ld.lld found")
 local prekernel_protocol = fab.git(
     "prekernel-protocol",
     "https://github.com/vcvtph2ps/theia",
-    "7f6f6df8659c80038ac2de79c441e9c97e5faec2"
+    "fe5ab225ceb3a4ef4938a97803987e8cd0a6c281"
 )
 
 local flanterm = fab.git(
@@ -98,6 +98,7 @@ if opt_build_type == "release" then
     table.extend(c_flags, {
         "-O3",
         "-flto",
+        "-g",
         "-D__RELEASE__"
     })
 elseif opt_build_type == "debug" then
