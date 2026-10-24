@@ -14,19 +14,22 @@
 #define LAPIC_LVT_TIMER 0x320
 #define LAPIC_MASK_MASKED 0x10000
 
+#define LAPIC_CALIBRATION_US 50000
+
 
 void arch_lapic_timer_init(uint32_t core_id, time_timer_t* calibration_timer) {
     LOG_INFO("calibrating lapic timer on core %d using %s\n", core_id, calibration_timer->name);
 
-    arch_lapic_write(LAPIC_TIMER_DIV, 0x3);
+    arch_lapic_write(LAPIC_TIMER_DIV, 0xB); // divid by 1
     arch_lapic_write(LAPIC_LVT_TIMER, 0x20);
 
     arch_lapic_write(LAPIC_TIMER_INIT_COUNT, 0xFFFFFFFF);
-    calibration_timer->sleep(calibration_timer, 10000);
+    calibration_timer->sleep(calibration_timer, LAPIC_CALIBRATION_US);
     uint32_t elapsed = 0xFFFFFFFF - arch_lapic_read(LAPIC_TIMER_CUR_COUNT);
     arch_lapic_timer_stop();
 
-    CPU_LOCAL_WRITE(lapic_timer_ticks_per_us, (uint32_t) (elapsed / 10000ull));
+    uint32_t ticks_per_us = (uint32_t) (((uint64_t) elapsed + (LAPIC_CALIBRATION_US / 2)) / LAPIC_CALIBRATION_US);
+    CPU_LOCAL_WRITE(lapic_timer_ticks_per_us, ticks_per_us);
 
     LOG_OKAY("apic timer calibrated: %d ticks/us\n", CPU_LOCAL_READ(lapic_timer_ticks_per_us));
 }
