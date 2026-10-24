@@ -166,31 +166,48 @@ static void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
 }
 
 
-void* slab_cache_alloc(slab_cache_t* cache) {
-    if(!cache->cpu_cached) {
-        return slab_cache_alloc_from_slab(cache);
+// Since we only ever touch the cpu cache on it's owning cpu, so we don't need to do any preemption/DPC bookkeeping, disabling interrupts is enough
+static inline void* slab_cpu_alloc(slab_cpu_cache_t* cc) {
+    if(cc->primary->rounds == 0 && cc->secondary->rounds == SLAB_MAGAZINE_SIZE) {
+        slab_magazine_t* temp = cc->secondary;
+        cc->secondary = cc->primary;
+        cc->primary = temp;
     }
 
+    if(cc->primary->rounds == 0) {
+        return nullptr;
+    }
+
+    return cc->primary->objects[--cc->primary->rounds];
+}
+
+static inline bool slab_cpu_free(slab_cpu_cache_t* cc, void* ptr) {
+    if(cc->primary->rounds < SLAB_MAGAZINE_SIZE) {
+        cc->primary->objects[cc->primary->rounds++] = ptr;
+        return true;
+    }
+
+    if(cc->secondary->rounds == 0) {
+        slab_magazine_t* temp = cc->secondary;
+        cc->secondary = cc->primary;
+        cc->primary = temp;
+
+        cc->primary->objects[cc->primary->rounds++] = ptr;
+        return true;
+    }
+
+    return false;
+}
+
+static void* slab_cache_alloc_slow(slab_cache_t* cache) {
     sched_preempt_disable();
     dpc_disable();
     slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
 
     (void) spinlock_no_dpc_lock(&cc->lock);
 
-    if(cc->primary->rounds > 0) {
-        void* ptr = cc->primary->objects[--cc->primary->rounds];
-        spinlock_no_dpc_unlock(&cc->lock);
-        dpc_enable();
-        sched_preempt_enable();
-        return ptr;
-    }
-
-    if(cc->secondary->rounds == SLAB_MAGAZINE_SIZE) {
-        slab_magazine_t* temp = cc->secondary;
-        cc->secondary = cc->primary;
-        cc->primary = temp;
-
-        void* ptr = cc->primary->objects[--cc->primary->rounds];
+    void* ptr = slab_cpu_alloc(cc);
+    if(ptr != nullptr) {
         spinlock_no_dpc_unlock(&cc->lock);
         dpc_enable();
         sched_preempt_enable();
@@ -204,7 +221,7 @@ void* slab_cache_alloc(slab_cache_t* cache) {
         cc->secondary = cc->primary;
         cc->primary = CONTAINER_OF(list_pop_front(&cache->magazine_full_list), slab_magazine_t, list_node);
         spinlock_no_dpc_unlock(&cache->magazine_lock);
-        void* ptr = cc->primary->objects[--cc->primary->rounds];
+        ptr = cc->primary->objects[--cc->primary->rounds];
         spinlock_no_dpc_unlock(&cc->lock);
         dpc_enable();
         sched_preempt_enable();
@@ -214,38 +231,37 @@ void* slab_cache_alloc(slab_cache_t* cache) {
     spinlock_no_dpc_unlock(&cache->magazine_lock);
     spinlock_no_dpc_unlock(&cc->lock);
 
-    void* ptr = slab_cache_alloc_from_slab(cache);
+    ptr = slab_cache_alloc_from_slab(cache);
     dpc_enable();
     sched_preempt_enable();
     return ptr;
 }
 
-void slab_cache_free(slab_cache_t* cache, void* ptr) {
+void* slab_cache_alloc(slab_cache_t* cache) {
     if(!cache->cpu_cached) {
-        slab_cache_free_to_slab(cache, ptr);
-        return;
+        return slab_cache_alloc_from_slab(cache);
     }
 
+    arch_interrupt_state_t state = arch_interrupt_disable();
+    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
+    void* ptr = slab_cpu_alloc(cc);
+    arch_interrupt_restore(state);
+
+    if(ptr != nullptr) {
+        return ptr;
+    }
+
+    return slab_cache_alloc_slow(cache);
+}
+
+static void slab_cache_free_slow(slab_cache_t* cache, void* ptr) {
     sched_preempt_disable();
     dpc_disable();
     slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
 
     spinlock_no_dpc_lock(&cc->lock);
 
-    if(cc->primary->rounds < SLAB_MAGAZINE_SIZE) {
-        cc->primary->objects[cc->primary->rounds++] = ptr;
-        spinlock_no_dpc_unlock(&cc->lock);
-        dpc_enable();
-        sched_preempt_enable();
-        return;
-    }
-
-    if(cc->secondary->rounds == 0) {
-        slab_magazine_t* temp = cc->secondary;
-        cc->secondary = cc->primary;
-        cc->primary = temp;
-
-        cc->primary->objects[cc->primary->rounds++] = ptr;
+    if(slab_cpu_free(cc, ptr)) {
         spinlock_no_dpc_unlock(&cc->lock);
         dpc_enable();
         sched_preempt_enable();
@@ -273,6 +289,22 @@ void slab_cache_free(slab_cache_t* cache, void* ptr) {
     slab_cache_free_to_slab(cache, ptr);
     dpc_enable();
     sched_preempt_enable();
+}
+
+void slab_cache_free(slab_cache_t* cache, void* ptr) {
+    if(!cache->cpu_cached) {
+        slab_cache_free_to_slab(cache, ptr);
+        return;
+    }
+
+    arch_interrupt_state_t state = arch_interrupt_disable();
+    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
+    bool freed = slab_cpu_free(cc, ptr);
+    arch_interrupt_restore(state);
+
+    if(!freed) {
+        slab_cache_free_slow(cache, ptr);
+    }
 }
 
 slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t alignment) {
