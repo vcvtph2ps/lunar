@@ -398,6 +398,8 @@ static uacpi_iteration_decision uart_device_find_callback(void* user, uacpi_name
     uart->irq_low_polarity = crs.irq_low_polarity;
     uart->rx_head = 0;
     uart->rx_tail = 0;
+    uart->on_recv = nullptr;
+    uart->recv_ctx = nullptr;
 
     list_push_back(&g_uart_list, &uart->uart_list_node);
 
