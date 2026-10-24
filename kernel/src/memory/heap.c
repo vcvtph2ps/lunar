@@ -50,6 +50,8 @@ static inline void* internal_heap_alloc(size_t size) {
 
 void* heap_alloc(size_t size) {
     void* ptr = internal_heap_alloc(size);
+    if(EXPECT_UNLIKELY(ptr == nullptr))
+        return nullptr;
 #if !defined(__RELEASE__)
     memory_set(ptr, 0xcc, size);
 #endif
