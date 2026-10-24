@@ -20,13 +20,13 @@
  * By default, uACPI ships with simple builtin MMIO helpers that use volatile
  * loads and stores.
  */
-// #define UACPI_NATIVE_MMIO
+#define UACPI_NATIVE_MMIO
 
 /*
  * Makes uacpi_kernel_alloc_zeroed mandatory to implement by the host, uACPI
  * will not provide a default implementation if this is enabled.
  */
-// #define UACPI_NATIVE_ALLOC_ZEROED
+#define UACPI_NATIVE_ALLOC_ZEROED
 
 /*
  * =========================

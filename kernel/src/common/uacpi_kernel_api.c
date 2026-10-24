@@ -12,6 +12,8 @@
 #include <lib/list.h>
 #include <stdint.h>
 
+#include "memory/ptm.h"
+
 #if defined(__x86_64__)
 #include <arch/x86_64/hardware/ioapic.h>
 #include <arch/x86_64/interrupts/interrupt_alloc.h>
@@ -86,7 +88,11 @@ void* uacpi_kernel_map(uacpi_phys_addr paddr, uacpi_size length) {
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
 
     const bool mmio = !uacpi_phys_is_ram(aligned_paddr, aligned_length);
-    virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, mmio ? VM_CACHE_DISABLE : VM_CACHE_NORMAL, aligned_paddr, VM_FLAG_NO_PAGEDB);
+    if(!mmio) {
+        return PTM_TO_HHDM(paddr);
+    }
+
+    virt_addr_t vaddr = (virt_addr_t) vm_map_direct(g_vm_global_address_space, VM_NO_HINT, aligned_length, VM_PROT_RW, VM_CACHE_DISABLE, aligned_paddr, VM_FLAG_NO_PAGEDB);
     if(vaddr == 0) {
         LOG_FAIL("uacpi: failed to map physical address %p, length=%zu\n", (void*) paddr, length);
         return nullptr;
@@ -100,6 +106,11 @@ void uacpi_kernel_unmap(void* addr, uacpi_size length) {
     const uintptr_t aligned_addr = ALIGN_DOWN(addr, PAGE_SIZE_DEFAULT);
     const uacpi_size alignment_diff = (uintptr_t) addr - aligned_addr;
     const uacpi_size aligned_length = ALIGN_UP(length + alignment_diff, PAGE_SIZE_DEFAULT);
+
+    if(aligned_addr >= g_init_boot_info->hhdm_offset && aligned_addr + length < g_init_boot_info->hhdm_offset + g_init_boot_info->hhdm_size) {
+        /// region is in the hhdm. no-op
+        return;
+    }
 
     vm_unmap(g_vm_global_address_space, (void*) aligned_addr, aligned_length);
 }
@@ -236,6 +247,32 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
     return UACPI_STATUS_OK;
 }
 
+uacpi_u8 uacpi_kernel_mmio_read8(void* addr) {
+    return arch_io_mem_read_u8((uintptr_t) addr);
+}
+uacpi_u16 uacpi_kernel_mmio_read16(void* addr) {
+    return arch_io_mem_read_u16((uintptr_t) addr);
+}
+uacpi_u32 uacpi_kernel_mmio_read32(void* addr) {
+    return arch_io_mem_read_u32((uintptr_t) addr);
+}
+uacpi_u64 uacpi_kernel_mmio_read64(void* addr) {
+    return arch_io_mem_read_u64((uintptr_t) addr);
+}
+
+void uacpi_kernel_mmio_write8(void* addr, uacpi_u8 value) {
+    return arch_io_mem_write_u8((uintptr_t) addr, value);
+}
+void uacpi_kernel_mmio_write16(void* addr, uacpi_u16 value) {
+    return arch_io_mem_write_u16((uintptr_t) addr, value);
+}
+void uacpi_kernel_mmio_write32(void* addr, uacpi_u32 value) {
+    return arch_io_mem_write_u32((uintptr_t) addr, value);
+}
+void uacpi_kernel_mmio_write64(void* addr, uacpi_u64 value) {
+    return arch_io_mem_write_u64((uintptr_t) addr, value);
+}
+
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle* out_handle) {
     (void) base;
     (void) len;
@@ -338,6 +375,10 @@ uacpi_status uacpi_kernel_io_write32(uacpi_handle handle, uacpi_size offset, uac
 
 void* uacpi_kernel_alloc(uacpi_size size) {
     return heap_alloc(size);
+}
+
+void* uacpi_kernel_alloc_zeroed(uacpi_size size) {
+    return heap_zalloc(size);
 }
 
 void uacpi_kernel_free(void* mem, uacpi_size size_hint) {
