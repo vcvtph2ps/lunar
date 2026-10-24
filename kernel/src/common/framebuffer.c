@@ -46,6 +46,13 @@ static void framebuffer_sink(int c, void* ctx) {
     framebuffer_put_char(c);
 }
 
+static void framebuffer_sink_str(const char* s, size_t len, void* ctx) {
+    (void) ctx;
+    if(!g_log_to_framebuffers)
+        return;
+    framebuffer_put_string(s, len);
+}
+
 void framebuffer_flush(void) {
     arch_memory_fence(ARCH_MEMORY_FENCE_STORE);
 }
@@ -66,6 +73,21 @@ void framebuffer_put_char(char c) {
             flanterm_write(framebuffer->ft_ctx, "\r", 1);
         }
         flanterm_write(framebuffer->ft_ctx, (const char*) &c, 1);
+    };
+
+    spinlock_noint_unlock(&g_framebuffer_lock, state);
+}
+
+void framebuffer_put_string(const char* s, size_t len) {
+    if(len == 0) {
+        return;
+    }
+
+    arch_interrupt_state_t state = spinlock_noint_lock(&g_framebuffer_lock);
+
+    LIST_FOR_EACH(&g_framebuffer_list, node) {
+        framebuffer_t* framebuffer = CONTAINER_OF(node, framebuffer_t, node);
+        flanterm_write(framebuffer->ft_ctx, s, len);
     };
 
     spinlock_noint_unlock(&g_framebuffer_lock, state);
@@ -118,7 +140,7 @@ void framebuffer_init() {
         }
     }
 
-    log_sink_t sink = { .min_level = LOG_LEVEL_INFO, .write = framebuffer_sink, .flush = framebuffer_sink_flush, .ctx = nullptr };
+    log_sink_t sink = { .min_level = LOG_LEVEL_INFO, .write = framebuffer_sink, .write_str = framebuffer_sink_str, .flush = framebuffer_sink_flush, .ctx = nullptr };
     if(log_add_sink(&sink)) {
         LOG_OKAY("Framebuffer logging initialized\n");
     } else {

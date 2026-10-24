@@ -38,13 +38,26 @@ uint64_t arch_get_core_id() {
 
 static void sink_debug(int c, void* ctx) {
     (void) ctx;
-    arch_io_port_write_u8(0xe9, (uint8_t) c);
+    if(!g_arch_16550uart_works) {
+        arch_io_port_write_u8(0xe9, (uint8_t) c);
+    }
+}
+
+static void sink_debug_str(const char* s, size_t len, void* ctx) {
+    (void) ctx;
+    if(g_arch_16550uart_works) {
+        return;
+    }
+    for(size_t i = 0; i < len; i++) {
+        arch_io_port_write_u8(0xe9, (uint8_t) s[i]);
+    }
 }
 
 void arch_log_init() {
     log_sink_t debug_sink = {
         .min_level = LOG_LEVEL_STRC,
         .write = sink_debug,
+        .write_str = sink_debug_str,
         .ctx = nullptr,
     };
     if(!log_add_sink(&debug_sink)) {

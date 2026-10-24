@@ -34,10 +34,18 @@ static void serial_sink(int c, void* ctx) {
     arch_sbi_console_putchar((char) c);
 }
 
+static void serial_sink_str(const char* s, size_t len, void* ctx) {
+    (void) ctx;
+    for(size_t i = 0; i < len; i++) {
+        arch_sbi_console_putchar(s[i]);
+    }
+}
+
 void arch_log_init() {
     log_sink_t sink = {
         .min_level = LOG_LEVEL_STRC,
         .write = serial_sink,
+        .write_str = serial_sink_str,
         .ctx = nullptr,
     };
 

@@ -92,6 +92,7 @@
 static arch_16550uart_t g_early_uart = {};
 
 arch_16550uart_t* g_arch_16550uart_default_uart = nullptr;
+bool g_arch_16550uart_works = false;
 
 list_t g_uart_list = LIST_INIT;
 
@@ -170,10 +171,7 @@ static int serial_test(uint16_t port) {
 }
 
 int arch_16550uart_transmit_empty(arch_16550uart_t* uart) {
-    arch_io_wait();
-    uint8_t data = arch_io_port_read_u8(uart->uart_port + SERIAL_LINE_INFO) & SERIAL_TX_EMPTY_BIT;
-    arch_io_wait();
-    return data;
+    return arch_io_port_read_u8(uart->uart_port + SERIAL_LINE_INFO) & SERIAL_TX_EMPTY_BIT;
 }
 
 int arch_16550uart_data_ready(arch_16550uart_t* uart) {
@@ -207,6 +205,13 @@ int arch_16550uart_read(arch_16550uart_t* uart) {
 static void serial_sink(int c, void* ctx) {
     (void) ctx;
     arch_16550uart_send(g_arch_16550uart_default_uart, (char) c);
+}
+
+static void serial_sink_str(const char* s, size_t len, void* ctx) {
+    (void) ctx;
+    for(size_t i = 0; i < len; i++) {
+        arch_16550uart_send(g_arch_16550uart_default_uart, s[i]);
+    }
 }
 
 wait_obj_t g_serial_wait_obj = WAIT_OBJ_INIT_SYNCHRONIZATION();
@@ -303,6 +308,7 @@ void arch_16550uart_early_setup() {
     log_sink_t sink = {
         .min_level = LOG_LEVEL_STRC,
         .write = serial_sink,
+        .write_str = serial_sink_str,
         .ctx = nullptr,
     };
 
@@ -311,6 +317,7 @@ void arch_16550uart_early_setup() {
     }
 
     serial_sink('\n', &g_arch_16550uart_default_uart);
+    g_arch_16550uart_works = true;
 }
 
 

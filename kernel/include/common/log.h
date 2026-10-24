@@ -14,9 +14,17 @@ typedef enum {
 
 typedef void (*log_sink_func_t)(int c, void* ctx);
 
+/**
+ * @brief Optional bulk write callback.
+ *
+ * When provided, formatted output is handed to the sink in whole chunks instead of one character at a time. If it is null the core falls back to @c write.
+ */
+typedef void (*log_sink_str_func_t)(const char* s, size_t len, void* ctx);
+
 typedef struct log_sink {
     log_level_t min_level;
     log_sink_func_t write;
+    log_sink_str_func_t write_str;
     /// @brief Optional, invoked once after a whole formatted message has been written to this sink
     void (*flush)(void* ctx);
     void* ctx;

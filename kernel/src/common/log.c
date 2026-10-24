@@ -34,33 +34,56 @@ bool log_add_sink(const log_sink_t* sink) {
     return true;
 }
 
+#define LOG_FORMAT_BUFFER_SIZE 256
+
 typedef struct {
     const log_sink_t** selected_sinks;
-    const size_t sink_count;
+    size_t sink_count;
+    char buffer[LOG_FORMAT_BUFFER_SIZE];
+    size_t length;
 } log_print_ctx_t;
 
-static void dispatch_to_sinks(int c, void* ctx) {
-    log_print_ctx_t* print_ctx = ctx;
-
-    for(size_t i = 0; i < print_ctx->sink_count; i++) {
-        const log_sink_t* sink = print_ctx->selected_sinks[i];
-
-        if(sink->write == nullptr) {
-            continue;
-        }
-
-        if(c == '\n') {
-            sink->write('\r', sink->ctx);
-        }
-        sink->write(c, sink->ctx);
+static void log_flush_ctx(log_print_ctx_t* ctx) {
+    if(ctx->length == 0) {
+        return;
     }
+
+    for(size_t i = 0; i < ctx->sink_count; i++) {
+        const log_sink_t* sink = ctx->selected_sinks[i];
+
+        if(sink->write_str != nullptr) {
+            sink->write_str(ctx->buffer, ctx->length, sink->ctx);
+        } else if(sink->write != nullptr) {
+            for(size_t j = 0; j < ctx->length; j++) {
+                sink->write((int) (unsigned char) ctx->buffer[j], sink->ctx);
+            }
+        }
+    }
+
+    ctx->length = 0;
+}
+
+static void log_buffer_char(int c, void* pctx) {
+    log_print_ctx_t* ctx = pctx;
+
+    if(c == '\n') {
+        if(ctx->length == sizeof(ctx->buffer)) {
+            log_flush_ctx(ctx);
+        }
+        ctx->buffer[ctx->length++] = '\r';
+    }
+
+    if(ctx->length == sizeof(ctx->buffer)) {
+        log_flush_ctx(ctx);
+    }
+    ctx->buffer[ctx->length++] = (char) c;
 }
 
 void log_vprint_lockless(log_level_t level, const char* fmt, va_list val) {
-    log_sink_t* selected_sinks[MAX_LOG_SINKS];
+    const log_sink_t* selected_sinks[MAX_LOG_SINKS];
     size_t selected_sink_count = 0;
     for(size_t i = 0; i < g_sink_count; i++) {
-        if(level >= g_sinks[i].min_level && g_sinks[i].write != nullptr) {
+        if(level >= g_sinks[i].min_level && (g_sinks[i].write != nullptr || g_sinks[i].write_str != nullptr)) {
             selected_sinks[selected_sink_count++] = &g_sinks[i];
         }
     }
@@ -70,11 +93,13 @@ void log_vprint_lockless(log_level_t level, const char* fmt, va_list val) {
     }
 
     log_print_ctx_t ctx = {
-        .selected_sinks = (const struct log_sink**) &selected_sinks,
+        .selected_sinks = selected_sinks,
         .sink_count = selected_sink_count,
+        .length = 0,
     };
 
-    npf_vpprintf(dispatch_to_sinks, &ctx, fmt, val);
+    npf_vpprintf(log_buffer_char, &ctx, fmt, val);
+    log_flush_ctx(&ctx);
 
     for(size_t i = 0; i < selected_sink_count; i++) {
         if(selected_sinks[i]->flush != nullptr) {

@@ -30,6 +30,7 @@ typedef struct {
 } arch_16550uart_t;
 
 extern arch_16550uart_t* g_arch_16550uart_default_uart;
+extern bool g_arch_16550uart_works;
 
 void arch_16550uart_early_setup();
 void arch_16550uart_setup();

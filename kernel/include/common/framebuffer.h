@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 
 /**
  * @brief Initializes the framebuffer for logging output.
@@ -9,6 +10,12 @@ void framebuffer_init();
  * @brief prints @p to every framebuffer
  */
 void framebuffer_put_char(char c);
+
+/**
+ * @brief Prints a whole run of characters to every framebuffer at once
+ * @note Must not contain bare newlines: the caller is expected to emit CRLF
+ */
+void framebuffer_put_string(const char* s, size_t len);
 
 /**
  * @brief Drains pending write-combining stores out to the framebuffer memory.
