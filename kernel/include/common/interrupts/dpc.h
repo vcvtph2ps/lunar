@@ -9,6 +9,7 @@ typedef void (*dpc_function_t)(void* data);
 typedef void (*dpc_cleanup_fn_t)(dpc_t* item);
 
 typedef struct {
+    uintptr_t stack_pointer_top;
     uint32_t counter;
 
     spinlock_no_int_t queue_lock;

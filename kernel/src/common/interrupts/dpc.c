@@ -12,11 +12,14 @@
 
 static slab_cache_t* g_dpc_cache;
 
+#define DPC_STACK_SIZE 4 * PAGE_SIZE_DEFAULT
+
 void dpc_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         g_dpc_cache = slab_cache_create("dpc_cache", sizeof(dpc_t), alignof(dpc_t));
     }
 
+    CPU_LOCAL_GET_SELF()->dpc_queue.stack_pointer_top = (uintptr_t) vm_map_anon(g_vm_global_address_space, VM_NO_HINT, DPC_STACK_SIZE, VM_PROT_RW, VM_CACHE_NORMAL, true) + DPC_STACK_SIZE;
     CPU_LOCAL_GET_SELF()->dpc_queue.queue = LIST_INIT;
     CPU_LOCAL_GET_SELF()->dpc_queue.queue_lock = SPINLOCK_NO_INT_INIT;
 }
@@ -72,6 +75,8 @@ void dpc_set_target_core(dpc_t* dpc, uint32_t target_core) {
     dpc->target_core_id = target_core;
 }
 
+extern void dpc_execute_on_stack(uintptr_t fn, uintptr_t data, uintptr_t stack);
+
 void dpc_process() {
     sched_preempt_disable();
     dpc_disable();
@@ -86,9 +91,13 @@ void dpc_process() {
         arch_interrupt_state_t state = spinlock_noint_lock(&local->dpc_queue.queue_lock);
         dpc_t* dpc = CONTAINER_OF(list_pop_front(&local->dpc_queue.queue), dpc_t, list_node);
         spinlock_noint_unlock(&local->dpc_queue.queue_lock, state);
+
+        dpc_function_t fn = ATOMIC_LOAD(&dpc->fn, ATOMIC_ACQUIRE);
+        void* data = ATOMIC_LOAD(&dpc->data, ATOMIC_ACQUIRE);
+
         ATOMIC_STORE(&dpc->queue, nullptr, ATOMIC_RELEASE);
 
-        dpc->fn(dpc->data);
+        dpc_execute_on_stack((uintptr_t) fn, (uintptr_t) data, CPU_LOCAL_GET_SELF()->dpc_queue.stack_pointer_top);
     }
     internal_enable();
     sched_preempt_enable();
