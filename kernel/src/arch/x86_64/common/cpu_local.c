@@ -1,11 +1,20 @@
 #include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/internal/msr.h>
 #include <common/cpu_local.h>
 #include <lib/helpers.h>
 
 arch_cpu_local_t* g_cpu_local_storage;
 
+void arch_cpu_local_set_gs_base(uint32_t core_id) {
+    arch_cpu_local_t* cpu_local = &g_cpu_local_storage[core_id];
+    arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, (uintptr_t) cpu_local);
+    arch_msr_write(ARCH_MSR_OTHER_GS_BASE, 0);
+}
+
 void cpu_local_init_bsp(uintptr_t cpu_local_ptr) {
     g_cpu_local_storage = (arch_cpu_local_t*) cpu_local_ptr;
+    arch_cpu_local_set_gs_base(0);
+
     arch_cpu_local_t* cpu_local = &g_cpu_local_storage[0];
     cpu_local->self = cpu_local;
     cpu_local->core_id = 0;
@@ -17,6 +26,8 @@ void cpu_local_init_bsp(uintptr_t cpu_local_ptr) {
 }
 
 void cpu_local_init(uint32_t core_id) {
+    arch_cpu_local_set_gs_base(core_id);
+
     arch_cpu_local_t* cpu_local = &g_cpu_local_storage[core_id];
     cpu_local->self = cpu_local;
     cpu_local->core_id = core_id;

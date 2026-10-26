@@ -51,6 +51,9 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
 
 uint32_t arch_cpu_local_get_core_lapic_id(uint32_t core_id);
 
+/// @brief Point the CPU's GS base at its own per CPU block.
+void arch_cpu_local_set_gs_base(uint32_t core_id);
+
 // NOLINTBEGIN
 #define CPU_LOCAL_READ(field)                                                                    \
     ({                                                                                           \

@@ -35,6 +35,9 @@ void init_stage_arch_cpu(uint32_t core_id) {
 
     dpc_init(core_id);
     arch_gdt_init();
+
+    arch_cpu_local_set_gs_base(core_id);
+
     interrupt_init(core_id);
     arch_lapic_init(core_id);
     arch_fpu_init(core_id);
