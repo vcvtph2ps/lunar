@@ -1,0 +1,19 @@
+[prekernel-protocol]
+type = "git"
+url = "https://github.com/vcvtph2ps/theia"
+revision = "fe5ab225ceb3a4ef4938a97803987e8cd0a6c281"
+
+[flanterm]
+type = "git"
+url = "https://github.com/vcvtph2ps/Flanterm.git"
+revision = "ef09b0cebee940a89d21ccf17e193782f440a856"
+
+[uacpi]
+type = "git"
+url = "https://github.com/uACPI/uACPI.git"
+revision = "686a9a52d9ad72690406d7cada82801377d5e2fa"
+
+[libfdt]
+type = "git"
+url = "https://github.com/dgibson/dtc.git"
+revision = "8f48565e5cfedc74d3f7512f1e0188e9d85dc1de"
