@@ -318,9 +318,9 @@ void sched_thread_init_common(thread_t* prev) {
 #endif
 
     CPU_LOCAL_WRITE(scheduler.threaded, true);
-    (void) arch_interrupt_enable();
-    dpc_enable();
-    sched_preempt_enable();
+
+    CPU_LOCAL_WRITE(scheduler.preempt_counter, 0u);
+    CPU_LOCAL_WRITE(dpc_queue.counter, 0u);
 
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) == 0);
     assert(CPU_LOCAL_READ(dpc_queue.counter) == 0);
