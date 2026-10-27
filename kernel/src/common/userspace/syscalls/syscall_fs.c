@@ -217,17 +217,23 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
+    vfs_node_attr_t attr;
+    vfs_result_t res = entry->node->ops->get_attributes(entry->node, &attr);
+    if(res != VFS_RESULT_OK) {
+        assert(false);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
     uint64_t new_offset;
-    if(whence == SEEK_SET) {
-        new_offset = offset;
-    } else if(whence == SEEK_CUR) {
-        new_offset = entry->offset + offset;
-    } else if(whence == SEEK_END) {
-        new_offset = 0;
-        user_assert(whence != SEEK_END && "unimplemented");
-    } else {
-        LOG_UTRC("fd=%d offset=%ld whence=%d | result=EINVAL\n", fd, offset, whence);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+
+    switch(whence) {
+        case SEEK_SET: new_offset = offset; break;
+        case SEEK_CUR: new_offset = entry->offset + offset; break;
+        case SEEK_END: new_offset = attr.size + offset; break;
+        default:       {
+            LOG_UTRC("fd=%d offset=%ld whence=%d | result=EINVAL\n", fd, offset, whence);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+        }
     }
 
     entry->offset = new_offset;
