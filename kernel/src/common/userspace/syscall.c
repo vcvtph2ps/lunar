@@ -36,17 +36,17 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_VM_UNMAP:   return "SYSCALL_VM_UNMAP";
         case SYSCALL_VM_PROTECT: return "SYSCALL_VM_PROTECT";
 
-        case SYSCALL_FS_OPEN:    return "SYSCALL_FS_OPEN";
-        case SYSCALL_FS_CLOSE:   return "SYSCALL_FS_CLOSE";
-        case SYSCALL_FS_READ:    return "SYSCALL_FS_READ";
-        case SYSCALL_FS_WRITE:   return "SYSCALL_FS_WRITE";
-        case SYSCALL_FS_SEEK:    return "SYSCALL_FS_SEEK";
-        case SYSCALL_FS_ISATTY:  return "SYSCALL_FS_ISATTY";
-        case SYSCALL_FS_MOUNT:   return "SYSCALL_FS_MOUNT";
-        case SYSCALL_FS_UNMOUNT: return "SYSCALL_FS_UNMOUNT";
-        case SYSCALL_FS_GETCWD:  return "SYSCALL_FS_GETCWD";
-        case SYSCALL_FS_CHDIR:   return "SYSCALL_FS_CHDIR";
-        case SYSCALL_FS_GETDENTS: return "SYSCALL_FS_GETDENTS";
+        case SYSCALL_FS_OPEN:       return "SYSCALL_FS_OPEN";
+        case SYSCALL_FS_CLOSE:      return "SYSCALL_FS_CLOSE";
+        case SYSCALL_FS_READ:       return "SYSCALL_FS_READ";
+        case SYSCALL_FS_WRITE:      return "SYSCALL_FS_WRITE";
+        case SYSCALL_FS_SEEK:       return "SYSCALL_FS_SEEK";
+        case SYSCALL_FS_ISATTY:     return "SYSCALL_FS_ISATTY";
+        case SYSCALL_FS_MOUNT:      return "SYSCALL_FS_MOUNT";
+        case SYSCALL_FS_UNMOUNT:    return "SYSCALL_FS_UNMOUNT";
+        case SYSCALL_FS_GETCWD:     return "SYSCALL_FS_GETCWD";
+        case SYSCALL_FS_CHDIR:      return "SYSCALL_FS_CHDIR";
+        case SYSCALL_FS_GETDENTS:   return "SYSCALL_FS_GETDENTS";
         case SYSCALL_FS_READLINKAT: return "SYSCALL_FS_READLINKAT";
 
         default: return "Unknown syscall";
@@ -71,6 +71,19 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_BADFD:  return "ERROR_BADFD";
         case SYSCALL_ERROR_AGAIN:  return "ERROR_AGAIN";
         default:                   arch_panic("Unknown syscall error code: %lu", ret.err);
+    }
+}
+
+syscall_ret_t syscall_from_vfs_result(vfs_result_t result) {
+    switch(result) {
+        case VFS_RESULT_OK:              return SYSCALL_RET_VALUE(0);
+        case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        case VFS_RESULT_ERR_NOT_DIR:     return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
+        case VFS_RESULT_ERR_IS_DIR:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
+        case VFS_RESULT_ERR_LOOP:        return SYSCALL_RET_ERROR(SYSCALL_ERROR_LOOP);
+        case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
+        case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
+        default:                         user_assert(false && "Invalid vfs return value");
     }
 }
 

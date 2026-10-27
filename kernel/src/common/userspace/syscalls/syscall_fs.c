@@ -54,13 +54,9 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     }
     // @todo: UAPI_O_DIRECTORY
 
-    switch(result) {
-        case VFS_RESULT_OK:              break;
-        case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
-        default:                         user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
-
 
     fd_store_entry_t* entry;
     uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, &entry);
@@ -120,11 +116,8 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
     io_req.no_block = entry->flags.non_blocking;
 
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
-    switch(result) {
-        case VFS_RESULT_OK:              break;
-        case VFS_RESULT_ERR_IS_DIR:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
-        case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
-        default:                         user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     entry->offset += io_req.read.bytes_read;
@@ -166,9 +159,8 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
     io_req.no_block = entry->flags.non_blocking;
 
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
-    switch(result) {
-        case VFS_RESULT_OK: break;
-        default:            user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     entry->offset += io_req.write.bytes_written;
@@ -202,7 +194,7 @@ syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
 
 syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
     uint32_t fd = args->arg1;
-    uint64_t offset = args->arg2;
+    int64_t offset = args->arg2;
     int whence = args->arg3;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
@@ -261,10 +253,8 @@ syscall_ret_t syscall_sys_fs_getcwd(syscall_args_t* args) {
     char* path;
     size_t size;
     vfs_result_t result = vfs_path_to(cwd, &path, &size);
-    switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        default:                       user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     if(size > args->arg2) {
@@ -311,10 +301,8 @@ syscall_ret_t syscall_sys_fs_chdir(syscall_args_t* args) {
     LOG_UTRC("pathname=%s | result=%d\n", path, result);
     heap_free(path, path_size);
 
-    switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        default:                       user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     process->current_working_dir = out_result_node;
@@ -424,10 +412,8 @@ syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args) {
 
     vfs_node_t* result_node;
     vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_AT_SYMLINK_NOFOLLOW) == 0, &result_node);
-    switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        default:                       user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     if(vfs_path.node) {
@@ -445,10 +431,8 @@ syscall_ret_t syscall_sys_fs_dup(syscall_args_t* args) {
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
     uint32_t new_fd;
     vfs_result_t result = fd_store_duplicate(process->fd_store, fd, &new_fd);
-    switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        default:                       user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     return SYSCALL_RET_VALUE(new_fd);
@@ -461,10 +445,8 @@ syscall_ret_t syscall_sys_fs_dup2(syscall_args_t* args) {
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
     vfs_result_t result = fd_store_duplicate_to(process->fd_store, fd, newfd, (flags & UAPI_O_CLOEXEC) != 0);
-    switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        default:                       user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     return SYSCALL_RET_VALUE(0);
@@ -634,12 +616,8 @@ syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args) {
     }
     heap_free(pathname, path_size);
 
-    switch(result) {
-        case VFS_RESULT_OK:            break;
-        case VFS_RESULT_ERR_NOT_FOUND: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        case VFS_RESULT_ERR_NOT_DIR:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
-        case VFS_RESULT_ERR_LOOP:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_LOOP);
-        default:                       user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     if(node->type != VFS_NODE_TYPE_LINK) {

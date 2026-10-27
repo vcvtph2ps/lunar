@@ -431,11 +431,8 @@ syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
         LOG_UTRC("failed with vfs result %d\n", result);
     }
 
-    switch(result) {
-        case VFS_RESULT_OK:              break;
-        case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
-        default:                         user_assert(false && "Invalid return value");
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
     }
 
     syscall_ret_t ret = execve_internal(node, args->arg2, args->arg3);

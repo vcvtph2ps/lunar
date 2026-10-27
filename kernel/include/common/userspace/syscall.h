@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "common/fs/vfs.h"
+
 typedef enum : uint64_t {
     SYSCALL_PROC_EXIT = 0,
     SYSCALL_PROC_GETINFO = 1,
@@ -104,5 +106,7 @@ typedef struct {
  * @brief Initializes userspace systems
  */
 void syscall_init();
+
+syscall_ret_t syscall_from_vfs_result(vfs_result_t result);
 
 syscall_ret_t syscall_dispatch(syscall_args_t* frame);
