@@ -122,7 +122,7 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     switch(result) {
         case VFS_RESULT_OK:              break;
-        case VFS_RESULT_ERR_NOT_FILE:    return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
+        case VFS_RESULT_ERR_IS_DIR:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
         case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
         default:                         user_assert(false && "Invalid return value");
     }

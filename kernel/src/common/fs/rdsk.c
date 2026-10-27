@@ -226,8 +226,8 @@ static vfs_result_t rdsk_node_readdir(vfs_node_t* node, size_t* offset, vfs_node
 }
 
 static vfs_result_t rdsk_node_read(vfs_node_t* node, void* buffer, size_t size, size_t offset, size_t* read_count) {
-    if(node->type != VFS_NODE_TYPE_FILE && node->type != VFS_NODE_TYPE_LINK)
-        return VFS_RESULT_ERR_NOT_FILE;
+    if(node->type == VFS_NODE_TYPE_DIR)
+        return VFS_RESULT_ERR_IS_DIR;
 
     if(buffer == nullptr || size == 0) {
         assert(buffer == nullptr && size == 0);
