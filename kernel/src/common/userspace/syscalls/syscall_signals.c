@@ -18,10 +18,9 @@
 
 #include "common/sched/process.h"
 
-syscall_ret_t syscall_sys_proc_sig_action(syscall_args_t* args) {
-    int signal_number = args->arg1;
-    uintptr_t new_action_ptr = args->arg2; // sigaction*
-    uintptr_t old_action_ptr = args->arg3; // sigaction*
+SYSCALL_DEFINE(syscall_proc_sig_action, SYSCALL_PROC_SIG_ACTION, void, int32_t, signal_number, void*, new_action, void*, old_action);
+static syscall_ret_t syscall_proc_sig_action(syscall_args_t* argument_data, int32_t signal_number, void* new_action_ptr, void* old_action_ptr) {
+    (void) argument_data;
 
     LOG_UTRC("signum=%d\n", signal_number);
 
@@ -37,50 +36,49 @@ syscall_ret_t syscall_sys_proc_sig_action(syscall_args_t* args) {
 
     uapi_signal_handler_t new_action;
     uapi_signal_handler_t old_action;
-    if(new_action_ptr != 0) {
-        vm_copy_from(&new_action, process->address_space, new_action_ptr, sizeof(uapi_signal_handler_t));
+    if(new_action_ptr != nullptr) {
+        vm_copy_from(&new_action, process->address_space, (uintptr_t) new_action_ptr, sizeof(uapi_signal_handler_t));
     }
 
     spinlock_lock(&process->signal_handler.lock);
 
-    if(old_action_ptr != 0) {
+    if(old_action_ptr != nullptr) {
         memory_copy(&old_action, &process->signal_handler.handlers[signal_number], sizeof(uapi_signal_handler_t));
     }
 
-    if(new_action_ptr != 0) {
+    if(new_action_ptr != nullptr) {
         memory_copy(&process->signal_handler.handlers[signal_number], &new_action, sizeof(uapi_signal_handler_t));
     }
 
     spinlock_unlock(&process->signal_handler.lock);
 
-    if(old_action_ptr != 0) {
-        vm_copy_to(process->address_space, old_action_ptr, &old_action, sizeof(uapi_signal_handler_t));
+    if(old_action_ptr != nullptr) {
+        vm_copy_to(process->address_space, (uintptr_t) old_action_ptr, &old_action, sizeof(uapi_signal_handler_t));
     }
 
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_proc_sig_mask(syscall_args_t* args) {
-    int how = args->arg1;
-    uintptr_t set_ptr = args->arg2; // sigset_t*
-    uintptr_t retrieve_ptr = args->arg3; // sigset_t*
+SYSCALL_DEFINE(syscall_proc_sig_mask, SYSCALL_PROC_SIG_MASK, void, int32_t, how, void*, set, void*, retrieve);
+static syscall_ret_t syscall_proc_sig_mask(syscall_args_t* argument_data, int32_t how, void* set_ptr, void* retrieve_ptr) {
+    (void) argument_data;
 
     thread_t* thread = sched_arch_thread_current();
 
     uapi_signal_set_t new_set = 0;
 
-    if(set_ptr != 0) {
+    if(set_ptr != nullptr) {
         if(how != UAPI_SIGNAL_HOW_BLOCK && how != UAPI_SIGNAL_HOW_UNBLOCK && how != UAPI_SIGNAL_HOW_SETMASK) {
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
         }
-        vm_copy_from(&new_set, thread->process->address_space, set_ptr, sizeof(uapi_signal_set_t));
+        vm_copy_from(&new_set, thread->process->address_space, (uintptr_t) set_ptr, sizeof(uapi_signal_set_t));
         new_set = signal_mask_sanitize(new_set);
     }
 
     spinlock_lock(&thread->signal.lock);
     uapi_signal_set_t old_set = thread->signal.masked_signal_set;
 
-    if(set_ptr != 0) {
+    if(set_ptr != nullptr) {
         switch(how) {
             case UAPI_SIGNAL_HOW_BLOCK:   thread->signal.masked_signal_set |= new_set; break;
             case UAPI_SIGNAL_HOW_UNBLOCK: thread->signal.masked_signal_set &= ~new_set; break;
@@ -91,16 +89,15 @@ syscall_ret_t syscall_sys_proc_sig_mask(syscall_args_t* args) {
 
     spinlock_unlock(&thread->signal.lock);
 
-    if(retrieve_ptr != 0) {
-        vm_copy_to(thread->process->address_space, retrieve_ptr, &old_set, sizeof(uapi_signal_set_t));
+    if(retrieve_ptr != nullptr) {
+        vm_copy_to(thread->process->address_space, (uintptr_t) retrieve_ptr, &old_set, sizeof(uapi_signal_set_t));
     }
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_proc_sig_send_simple(syscall_args_t* args) {
-    uapi_pid_t pid = args->arg1;
-    uint32_t tid = args->arg2;
-    int signal = args->arg3;
+SYSCALL_DEFINE(syscall_proc_sig_send_simple, SYSCALL_PROC_SIG_SEND_SIMPLE, void, int32_t, pid, uint32_t, tid, int32_t, signal);
+static syscall_ret_t syscall_proc_sig_send_simple(syscall_args_t* argument_data, int32_t pid, uint32_t tid, int32_t signal) {
+    (void) argument_data;
 
     if(pid <= 0) {
         /// @todo: process group signals
@@ -151,15 +148,15 @@ syscall_ret_t syscall_sys_proc_sig_send_simple(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_proc_sig_send_alt_stack(syscall_args_t* args);
-
-syscall_ret_t syscall_sys_proc_sig_send_return(syscall_args_t* args) {
+SYSCALL_DEFINE_NO_RETURN(syscall_proc_sig_send_return, SYSCALL_PROC_SIG_RETURN);
+static syscall_ret_t syscall_proc_sig_send_return(syscall_args_t* argument_data) {
+    (void) argument_data;
     LOG_UTRC("returning from signal handler\n");
 
     thread_t* thread = sched_arch_thread_current();
 
     /// the restorer is reached by returning out of the signal handler, so the user stack pointer points directly at the ucontext that signal_arch_setup_frame pushed.
-    userptr_t* ucontext_pointer = userptr_create(args->user_rsp, sizeof(uapi_signal_ucontext_t));
+    userptr_t* ucontext_pointer = userptr_create(argument_data->user_rsp, sizeof(uapi_signal_ucontext_t));
     if(ucontext_pointer == nullptr) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }

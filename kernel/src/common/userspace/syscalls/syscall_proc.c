@@ -19,15 +19,15 @@
 #include <uapi/limits.h>
 #include <uapi/types.h>
 
-[[noreturn]] syscall_ret_t syscall_sys_proc_exit(syscall_args_t* args) {
-    LOG_UTRC("exit_code=%d\n", (int) args->arg1);
-
+SYSCALL_DEFINE_NO_RETURN(syscall_proc_exit, SYSCALL_PROC_EXIT, int32_t, exit_code);
+static syscall_ret_t syscall_proc_exit(syscall_args_t* argument_data, int32_t exit_code) {
+    (void) argument_data;
     thread_t* thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
     process_t* process = thread->process;
 
-    ATOMIC_STORE(&thread->exit_code, (int32_t) args->arg1, ATOMIC_RELAXED);
+    ATOMIC_STORE(&thread->exit_code, exit_code, ATOMIC_RELAXED);
 
-    process_kill(process, PROCESS_EXITED, (int32_t) args->arg1);
+    process_kill(process, PROCESS_EXITED, exit_code);
     ASSERT_UNREACHABLE();
 }
 
@@ -81,19 +81,21 @@ static syscall_ret_t internal_setpgid(process_t* target, int32_t pgid) {
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_proc_setinfo(syscall_args_t* args) {
+SYSCALL_DEFINE(syscall_proc_setinfo, SYSCALL_PROC_SETINFO, void, uint64_t, pid, uint64_t, query, uint64_t, value);
+static syscall_ret_t syscall_proc_setinfo(syscall_args_t* argument_data, uint64_t pid, uint64_t query, uint64_t value) {
+    (void) argument_data;
     process_t* process;
-    if(args->arg1 == UINT64_MAX) {
+    if(pid == UINT64_MAX) {
         process = sched_arch_thread_current()->process;
         process_ref(process);
     } else {
-        process = find_self_or_child(sched_arch_thread_current()->process, (uint32_t) args->arg1);
+        process = find_self_or_child(sched_arch_thread_current()->process, (uint32_t) pid);
         if(process == nullptr) {
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_SEARCH);
         }
     }
 
-    switch(args->arg2) {
+    switch(query) {
         case SYSCALL_PROC_INFO_GROUP_ID:         user_assert(false && "SYSCALL_PROC_INFO_GROUP_ID unimplemented!\n"); break;
         case SYSCALL_PROC_INFO_EGROUP_ID:        user_assert(false && "SYSCALL_PROC_INFO_EGROUP_ID unimplemented!\n"); break;
         case SYSCALL_PROC_INFO_USER_ID:          user_assert(false && "SYSCALL_PROC_INFO_USER_ID unimplemented!\n"); break;
@@ -101,27 +103,30 @@ syscall_ret_t syscall_sys_proc_setinfo(syscall_args_t* args) {
         case SYSCALL_PROC_INFO_PROCESS_ID:       user_assert(false && "SYSCALL_PROC_INFO_PROCESS_ID unimplemented!\n"); break;
         case SYSCALL_PROC_INFO_PARENT_PROCESS:   user_assert(false && "SYSCALL_PROC_INFO_PARENT_PROCESS unimplemented!\n"); break;
         case SYSCALL_PROC_INFO_THREAD_ID:        user_assert(false && "SYSCALL_PROC_INFO_THREAD_ID unimplemented!\n"); break;
-        case SYSCALL_PROC_INFO_PROCESS_GROUP_ID: return internal_setpgid(process, args->arg3);
+        case SYSCALL_PROC_INFO_PROCESS_GROUP_ID: return internal_setpgid(process, value);
         default:                                 user_assert(false && "unreachable"); break;
     }
 
     ASSERT_UNREACHABLE();
 }
 
-syscall_ret_t syscall_sys_proc_getinfo(syscall_args_t* args) {
+SYSCALL_DEFINE(syscall_proc_getinfo, SYSCALL_PROC_GETINFO, uint64_t, uint64_t, pid, uint64_t, query);
+static syscall_ret_t syscall_proc_getinfo(syscall_args_t* argument_data, uint64_t pid, uint64_t query) {
+    (void) argument_data;
+
     process_t* process;
-    if(args->arg1 == UINT64_MAX) {
+    if(pid == UINT64_MAX) {
         process = sched_arch_thread_current()->process;
         process_ref(process);
     } else {
-        process = find_self_or_child(sched_arch_thread_current()->process, (uint32_t) args->arg1);
+        process = find_self_or_child(sched_arch_thread_current()->process, (uint32_t) pid);
         if(process == nullptr) {
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_SEARCH);
         }
     }
 
     process_t* current_process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    switch(args->arg2) {
+    switch(query) {
         case SYSCALL_PROC_INFO_GROUP_ID:         LOG_UTRC("SYSCALL_PROC_INFO_GROUP_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
         case SYSCALL_PROC_INFO_EGROUP_ID:        LOG_UTRC("SYSCALL_PROC_INFO_EGROUP_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
         case SYSCALL_PROC_INFO_USER_ID:          LOG_UTRC("SYSCALL_PROC_INFO_USER_ID unimplemented!\n"); return SYSCALL_RET_VALUE(0);
@@ -136,9 +141,10 @@ syscall_ret_t syscall_sys_proc_getinfo(syscall_args_t* args) {
     ASSERT_UNREACHABLE();
 }
 
-syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
+SYSCALL_DEFINE(syscall_proc_fork, SYSCALL_PROC_FORK, int32_t);
+static syscall_ret_t syscall_proc_fork(syscall_args_t* argument_data) {
     LOG_UTRC("process forked\n");
-    arch_interrupt_regs_t* frame = args->regs;
+    arch_interrupt_regs_t* frame = argument_data->regs;
 
     uintptr_t entry = arch_interrupt_regs_syscall_get_user_ip(frame);
 
@@ -147,7 +153,7 @@ syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
 
-    thread_t* thread = sched_arch_fork_thread_user(new_process, sched_arch_thread_current(), args->user_rsp, entry, frame);
+    thread_t* thread = sched_arch_fork_thread_user(new_process, sched_arch_thread_current(), argument_data->user_rsp, entry, frame);
 
     /// The thread references its process for as long as it lives
     process_ref(new_process);
@@ -160,13 +166,10 @@ syscall_ret_t syscall_sys_proc_fork(syscall_args_t* args) {
 /// Return immediately if no child has exited yet
 #define SYSCALL_WAITPID_NOHANG 1
 
-syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
-    int32_t pid = (int32_t) args->arg1;
-    uintptr_t status_ptr = args->arg2; // int*
-    int flags = (int) args->arg3;
-    // uintptr_t ru = args->arg4; // struct rusage*, unimplemented
-
-    LOG_UTRC("pid=%d, flags=%d\n", pid, flags);
+SYSCALL_DEFINE(syscall_proc_waitpid, SYSCALL_PROC_WAITPID, int32_t, int32_t, pid, void*, status_ptr, int, flags, void*, ru);
+static syscall_ret_t syscall_proc_waitpid(syscall_args_t* argument_data, int32_t pid, void* status_ptr, int flags, void* ru) {
+    (void) argument_data;
+    (void) ru;
 
     process_t* parent = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
@@ -226,8 +229,8 @@ syscall_ret_t syscall_sys_proc_waitpid(syscall_args_t* args) {
             /// The parent's children list held a reference, it was taken off the list above
             process_deref(child);
 
-            if(status_ptr != 0) {
-                if(vm_copy_to(parent->address_space, status_ptr, &status, sizeof(status)) != sizeof(status)) {
+            if(status_ptr != nullptr) {
+                if(vm_copy_to(parent->address_space, (uintptr_t) status_ptr, &status, sizeof(status)) != sizeof(status)) {
                     return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
                 }
             }
@@ -399,8 +402,10 @@ static syscall_ret_t execve_internal(vfs_node_t* node, uintptr_t argv_ptr, uintp
     return SYSCALL_RET_ERROR(SYSCALL_ERROR_NO_EXEC);
 }
 
-syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
-    userptr_t* upath = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+SYSCALL_DEFINE(syscall_proc_execve, SYSCALL_PROC_EXECVE, void, void*, path, void*, argv, void*, envp);
+static syscall_ret_t syscall_proc_execve(syscall_args_t* argument_data, void* path_ptr, void* argv_ptr, void* envp_ptr) {
+    (void) argument_data;
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
     if(!upath) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
@@ -435,13 +440,17 @@ syscall_ret_t syscall_sys_proc_execve(syscall_args_t* args) {
         return syscall_from_vfs_result(result);
     }
 
-    syscall_ret_t ret = execve_internal(node, args->arg2, args->arg3);
+    syscall_ret_t ret = execve_internal(node, (uintptr_t) argv_ptr, (uintptr_t) envp_ptr);
     vfs_node_put(node);
     return ret;
 }
 
-syscall_ret_t syscall_sys_proc_fexecve(syscall_args_t* args) {
-    (void) args;
+SYSCALL_DEFINE(syscall_proc_fexecve, SYSCALL_PROC_FEXECVE, void, int32_t, fd, void*, argv, void*, envp);
+static syscall_ret_t syscall_proc_fexecve(syscall_args_t* argument_data, int32_t fd, void* argv_ptr, void* envp_ptr) {
+    (void) argument_data;
+    (void) fd;
+    (void) argv_ptr;
+    (void) envp_ptr;
     ASSERT_TODO();
     // int fd = args->arg1;
 

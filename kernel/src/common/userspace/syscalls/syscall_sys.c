@@ -9,8 +9,10 @@
 #include "common/userspace/userptr.h"
 #include "uapi/limits.h"
 
-syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
-    userptr_t* ubuffer = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+SYSCALL_DEFINE(syscall_sys_debug_log, SYSCALL_SYS_DEBUG_LOG, void, void*, string);
+static syscall_ret_t syscall_sys_debug_log(syscall_args_t* argument_data, void* string) {
+    (void) argument_data;
+    userptr_t* ubuffer = userptr_create_string((uintptr_t) string, UAPI_LIMITS_ARG_MAX - 1);
     if(!ubuffer) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
@@ -39,16 +41,22 @@ syscall_ret_t syscall_sys_debug_log(syscall_args_t* args) {
 #if defined(__x86_64__)
 #include <arch/x86_64/internal/msr.h>
 
-syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args) {
-    arch_msr_write(ARCH_MSR_FS_BASE, args->arg1);
-    CPU_LOCAL_GET_CURRENT_THREAD()->fsbase = args->arg1;
-    LOG_UTRC("tcb=0x%lx\n", args->arg1);
+SYSCALL_DEFINE(syscall_sys_tcb_set, SYSCALL_SYS_TCB_SET, void, void*, fs_base);
+static syscall_ret_t syscall_sys_tcb_set(syscall_args_t* argument_data, void* fs_base) {
+    (void) argument_data;
+    arch_msr_write(ARCH_MSR_FS_BASE, (uintptr_t) fs_base);
+    CPU_LOCAL_GET_CURRENT_THREAD()->fsbase = (uintptr_t) fs_base;
 
     return SYSCALL_RET_VALUE(0);
 }
+
 #else
-syscall_ret_t syscall_sys_thread_set_tcb(syscall_args_t* args) {
-    (void) args;
+
+SYSCALL_DEFINE(syscall_sys_tcb_set, SYSCALL_SYS_TCB_SET, void, void*, fs_base);
+static syscall_ret_t syscall_sys_tcb_set(syscall_args_t* argument_data, void* fs_base) {
+    (void) argument_data;
+    (void) fs_base;
     assert(false && "unimplemented");
 }
+
 #endif

@@ -31,12 +31,12 @@ syscall_ret_t x86_64_dispatch_syscall(x86_64_syscall_frame_t* frame) {
 
     syscall_args_t args;
     args.syscall_nr = syscall_nr;
-    args.arg1 = frame->regs.rdi;
-    args.arg2 = frame->regs.rsi;
-    args.arg3 = frame->regs.rdx;
-    args.arg4 = frame->regs.r10;
-    args.arg5 = frame->regs.r8;
-    args.arg6 = frame->regs.r9;
+    args.args[0] = frame->regs.rdi;
+    args.args[1] = frame->regs.rsi;
+    args.args[2] = frame->regs.rdx;
+    args.args[3] = frame->regs.r10;
+    args.args[4] = frame->regs.r8;
+    args.args[5] = frame->regs.r9;
     args.user_rsp = frame->user_rsp;
     args.regs = &frame->regs;
 

@@ -68,6 +68,7 @@ typedef enum : int64_t {
     SYSCALL_ERROR_NOTDIR = 20, // Not a directory (ENOTDIR)
     SYSCALL_ERROR_ISDIR = 21, // Resource is directory (EISDIR)
     SYSCALL_ERROR_INVAL = 22, // Invalid argument
+    SYSCALL_ERROR_NOSYS = 38, // Function not implemented.
     SYSCALL_ERROR_NOTTY = 25, // Not a TTY
     SYSCALL_ERROR_SPIPE = 29, // Illegal seek
     SYSCALL_ERROR_ROFS = 30, // Read-only file system
@@ -89,15 +90,12 @@ static_assert(sizeof(syscall_ret_t) == 16, "syscall_ret_t must be 16 bytes");
 
 #define SYSCALL_RET_ERROR(err_code) ((syscall_ret_t) { .is_error = true, .err = (err_code) })
 #define SYSCALL_RET_VALUE(val) ((syscall_ret_t) { .is_error = false, .value = (val) })
+#define SYSCALL_RET_VOID() ((syscall_ret_t) { .is_error = false, .value = 0 })
 
 typedef struct {
+    uint64_t args[6];
+
     uint64_t syscall_nr;
-    uint64_t arg1;
-    uint64_t arg2;
-    uint64_t arg3;
-    uint64_t arg4;
-    uint64_t arg5;
-    uint64_t arg6;
     uint64_t user_rsp;
     arch_interrupt_regs_t* regs;
 } syscall_args_t;

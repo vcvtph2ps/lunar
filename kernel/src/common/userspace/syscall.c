@@ -5,9 +5,7 @@
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userspace.h>
 
-typedef syscall_ret_t (*fn_syscall_handler_t)(syscall_args_t* args);
-
-static fn_syscall_handler_t g_syscall_table[SYSCALL_HIGHEST_NR];
+static const syscall_meta_t* g_syscall_table[SYSCALL_HIGHEST_NR];
 
 static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLINT
     switch(nr) {
@@ -87,69 +85,99 @@ syscall_ret_t syscall_from_vfs_result(vfs_result_t result) {
     }
 }
 
-static syscall_ret_t syscall_sys_invalid(syscall_args_t* args) {
-    (void) args;
-
-    LOG_INFO("Invalid syscall \"%s\" (0x%lx) invoked with args: %lu, %lu, %lu, %lu, %lu, %lu\n", userspace_syscall_number_to_string(args->syscall_nr), args->syscall_nr, args->arg1, args->arg2, args->arg3, args->arg4, args->arg5, args->arg6);
-    user_assert(false && "Invalid syscall");
-    return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+static void print_value_with_type(sc_kind_t kind, uint64_t value) {
+    switch(kind) {
+        case SC_U64:  log_print_lockless(LOG_LEVEL_STRC, "%lu", (int64_t) value); break;
+        case SC_I64:  log_print_lockless(LOG_LEVEL_STRC, "%ld", (uint64_t) value); break;
+        case SC_U32:  log_print_lockless(LOG_LEVEL_STRC, "%u", (int32_t) value); break;
+        case SC_I32:  log_print_lockless(LOG_LEVEL_STRC, "%i", (uint32_t) value); break;
+        case SC_PTR:  log_print_lockless(LOG_LEVEL_STRC, "0x%lx", (int64_t) value); break;
+        case SC_VOID: log_print_lockless(LOG_LEVEL_STRC, "<void>"); break;
+    }
 }
 
-#define SYSCALL_DISPATCHER(nr, __handler) g_syscall_table[nr] = __handler;
+static void syscall_log(const syscall_meta_t* meta, const syscall_args_t* arguments, syscall_ret_t ret) {
+    arch_interrupt_state_t state = log_lock_acquire();
+    log_print_lockless(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: (", sched_arch_thread_current()->process->process_id, meta->name);
+    for(size_t i = 0; i < meta->nargs; i++) {
+        const syscall_arg_desc_t* d = &meta->args[i];
+        log_print_lockless(LOG_LEVEL_STRC, "%s%s=", i ? ", " : "", d->name);
+        print_value_with_type(d->kind, arguments->args[i]);
+    }
+    log_print_lockless(LOG_LEVEL_STRC, ") = ");
+    if(!ret.is_error) {
+        print_value_with_type(meta->ret_type, ret.value);
+        log_print_lockless(LOG_LEVEL_STRC, "\n");
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%s\n", userspace_syscall_ret_to_string(ret));
+    }
+
+    if(meta->ret_type == SC_VOID && ret.value != 0 && !ret.is_error) {
+        arch_panic("void syscall returned with value 0x%lx\n", ret.value);
+    }
+
+
+    log_lock_release(state);
+}
+
+static void syscall_log_noreturn(const syscall_meta_t* meta, const syscall_args_t* arguments) {
+    arch_interrupt_state_t state = log_lock_acquire();
+    log_print_lockless(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: (", sched_arch_thread_current()->process->process_id, meta->name);
+    for(size_t i = 0; i < meta->nargs; i++) {
+        const syscall_arg_desc_t* d = &meta->args[i];
+        log_print_lockless(LOG_LEVEL_STRC, "%s%s=", i ? ", " : "", d->name);
+        print_value_with_type(d->kind, arguments->args[i]);
+    }
+    log_print_lockless(LOG_LEVEL_STRC, ") = [no return]\n");
+    log_lock_release(state);
+}
 
 syscall_ret_t syscall_dispatch(syscall_args_t* args) {
     user_assert(args->syscall_nr < SYSCALL_HIGHEST_NR);
-    fn_syscall_handler_t handler = g_syscall_table[args->syscall_nr];
-    user_assert(handler != nullptr);
 
-    return handler(args);
+    const syscall_meta_t* meta = g_syscall_table[args->syscall_nr];
+    if(meta == nullptr) {
+        LOG_INFO(
+            "Invalid syscall \"%s\" (0x%lx) invoked with args: %lu, %lu, %lu, %lu, %lu, %lu\n",
+            userspace_syscall_number_to_string(args->syscall_nr),
+            args->syscall_nr,
+            args->args[0],
+            args->args[1],
+            args->args[2],
+            args->args[3],
+            args->args[4],
+            args->args[5]
+        );
+        user_assert(false && "Invalid syscall");
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+    user_assert(meta != nullptr);
+
+#if defined(__DEBUG__)
+    if(meta->no_return) {
+        syscall_log_noreturn(meta, args);
+    }
+#endif
+    syscall_ret_t ret = meta->fn(args);
+#if defined(__DEBUG__)
+    syscall_log(meta, args, ret);
+#endif
+    return ret;
 }
 
 void arch_syscall_init();
+
+extern const syscall_meta_t __start_syscall_meta[], __stop_syscall_meta[]; // NOLINT
 
 void syscall_init() {
     arch_syscall_init();
 
     for(size_t i = 0; i < SYSCALL_HIGHEST_NR; i++) {
-        g_syscall_table[i] = syscall_sys_invalid;
+        g_syscall_table[i] = nullptr;
     }
 
-    SYSCALL_DISPATCHER(SYSCALL_PROC_EXIT, syscall_sys_proc_exit);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_GETINFO, syscall_sys_proc_getinfo);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_SETINFO, syscall_sys_proc_setinfo);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_FORK, syscall_sys_proc_fork);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_WAITPID, syscall_sys_proc_waitpid);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_EXECVE, syscall_sys_proc_execve);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_FEXECVE, syscall_sys_proc_fexecve);
-
-    SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_ACTION, syscall_sys_proc_sig_action);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_MASK, syscall_sys_proc_sig_mask);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_SEND_SIMPLE, syscall_sys_proc_sig_send_simple);
-    SYSCALL_DISPATCHER(SYSCALL_PROC_SIG_RETURN, syscall_sys_proc_sig_send_return);
-
-    SYSCALL_DISPATCHER(SYSCALL_SYS_TCB_SET, syscall_sys_thread_set_tcb);
-    SYSCALL_DISPATCHER(SYSCALL_SYS_DEBUG_LOG, syscall_sys_debug_log);
-
-    SYSCALL_DISPATCHER(SYSCALL_VM_MAP, syscall_sys_vm_map);
-    SYSCALL_DISPATCHER(SYSCALL_VM_UNMAP, syscall_sys_vm_unmap);
-    SYSCALL_DISPATCHER(SYSCALL_VM_PROTECT, syscall_sys_vm_protect);
-
-    SYSCALL_DISPATCHER(SYSCALL_FS_OPEN, syscall_sys_fs_open);
-    SYSCALL_DISPATCHER(SYSCALL_FS_CLOSE, syscall_sys_fs_close);
-    SYSCALL_DISPATCHER(SYSCALL_FS_READ, syscall_sys_fs_read);
-    SYSCALL_DISPATCHER(SYSCALL_FS_WRITE, syscall_sys_fs_write);
-    SYSCALL_DISPATCHER(SYSCALL_FS_SEEK, syscall_sys_fs_seek);
-    SYSCALL_DISPATCHER(SYSCALL_FS_ISATTY, syscall_sys_fs_is_a_tty);
-    SYSCALL_DISPATCHER(SYSCALL_FS_GETCWD, syscall_sys_fs_getcwd);
-    SYSCALL_DISPATCHER(SYSCALL_FS_CHDIR, syscall_sys_fs_chdir);
-    SYSCALL_DISPATCHER(SYSCALL_FS_STAT, syscall_sys_fs_stat);
-    SYSCALL_DISPATCHER(SYSCALL_FS_STAT_AT, syscall_sys_fs_stat_at);
-    SYSCALL_DISPATCHER(SYSCALL_FS_DUP, syscall_sys_fs_dup);
-    SYSCALL_DISPATCHER(SYSCALL_FS_DUP2, syscall_sys_fs_dup2);
-    SYSCALL_DISPATCHER(SYSCALL_FS_GETDENTS, syscall_sys_fs_getdents);
-    SYSCALL_DISPATCHER(SYSCALL_FS_READLINKAT, syscall_sys_fs_readlinkat);
-
-    // SYSCALL_DISPATCHER(SYSCALL_FUTEX, syscall_sys_futex);
-    // SYSCALL_DISPATCHER(SYSCALL_GET_CLOCK, syscall_sys_get_clock);
-    // SYSCALL_DISPATCHER(SYSCALL_GET_PROCESS_INFO, syscall_sys_get_process_info);
+    for(const syscall_meta_t* m = __start_syscall_meta; m < __stop_syscall_meta; m++) {
+        assert(g_syscall_table[m->num] == nullptr);
+        g_syscall_table[m->num] = m;
+    }
 }

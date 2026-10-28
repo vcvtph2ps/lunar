@@ -17,13 +17,13 @@
 #include <uapi/limits.h>
 #include <uapi/stat.h>
 
-syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
-    int flags = args->arg2;
-    uint32_t mode = args->arg3;
+SYSCALL_DEFINE(syscall_fs_open, SYSCALL_FS_OPEN, int32_t, void*, path, int, flags, uint32_t, mode);
+static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_ptr, int flags, uint32_t mode) {
+    (void) argument_data;
     (void) mode;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    userptr_t* upath = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
     if(!upath) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
@@ -71,8 +71,9 @@ syscall_ret_t syscall_sys_fs_open(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(fd);
 }
 
-syscall_ret_t syscall_sys_fs_close(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
+SYSCALL_DEFINE(syscall_fs_close, SYSCALL_FS_CLOSE, void, uint32_t, fd);
+static syscall_ret_t syscall_fs_close(syscall_args_t* argument_data, uint32_t fd) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
@@ -87,30 +88,29 @@ syscall_ret_t syscall_sys_fs_close(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
-    uintptr_t ubuffer = args->arg2;
-    size_t ubuffer_size = args->arg3;
+SYSCALL_DEFINE(syscall_fs_read, SYSCALL_FS_READ, uint64_t, uint32_t, fd, void*, buffer, size_t, count);
+static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd, void* buffer_ptr, size_t count) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
     if(!entry->access.read) {
-        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, access.read=false | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.read=false | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
-    char* buffer = heap_alloc(ubuffer_size);
+    char* buffer = heap_alloc(count);
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
     io_req.read.buffer = buffer;
-    io_req.read.count = ubuffer_size;
+    io_req.read.count = count;
     io_req.read.offset = entry->offset;
     io_req.read.bytes_read = 0;
     io_req.no_block = entry->flags.non_blocking;
@@ -122,38 +122,37 @@ syscall_ret_t syscall_sys_fs_read(syscall_args_t* args) {
 
     entry->offset += io_req.read.bytes_read;
 
-    vm_copy_to(process->address_space, ubuffer, buffer, io_req.read.bytes_read);
-    heap_free(buffer, ubuffer_size);
-    LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.offset, io_req.read.bytes_read);
+    vm_copy_to(process->address_space, (uintptr_t) buffer_ptr, buffer, io_req.read.bytes_read);
+    heap_free(buffer, count);
+    LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, io_req.read.offset, io_req.read.bytes_read);
 
     return SYSCALL_RET_VALUE(io_req.read.bytes_read);
 }
 
-syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
-    uintptr_t ubuffer = args->arg2;
-    size_t ubuffer_size = args->arg3;
+SYSCALL_DEFINE(syscall_fs_write, SYSCALL_FS_WRITE, uint64_t, uint32_t, fd, void*, buffer, size_t, count);
+static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd, void* buffer_ptr, size_t count) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
     if(!entry->access.write) {
-        LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, access.write=false | result=BADFD\n", fd, ubuffer, ubuffer_size);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.write=false | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
     }
 
-    char* buffer = heap_alloc(ubuffer_size);
-    vm_copy_from(buffer, process->address_space, ubuffer, ubuffer_size);
+    char* buffer = heap_alloc(count);
+    vm_copy_from(buffer, process->address_space, (uintptr_t) buffer_ptr, count);
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_WRITE;
     io_req.write.buffer = buffer;
-    io_req.write.count = ubuffer_size;
+    io_req.write.count = count;
     io_req.write.offset = entry->offset;
     io_req.write.bytes_written = 0;
     io_req.no_block = entry->flags.non_blocking;
@@ -165,14 +164,15 @@ syscall_ret_t syscall_sys_fs_write(syscall_args_t* args) {
 
     entry->offset += io_req.write.bytes_written;
 
-    heap_free(buffer, ubuffer_size);
-    LOG_UTRC("fd=%d, ubuffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.write.offset, io_req.write.bytes_written);
+    heap_free(buffer, count);
+    LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, io_req.write.offset, io_req.write.bytes_written);
 
     return SYSCALL_RET_VALUE(io_req.write.bytes_written);
 }
 
-syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
+SYSCALL_DEFINE(syscall_fs_is_a_tty, SYSCALL_FS_ISATTY, void, uint32_t, fd);
+static syscall_ret_t syscall_fs_is_a_tty(syscall_args_t* argument_data, uint32_t fd) {
+    (void) argument_data;
     LOG_UTRC("fd=%d\n", fd);
 
     // @todo: STUB
@@ -192,10 +192,9 @@ syscall_ret_t syscall_sys_fs_is_a_tty(syscall_args_t* args) {
 /// Seek from end of file.
 #define SEEK_END 2
 
-syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
-    int64_t offset = args->arg2;
-    int whence = args->arg3;
+SYSCALL_DEFINE(syscall_fs_seek, SYSCALL_FS_SEEK, void, uint32_t, fd, int64_t, offset, int, whence);
+static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd, int64_t offset, int whence) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
@@ -233,9 +232,11 @@ syscall_ret_t syscall_sys_fs_seek(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_fs_getcwd(syscall_args_t* args) {
+SYSCALL_DEFINE(syscall_fs_getcwd, SYSCALL_FS_GETCWD, void, void*, buffer, size_t, size);
+static syscall_ret_t syscall_fs_getcwd(syscall_args_t* argument_data, void* buffer_ptr, size_t size) {
+    (void) argument_data;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    userptr_t* upath = userptr_create(args->arg1, args->arg2);
+    userptr_t* upath = userptr_create((uintptr_t) buffer_ptr, size);
     if(!upath) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
@@ -251,31 +252,33 @@ syscall_ret_t syscall_sys_fs_getcwd(syscall_args_t* args) {
     }
 
     char* path;
-    size_t size;
-    vfs_result_t result = vfs_path_to(cwd, &path, &size);
+    size_t path_size;
+    vfs_result_t result = vfs_path_to(cwd, &path, &path_size);
     if(syscall_from_vfs_result(result).is_error) {
         return syscall_from_vfs_result(result);
     }
 
-    if(size > args->arg2) {
-        heap_free(path, size);
+    if(path_size > size) {
+        heap_free(path, path_size);
         heap_free(upath, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
 
-    if(!userptr_write(upath, path, 0, size)) {
-        heap_free(path, size);
+    if(!userptr_write(upath, path, 0, path_size)) {
+        heap_free(path, path_size);
         heap_free(upath, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
 
-    heap_free(path, size);
+    heap_free(path, path_size);
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_fs_chdir(syscall_args_t* args) {
+SYSCALL_DEFINE(syscall_fs_chdir, SYSCALL_FS_CHDIR, void, void*, path);
+static syscall_ret_t syscall_fs_chdir(syscall_args_t* argument_data, void* path_ptr) {
+    (void) argument_data;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    userptr_t* upath = userptr_create_string(args->arg1, UAPI_LIMITS_PATH_MAX - 1);
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
     if(!upath) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
@@ -343,10 +346,11 @@ static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_fs_stat(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
+SYSCALL_DEFINE(syscall_fs_stat, SYSCALL_FS_STAT, void, uint32_t, fd, void*, stat);
+static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd, void* stat_ptr) {
+    (void) argument_data;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    userptr_t* stat_buf = userptr_create(args->arg2, sizeof(uapi_stat_t));
+    userptr_t* stat_buf = userptr_create((uintptr_t) stat_ptr, sizeof(uapi_stat_t));
     if(!stat_buf) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
@@ -361,14 +365,16 @@ syscall_ret_t syscall_sys_fs_stat(syscall_args_t* args) {
     return stat_internal(stat_buf, entry->node);
 }
 
-syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args) {
+SYSCALL_DEFINE(syscall_fs_stat_at, SYSCALL_FS_STAT_AT, void, uint32_t, fd, void*, path, void*, stat, uint32_t, flags);
+static syscall_ret_t syscall_fs_stat_at(syscall_args_t* argument_data, uint32_t fd, void* path_ptr, void* stat_ptr, uint32_t flags) {
+    (void) argument_data;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    userptr_t* stat_buf = userptr_create(args->arg3, sizeof(uapi_stat_t));
+    userptr_t* stat_buf = userptr_create((uintptr_t) stat_ptr, sizeof(uapi_stat_t));
     if(!stat_buf) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
-    userptr_t* upath = userptr_create_string(args->arg2, UAPI_LIMITS_PATH_MAX - 1);
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
     if(!upath) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
@@ -388,9 +394,6 @@ syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args) {
 
     pathname[upath->size] = '\0';
     heap_free(upath, sizeof(userptr_t));
-
-    uint32_t fd = args->arg1;
-    uint32_t flags = args->arg4;
 
     vfs_path_t vfs_path;
     vfs_path.rel_path = pathname;
@@ -423,8 +426,9 @@ syscall_ret_t syscall_sys_fs_stat_at(syscall_args_t* args) {
     return stat_internal(stat_buf, result_node);
 }
 
-syscall_ret_t syscall_sys_fs_dup(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
+SYSCALL_DEFINE(syscall_fs_dup, SYSCALL_FS_DUP, int32_t, uint32_t, fd);
+static syscall_ret_t syscall_fs_dup(syscall_args_t* argument_data, uint32_t fd) {
+    (void) argument_data;
     // @note: unused, always passed as 0 from mlibc
     // uint32_t flags = args->arg2;
     //
@@ -438,10 +442,9 @@ syscall_ret_t syscall_sys_fs_dup(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(new_fd);
 }
 
-syscall_ret_t syscall_sys_fs_dup2(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
-    uint32_t flags = args->arg2;
-    uint32_t newfd = args->arg3;
+SYSCALL_DEFINE(syscall_fs_dup2, SYSCALL_FS_DUP2, void, uint32_t, fd, uint32_t, flags, uint32_t, newfd);
+static syscall_ret_t syscall_fs_dup2(syscall_args_t* argument_data, uint32_t fd, uint32_t flags, uint32_t newfd) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
     vfs_result_t result = fd_store_duplicate_to(process->fd_store, fd, newfd, (flags & UAPI_O_CLOEXEC) != 0);
@@ -452,10 +455,9 @@ syscall_ret_t syscall_sys_fs_dup2(syscall_args_t* args) {
     return SYSCALL_RET_VALUE(0);
 }
 
-syscall_ret_t syscall_sys_fs_getdents(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
-    uintptr_t ubuffer = args->arg2;
-    size_t ubuffer_size = args->arg3;
+SYSCALL_DEFINE(syscall_fs_getdents, SYSCALL_FS_GETDENTS, uint64_t, uint32_t, fd, void*, buffer, size_t, count);
+static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t fd, void* buffer_ptr, size_t count) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
@@ -470,26 +472,26 @@ syscall_ret_t syscall_sys_fs_getdents(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
     }
 
-    if(ubuffer_size == 0) {
+    if(count == 0) {
         return SYSCALL_RET_VALUE(0);
     }
 
-    char* buffer = heap_alloc(ubuffer_size);
+    char* buffer = heap_alloc(count);
     if(buffer == nullptr) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
-    memory_set(buffer, 0, ubuffer_size);
+    memory_set(buffer, 0, count);
 
     vfs_path_t dir_path = VFS_MAKE_REL_PATH(entry->node, "");
     size_t offset = entry->offset;
     size_t used = 0;
 
-    while(used < ubuffer_size) {
+    while(used < count) {
         size_t prev_offset = offset;
         vfs_dentry_t* child = nullptr;
         vfs_result_t result = vfs_read_dir(&dir_path, &offset, &child);
         if(result != VFS_RESULT_OK) {
-            heap_free(buffer, ubuffer_size);
+            heap_free(buffer, count);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
         }
 
@@ -507,12 +509,12 @@ syscall_ret_t syscall_sys_fs_getdents(syscall_args_t* args) {
             size_t raw = offsetof(uapi_dirent_t, d_name) + name_len + 1;
             reclen = MATH_ALIGN_UP(raw, alignof(uapi_dirent_t));
         }
-        if(used + reclen > ubuffer_size) {
+        if(used + reclen > count) {
             offset = prev_offset;
             vfs_dentry_put(child);
 
             if(used == 0) {
-                heap_free(buffer, ubuffer_size);
+                heap_free(buffer, count);
                 return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
             }
             break;
@@ -550,25 +552,24 @@ syscall_ret_t syscall_sys_fs_getdents(syscall_args_t* args) {
     entry->offset = offset;
 
     if(used == 0) {
-        heap_free(buffer, ubuffer_size);
+        heap_free(buffer, count);
         return SYSCALL_RET_VALUE(0);
     }
 
-    vm_copy_to(process->address_space, ubuffer, buffer, used);
-    heap_free(buffer, ubuffer_size);
+    vm_copy_to(process->address_space, (uintptr_t) buffer_ptr, buffer, used);
+    heap_free(buffer, count);
 
-    LOG_UTRC("fd=%d, ubuffer=0x%lx, max_size=%ld, offset=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, entry->offset, used);
+    LOG_UTRC("fd=%d, buffer=0x%lx, max_size=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, entry->offset, used);
     return SYSCALL_RET_VALUE(used);
 }
 
-syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args) {
-    uint32_t fd = args->arg1;
-    uintptr_t ubuffer = args->arg3;
-    size_t ubuffer_size = args->arg4;
+SYSCALL_DEFINE(syscall_fs_readlinkat, SYSCALL_FS_READLINKAT, uint64_t, uint32_t, fd, void*, path, void*, buffer, size_t, count);
+static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32_t fd, void* path_ptr, void* buffer_ptr, size_t count) {
+    (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    userptr_t* upath = userptr_create_string(args->arg2, UAPI_LIMITS_PATH_MAX - 1);
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
     if(!upath) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
     }
@@ -632,17 +633,17 @@ syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
 
-    size_t count = attr.size;
-    if(count > ubuffer_size) {
-        count = ubuffer_size;
+    size_t link_size = attr.size;
+    if(link_size > count) {
+        link_size = count;
     }
 
-    if(count == 0) {
+    if(link_size == 0) {
         vfs_node_put(node);
         return SYSCALL_RET_VALUE(0);
     }
 
-    char* buffer = heap_alloc(count);
+    char* buffer = heap_alloc(link_size);
     if(buffer == nullptr) {
         vfs_node_put(node);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
@@ -651,7 +652,7 @@ syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args) {
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
     io_req.read.buffer = buffer;
-    io_req.read.count = count;
+    io_req.read.count = link_size;
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;
     io_req.no_block = false;
@@ -660,13 +661,13 @@ syscall_ret_t syscall_sys_fs_readlinkat(syscall_args_t* args) {
     vfs_node_put(node);
 
     if(result != VFS_RESULT_OK) {
-        heap_free(buffer, count);
+        heap_free(buffer, link_size);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
 
-    vm_copy_to(process->address_space, ubuffer, buffer, io_req.read.bytes_read);
-    heap_free(buffer, count);
+    vm_copy_to(process->address_space, (uintptr_t) buffer_ptr, buffer, io_req.read.bytes_read);
+    heap_free(buffer, link_size);
 
-    LOG_UTRC("fd=%d, ubuffer=0x%lx, max_size=%ld | result=%ld\n", fd, ubuffer, ubuffer_size, io_req.read.bytes_read);
+    LOG_UTRC("fd=%d, buffer=0x%lx, max_size=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, io_req.read.bytes_read);
     return SYSCALL_RET_VALUE(io_req.read.bytes_read);
 }
