@@ -341,6 +341,16 @@ static syscall_ret_t read_user_string_array(userptr_t* u_array, size_t* byte_cou
 }
 
 static syscall_ret_t execve_internal(vfs_node_t* node, uintptr_t argv_ptr, uintptr_t envp_ptr) {
+    vfs_node_attr_t attributes;
+    vfs_result_t res = vfs_get_attributes_node(node, &attributes);
+    if(res != VFS_RESULT_OK) {
+        return syscall_from_vfs_result(res);
+    }
+
+    if(attributes.type == VFS_NODE_TYPE_DIR) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
+    }
+
     userptr_t* u_argv = userptr_create_array(argv_ptr, sizeof(char*));
     if(u_argv == nullptr) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);

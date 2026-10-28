@@ -56,19 +56,27 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         return "SUCCESS";
     }
     switch(ret.err) {
-        case SYSCALL_ERROR_NOENT:  return "ERROR_NOENT";
-        case SYSCALL_ERROR_SEARCH: return "ERROR_SEARCH";
-        case SYSCALL_ERROR_CHILD:  return "ERROR_CHILD";
-        case SYSCALL_ERROR_NOMEM:  return "ERROR_NOMEM";
-        case SYSCALL_ERROR_FAULT:  return "ERROR_FAULT";
-        case SYSCALL_ERROR_INVAL:  return "ERROR_INVAL";
-        case SYSCALL_ERROR_NOTDIR: return "ERROR_NOTDIR";
-        case SYSCALL_ERROR_SPIPE:  return "ERROR_SPIPE";
-        case SYSCALL_ERROR_ROFS:   return "ERROR_ROFS";
-        case SYSCALL_ERROR_RANGE:  return "ERROR_RANGE";
-        case SYSCALL_ERROR_BADFD:  return "ERROR_BADFD";
-        case SYSCALL_ERROR_AGAIN:  return "ERROR_AGAIN";
-        default:                   arch_panic("Unknown syscall error code: %lu", ret.err);
+        case SYSCALL_ERROR_NOENT:    return "ERROR_NOENT";
+        case SYSCALL_ERROR_SEARCH:   return "ERROR_SEARCH";
+        case SYSCALL_ERROR_INTR:     return "ERROR_INTR";
+        case SYSCALL_ERROR_TOO_BIG:  return "ERROR_TOO_BIG";
+        case SYSCALL_ERROR_NO_EXEC:  return "ERROR_NO_EXEC";
+        case SYSCALL_ERROR_CHILD:    return "ERROR_CHILD";
+        case SYSCALL_ERROR_AGAIN:    return "ERROR_AGAIN";
+        case SYSCALL_ERROR_NOMEM:    return "ERROR_NOMEM";
+        case SYSCALL_ERROR_FAULT:    return "ERROR_FAULT";
+        case SYSCALL_ERROR_NOTDIR:   return "ERROR_NOTDIR";
+        case SYSCALL_ERROR_ISDIR:    return "ERROR_ISDIR";
+        case SYSCALL_ERROR_INVAL:    return "ERROR_INVAL";
+        case SYSCALL_ERROR_NOSYS:    return "ERROR_NOSYS";
+        case SYSCALL_ERROR_NOTTY:    return "ERROR_NOTTY";
+        case SYSCALL_ERROR_SPIPE:    return "ERROR_SPIPE";
+        case SYSCALL_ERROR_ROFS:     return "ERROR_ROFS";
+        case SYSCALL_ERROR_RANGE:    return "ERROR_RANGE";
+        case SYSCALL_ERROR_LOOP:     return "ERROR_LOOP";
+        case SYSCALL_ERROR_BADFD:    return "ERROR_BADFD";
+        case SYSCALL_ERROR_TIMEDOUT: return "ERROR_TIMEDOUT";
+        default:                     arch_panic("Unknown syscall error code: %lu", ret.err);
     }
 }
 

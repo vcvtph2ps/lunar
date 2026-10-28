@@ -199,8 +199,6 @@ bool ldr_setup_process(vm_address_space_t* address_space, vfs_node_t* node, cons
         return false;
     }
 
-    assert(attributes.type == VFS_NODE_TYPE_FILE);
-
     size_t sniff_size = math_min(attributes.size, (size_t) LDR_MAGIC_SNIFF_SIZE);
     if(sniff_size == 0) {
         LOG_FAIL("ldr: file is empty\n");
@@ -232,7 +230,6 @@ bool ldr_setup_process(vm_address_space_t* address_space, vfs_node_t* node, cons
     heap_free(buffer, sniff_size);
 
     if(loader == nullptr) {
-        // @TODO: #!interpreter [optional-one-arg-only]
         LOG_FAIL("ldr: failed to find a loader for the file\n");
         return false;
     }
