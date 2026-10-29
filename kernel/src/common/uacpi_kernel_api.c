@@ -5,32 +5,32 @@
 #include <common/init.h>
 #include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
+#include <common/log.h>
 #include <common/sched/sched.h>
 #include <common/sync/lock.h>
+#include <common/sync/spinlock.h>
 #include <common/sync/wait_obj.h>
 #include <common/time/time.h>
+#include <lib/helpers.h>
 #include <lib/list.h>
+#include <lib/types.h>
+#include <memory/heap.h>
+#include <memory/pagedb.h>
+#include <memory/ptm.h>
+#include <memory/vm.h>
 #include <stdint.h>
-
-#include "memory/ptm.h"
+#include <uacpi/kernel_api.h>
+#include <uacpi/log.h>
+#include <uacpi/platform/arch_helpers.h>
+#include <uacpi/status.h>
 
 #if defined(__x86_64__)
 #include <arch/x86_64/hardware/ioapic.h>
 #include <arch/x86_64/interrupts/interrupt_alloc.h>
 #include <arch/x86_64/io.h>
+#elif defined(__riscv) && __riscv_xlen == 64
+#include <arch/riscv64/io.h>
 #endif
-
-#include <common/log.h>
-#include <common/sync/spinlock.h>
-#include <lib/helpers.h>
-#include <lib/types.h>
-#include <memory/heap.h>
-#include <memory/pagedb.h>
-#include <memory/vm.h>
-#include <uacpi/kernel_api.h>
-#include <uacpi/log.h>
-#include <uacpi/platform/arch_helpers.h>
-#include <uacpi/status.h>
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr* out_rsdp_address) {
     if(!g_init_boot_info->rdsp_physical) {
