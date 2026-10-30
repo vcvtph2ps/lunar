@@ -70,6 +70,8 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_TIME, 0);
     run_stage(INIT_STAGE_SCHED, 0);
 
+    arch_start_aps();
+
     thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
     ATOMIC_STORE(&thread->sched.migratable, false, ATOMIC_SEQ_CST);
 

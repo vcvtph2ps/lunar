@@ -274,3 +274,27 @@ void arch_lapic_broadcast_ipi(uint8_t vector) {
 
     lapic_send_icr(0, icr);
 }
+
+void arch_lapic_send_init(uint32_t apic_id) {
+    uint64_t icr = 0;
+
+    icr |= LAPIC_LEVEL_ASSERT;
+    icr |= LAPIC_DELMODE_INIT;
+
+    lapic_send_icr(apic_id, icr);
+}
+
+void arch_lapic_send_startup(uint32_t apic_id, uintptr_t startup_page) {
+    size_t startup_cs = startup_page / PAGE_SIZE_DEFAULT;
+    if(startup_cs > 0xFF) {
+        arch_panic("lapic: startup page 0x%lx exceeds 0xFF000", startup_page);
+    }
+
+    uint64_t icr = 0;
+
+    icr |= LAPIC_LEVEL_ASSERT;
+    icr |= LAPIC_DELMODE_STARTUP;
+    icr |= startup_cs;
+
+    lapic_send_icr(apic_id, icr);
+}

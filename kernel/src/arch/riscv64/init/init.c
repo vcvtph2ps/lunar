@@ -1,4 +1,5 @@
 #include <common/arch.h>
+#include <common/assert.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <lib/helpers.h>
@@ -46,6 +47,10 @@ void arch_init_bsp() {
     while(1) {
         arch_spin_hint();
     }
+}
+
+[[noreturn]] void arch_start_aps() {
+    ASSERT_TODO();
 }
 
 void arch_init_ap(uint32_t core_id) {

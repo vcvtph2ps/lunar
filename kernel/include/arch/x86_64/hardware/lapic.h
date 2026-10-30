@@ -44,6 +44,19 @@ void arch_lapic_send_ipi(uint32_t apic_id, uint8_t vector);
 void arch_lapic_broadcast_ipi(uint8_t vector);
 
 /**
+ * @brief Sends an INIT IPI to the processor with the specified APIC ID
+ * @param apic_id The APIC ID of the target processor.
+ */
+void arch_lapic_send_init(uint32_t apic_id);
+
+/**
+ * @brief Sends a startup IPI to the processor with the specified APIC ID.
+ * @param apic_id The APIC ID of the target processor.
+ * @param startup_page The physical address of the page the processor should start executing from. Must be below 1 MiB and page aligned.
+ */
+void arch_lapic_send_startup(uint32_t apic_id, uintptr_t startup_page);
+
+/**
  * @brief Reads a value from the specified LAPIC register.
  * @param reg The LAPIC register to read from.
  * @return The value read from the specified LAPIC register.

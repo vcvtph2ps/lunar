@@ -1,6 +1,7 @@
 #include <common/arch.h>
 #include <common/cmdline.h>
 #include <common/cpu_local.h>
+#include <common/init.h>
 #include <common/log.h>
 #include <lib/helpers.h>
 #include <lib/ksym.h>
@@ -29,7 +30,7 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
-[[noreturn]] static void kernel_entry_ap(uint64_t core_id) {
+[[noreturn]] void init_kernel_entry_ap(uint64_t core_id) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0) {
         arch_spin_hint();
     }
@@ -55,11 +56,7 @@ const char* memmap_type_to_string(uint64_t type) {
     }
 }
 
-[[gnu::used, noreturn]] void kernel_entry(bootinfo_t* boot_info, uint64_t core_id) {
-    if(core_id != 0) {
-        kernel_entry_ap(core_id);
-    }
-
+[[gnu::used, noreturn]] void kernel_entry(bootinfo_t* boot_info) {
     g_init_boot_info = boot_info;
     cpu_local_init_bsp(boot_info->cpulocal_start);
     log_init();
@@ -184,7 +181,6 @@ const char* memmap_type_to_string(uint64_t type) {
     }
 
     LOG_KTRC("cpu_count=%ld\n", boot_info->core_count);
-
     pagedb_init();
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);

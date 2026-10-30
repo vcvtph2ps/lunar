@@ -28,6 +28,14 @@ void pmm_init(uint32_t core_id);
 [[nodiscard]] uintptr_t pmm_alloc_page(pmm_flag_t flags);
 
 /**
+ * @brief Allocates a single page of physical memory from the low (<1 MiB) freelist.
+ * @param flags A bitfield of pmm_flag_t values that modify the behavior of the allocation.
+ * @return The physical address of the allocated page, or 0 if no free pages are available and PMM_FLAG_PANIC is not set.
+ * @note This memory is only intended for the real mode application processor trampoline.
+ */
+[[nodiscard]] uintptr_t pmm_alloc_page_low(pmm_flag_t flags);
+
+/**
  * @brief Frees a single page of physical memory at the given address, returning it to the allocator.
  * @note If the page's reference count is greater than 0, the reference count will be decremented but the page will not be returned to the allocator.
  * @param addr The physical address of the page to free. Must be aligned to the page

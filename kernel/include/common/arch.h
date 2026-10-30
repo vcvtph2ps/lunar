@@ -64,6 +64,11 @@ void arch_panic_int(arch_interrupt_frame_t* frame);
 [[noreturn]] void arch_init_ap(uint32_t core_id);
 
 /**
+ * @brief Bring up every ap discovered by the prekernel
+ */
+void arch_start_aps();
+
+/**
  * @brief Initializes architecture specific logging, such as serial output
  */
 void arch_log_init();

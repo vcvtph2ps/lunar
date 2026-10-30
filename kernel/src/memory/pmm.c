@@ -13,12 +13,32 @@
 #define PMM_LOCAL_PAGE_MIN 25
 #define PMM_LOCAL_PAGE_MAX 30
 
+// Memory below this address is carved off into its own freelist
+#define PMM_LOW_MEMORY_END 0x100000
+
 static pmm_t g_pmm;
+static pmm_t g_pmm_low;
+
+static void populate_list(pmm_t* pmm, uintptr_t start, uintptr_t end) {
+    for(uintptr_t addr = start; addr < end; addr += ARCH_PAGE_SIZE_DEFAULT) {
+        uint64_t pfn = addr >> 12;
+        pagedb_page_t* page = pagedb_get_page(pfn);
+        assert(page != nullptr);
+        ATOMIC_STORE(&page->type, PAGEDB_ENTRY_TYPE_FREE, ATOMIC_RELAXED);
+        ATOMIC_STORE(&page->free.next_pfn, pmm->free_list_pfn, ATOMIC_RELAXED);
+        pmm->free_list_pfn = pfn;
+        pmm->num_pages++;
+    }
+}
 
 static void populate_global() {
     g_pmm.num_pages = 0;
     g_pmm.free_list_pfn = 0;
     g_pmm.pmm_lock = SPINLOCK_NO_DPC_INIT;
+
+    g_pmm_low.num_pages = 0;
+    g_pmm_low.free_list_pfn = 0;
+    g_pmm_low.pmm_lock = SPINLOCK_NO_DPC_INIT;
 
     for(size_t i = 0; i < g_init_boot_info->mm_entry_count; i++) {
         bootinfo_mm_entry_t* entry = &g_init_boot_info->mm_entries[i];
@@ -28,14 +48,16 @@ static void populate_global() {
 
         uintptr_t start = entry->phys_base;
         uintptr_t end = entry->phys_base + entry->length;
-        for(uintptr_t addr = start; addr < end; addr += ARCH_PAGE_SIZE_DEFAULT) {
-            uint64_t pfn = addr >> 12;
-            pagedb_page_t* page = pagedb_get_page(pfn);
-            assert(page != nullptr);
-            ATOMIC_STORE(&page->type, PAGEDB_ENTRY_TYPE_FREE, ATOMIC_RELAXED);
-            ATOMIC_STORE(&page->free.next_pfn, g_pmm.free_list_pfn, ATOMIC_RELAXED);
-            g_pmm.free_list_pfn = pfn;
-            g_pmm.num_pages++;
+
+        // carve off the first megabyte into its own freelist
+        uintptr_t low_end = end < PMM_LOW_MEMORY_END ? end : PMM_LOW_MEMORY_END;
+        if(start < low_end) {
+            populate_list(&g_pmm_low, start, low_end);
+        }
+
+        uintptr_t high_start = start > PMM_LOW_MEMORY_END ? start : PMM_LOW_MEMORY_END;
+        if(high_start < end) {
+            populate_list(&g_pmm, high_start, end);
         }
     }
 }
@@ -129,6 +151,10 @@ uintptr_t pmm_alloc_page(pmm_flag_t flags) {
 
     uintptr_t addr = alloc_page_from(&CPU_LOCAL_GET_SELF()->pmm, flags);
     return addr;
+}
+
+uintptr_t pmm_alloc_page_low(pmm_flag_t flags) {
+    return alloc_page_from(&g_pmm_low, flags);
 }
 
 void pmm_free_page(uintptr_t addr) {

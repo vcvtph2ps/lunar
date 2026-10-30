@@ -26,6 +26,12 @@ typedef struct {
 
 extern bootinfo_t* g_init_boot_info;
 
+/**
+ * @brief Entry point for an application processor started by the kernel
+ * @param core_id The core id of the application processor
+ */
+[[noreturn]] void init_kernel_entry_ap(uint64_t core_id);
+
 const char* init_stage_to_str(init_stage_t stage);
 [[nodiscard]] bool init_stage_from_str(const char* str, init_stage_t* stage);
 
