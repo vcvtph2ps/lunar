@@ -33,7 +33,11 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
     for(size_t i = 0; i < sizeof(g_init_stage_handlers) / sizeof(init_stage_handler_t); i++) {
         if(g_init_stage_handlers[i].stage == stage) {
             g_init_stage_handlers[i].handler(core_id);
-            LOG_KTRC("finished stage %s (%i) on core %d (%s)\n", init_stage_to_str(stage), stage, core_id, INIT_CORE_IS_BSP(core_id) ? "bsp" : "ap");
+            if(core_id == 0) {
+                LOG_OKAY("finished stage %s (%i) on bsp\n", init_stage_to_str(stage), stage);
+            } else {
+                LOG_KTRC("finished stage %s (%i) on core %d (ap)\n", init_stage_to_str(stage), stage, core_id);
+            }
             found = true;
             break;
         }
@@ -65,6 +69,7 @@ static void arch_init_thread() {
 }
 
 void arch_init_bsp() {
+    LOG_OKAY("Starting early bsp init\n");
     run_stage(INIT_STAGE_BASE_MEM, 0);
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     run_stage(INIT_STAGE_TIME, 0);

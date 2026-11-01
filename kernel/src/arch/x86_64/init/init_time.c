@@ -33,14 +33,19 @@ static void register_timer(timer_registry_t* registry, time_timer_t* timer) {
 }
 
 void init_stage_time(uint32_t core_id) {
+    if(INIT_CORE_IS_AP(core_id)) {
+        arch_lapic_timer_init(core_id);
+        return;
+    }
+    
+    arch_lapic_timer_init(core_id);
+
     timer_registry_t registry = {};
 
     register_timer(&registry, arch_pit_timer_get());
     register_timer(&registry, arch_kvm_pvclock_init());
     register_timer(&registry, arch_tsc_init_timer(registry.best_timer));
-    arch_lapic_timer_init(core_id, registry.best_timer);
+    arch_lapic_timer_calibrate(registry.best_timer);
 
-    if(INIT_CORE_IS_BSP(core_id)) {
-        time_init(registry.best_timer);
-    }
+    time_init(registry.best_timer);
 }

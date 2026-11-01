@@ -4,11 +4,17 @@
 #include <stdint.h>
 
 /**
- * @brief Initializes the LAPIC timer for the current core and calibrates it using the provided calibration timer.
- * @param core_id The ID of the current core.
+ * @brief calibrates the lapic it using the provided calibration timer.
  * @param calibration_timer A pointer to a time_timer_t structure used for calibration.
+ * @note should only be called on the bsp
  */
-void arch_lapic_timer_init(uint32_t core_id, time_timer_t* calibration_timer);
+void arch_lapic_timer_calibrate(time_timer_t* calibration_timer);
+
+/**
+ * @brief Initializes the LAPIC timer for the current core
+ * @param core_id The ID of the current core.
+ */
+void arch_lapic_timer_init(uint32_t core_id);
 
 /**
  * @brief Configures the LAPIC timer to fire a one-shot interrupt after the specified number of microseconds.

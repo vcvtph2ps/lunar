@@ -127,6 +127,6 @@ void arch_start_aps() {
         if(!booted) {
             arch_panic("failed to start core %lu (lapic id %u)", i, lapic_id);
         }
-        LOG_OKAY("started core %lu (lapic id %u)\n", i, lapic_id);
     }
+    LOG_OKAY("sucessfully started all cores\n");
 }

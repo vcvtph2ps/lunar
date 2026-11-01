@@ -44,8 +44,6 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_gdt_t gdt;
     arch_gdt_tss_t tss;
 
-    uint32_t lapic_timer_ticks_per_us;
-    uint32_t tsc_ticks_per_us;
     time_timer_t* kvm_pvclock;
 };
 

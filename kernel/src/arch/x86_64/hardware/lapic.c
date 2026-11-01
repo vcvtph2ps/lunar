@@ -213,7 +213,9 @@ void arch_lapic_init(uint32_t core_id) {
 
     lapic_configure();
     g_lapic_initialized = true;
-    LOG_OKAY("initialized in %s mode for lapic %d\n", g_x2apic_mode ? "x2APIC" : "xAPIC", arch_lapic_get_id());
+    if(INIT_CORE_IS_BSP(core_id)) {
+        LOG_OKAY("initialized lapic in %s mode\n", g_x2apic_mode ? "x2APIC" : "xAPIC");
+    }
 }
 
 static void lapic_send_icr(uint32_t apic_id, uint64_t icr) {
