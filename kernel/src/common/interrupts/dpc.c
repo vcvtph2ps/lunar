@@ -109,7 +109,7 @@ void dpc_disable() {
 }
 
 void dpc_enable() {
-    if(internal_enable()) {
+    if(internal_enable() && CPU_LOCAL_READ(dpc_queue.queue.count) != 0) {
         dpc_process();
     }
 }
