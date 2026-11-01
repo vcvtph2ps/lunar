@@ -16,14 +16,21 @@
 
 void sched_preempt_disable() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) < UINT32_MAX);
-    ATOMIC_LOAD_ADD(&CPU_LOCAL_GET_SELF()->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
+    CPU_LOCAL_INC(scheduler.preempt_counter);
 }
 
 void sched_preempt_enable() {
     size_t count = CPU_LOCAL_READ(scheduler.preempt_counter);
     assert(count > 0);
-    bool yield = count == 1 && CPU_LOCAL_EXCHANGE(scheduler.yield_pending, false);
-    ATOMIC_LOAD_SUB(&CPU_LOCAL_GET_SELF()->scheduler.preempt_counter, 1, ATOMIC_SEQ_CST);
+
+    bool yield = false;
+    if(count == 1 && CPU_LOCAL_READ(scheduler.yield_pending)) {
+        (void) CPU_LOCAL_EXCHANGE(scheduler.yield_pending, false);
+        yield = true;
+    }
+
+    CPU_LOCAL_DEC(scheduler.preempt_counter);
+
     if(yield)
         sched_yield();
 }
