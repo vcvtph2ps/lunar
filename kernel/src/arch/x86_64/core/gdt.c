@@ -3,18 +3,25 @@
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/vm.h>
+#include <stddef.h>
 
 #define DEFINE_SEGMENT(ACCESS, FLAGS) { .limit_low = 0, .base_low = 0, .base_mid = 0, .access = (ACCESS), .limit_high_flags = ((FLAGS) << 4), .base_high = 0 }
 
+/// The layout is constrained by IA32_STAR
+/// @see: src/arch/x86_64/userspace/syscall.c
 const arch_gdt_t g_arch_gdt_static_data = {
     {}, // null @ 0x00
-    DEFINE_SEGMENT(0x9b, 0xA), // lmode kernel code @ 0x08
-    DEFINE_SEGMENT(0x93, 0xC), // lmode kernel data @ 0x10
-    DEFINE_SEGMENT(0xfb, 0xA), // cmode user code @ 0x18
-    DEFINE_SEGMENT(0xf3, 0xC), // lmode user data @ 0x20
-    DEFINE_SEGMENT(0xfb, 0xA), // lmode user code @ 0x28
+    DEFINE_SEGMENT(0x9b, 0xA), // 64 bit kernel code @ 0x08
+    DEFINE_SEGMENT(0x93, 0xC), // 64 bit kernel data @ 0x10
+    DEFINE_SEGMENT(0xfb, 0xA), // 32 bit user code @ 0x18
+    DEFINE_SEGMENT(0xf3, 0xC), // 64 bit user data @ 0x20
+    DEFINE_SEGMENT(0xfb, 0xA), // 64 bit user code @ 0x28
     {} // tss @ 0x30
 };
+
+static_assert(offsetof(arch_gdt_t, kernel_code) + 8 == offsetof(arch_gdt_t, kernel_data));
+static_assert(offsetof(arch_gdt_t, user_code_32) + 8 == offsetof(arch_gdt_t, user_data));
+static_assert(offsetof(arch_gdt_t, user_code_32) + 16 == offsetof(arch_gdt_t, user_code));
 
 static void gdt_set_tss(arch_gdt_t* gdt, arch_gdt_tss_t* tss) {
     uint32_t tss_limit = sizeof(arch_gdt_tss_t) - 1;
@@ -53,5 +60,6 @@ void arch_gdt_init() {
     arch_gdt_ptr_t gdtr;
     gdtr.limit = sizeof(arch_gdt_t) - 1;
     gdtr.base = (uint64_t) gdt;
-    x86_64_load_gdt(&gdtr, 0x08, 0x10, 0x30);
+
+    x86_64_load_gdt(&gdtr, offsetof(arch_gdt_t, kernel_code), offsetof(arch_gdt_t, kernel_data), offsetof(arch_gdt_t, tss));
 }
