@@ -81,6 +81,22 @@ static void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
     return object;
 }
 
+static size_t slab_cache_alloc_many_from_slab(slab_cache_t* cache, void** objects, size_t object_count) {
+    spinlock_no_dpc_lock(&cache->slab_lock);
+
+    for(size_t i = 0; i < object_count; i++) {
+        void* object = slab_cache_alloc_from_slab_lockless(cache);
+        objects[i] = object;
+        if(object == nullptr) {
+            spinlock_no_dpc_unlock(&cache->slab_lock);
+            return i;
+        }
+    }
+
+    spinlock_no_dpc_unlock(&cache->slab_lock);
+    return object_count;
+}
+
 // @safety: assumes cache->slab_lock is held
 static void slab_cache_free_to_slab_lockless(slab_cache_t* cache, void* object) {
     slab_t* slab = (slab_t*) (ALIGN_DOWN((uintptr_t) object, cache->slab_align) + cache->slab_size - sizeof(slab_t));
@@ -108,6 +124,16 @@ static void slab_cache_free_to_slab_lockless(slab_cache_t* cache, void* object) 
 static void slab_cache_free_to_slab(slab_cache_t* cache, void* object) {
     spinlock_no_dpc_lock(&cache->slab_lock);
     slab_cache_free_to_slab_lockless(cache, object);
+    spinlock_no_dpc_unlock(&cache->slab_lock);
+}
+
+static void slab_cache_free_many_to_slab(slab_cache_t* cache, void** objects, size_t object_count) {
+    spinlock_no_dpc_lock(&cache->slab_lock);
+
+    for(size_t i = 0; i < object_count; i++) {
+        slab_cache_free_to_slab_lockless(cache, objects[i]);
+    }
+
     spinlock_no_dpc_unlock(&cache->slab_lock);
 }
 
@@ -224,7 +250,16 @@ void* slab_cache_alloc(slab_cache_t* cache) {
 
     spinlock_no_dpc_unlock(&cache->magazine_lock);
 
-    ptr = slab_cache_alloc_from_slab(cache);
+    size_t count = slab_cache_alloc_many_from_slab(cache, cc->primary->objects, SLAB_MAGAZINE_SIZE);
+    cc->primary->rounds = count;
+
+    if(count == 0) {
+        dpc_enable();
+        sched_preempt_enable();
+        return nullptr;
+    }
+
+    ptr = cc->primary->objects[--cc->primary->rounds];
 
     dpc_enable();
     sched_preempt_enable();
@@ -262,7 +297,15 @@ void slab_cache_free(slab_cache_t* cache, void* ptr) {
     }
 
     spinlock_no_dpc_unlock(&cache->magazine_lock);
-    slab_cache_free_to_slab(cache, ptr);
+
+
+    slab_cache_free_many_to_slab(cache, cc->secondary->objects, cc->secondary->rounds);
+    cc->secondary->rounds = 0;
+
+    slab_magazine_t* temp = cc->secondary;
+    cc->secondary = cc->primary;
+    cc->primary = temp;
+    cc->primary->objects[cc->primary->rounds++] = ptr;
 
     dpc_enable();
     sched_preempt_enable();
