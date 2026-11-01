@@ -20,8 +20,6 @@ struct slab_magazine {
 };
 
 struct slab_cpu_cache {
-    spinlock_no_dpc_t lock;
-
     slab_magazine_t* primary;
     slab_magazine_t* secondary;
 };

@@ -45,98 +45,8 @@ static void slab_cache_destroy_slab(slab_cache_t* cache, slab_t* slab) {
     vm_unmap(g_vm_global_address_space, (void*) slab->buffer, cache->slab_size);
 }
 
-static void slab_cache_free_to_slab(slab_cache_t* cache, void* ptr) {
-    slab_t* slab = (slab_t*) (ALIGN_DOWN((uintptr_t) ptr, cache->slab_align) + cache->slab_size - sizeof(slab_t));
-
-    spinlock_no_dpc_lock(&cache->slab_lock);
-
-    if(slab->free_count == 0) {
-        list_node_delete(&cache->slab_full_list, &slab->list_node);
-        list_push(&cache->slab_partial_list, &slab->list_node);
-    }
-
-    if(slab->free_count + 1 == (cache->slab_size - sizeof(slab_t)) / cache->object_size) {
-        list_node_delete(&cache->slab_partial_list, &slab->list_node);
-
-        if(cache->slab_empty) {
-            slab_cache_destroy_slab(cache, cache->slab_empty);
-        }
-        cache->slab_empty = slab;
-    }
-
-    *(void**) ptr = slab->free_list;
-    assert(ptr != nullptr);
-    slab->free_list = ptr;
-    slab->free_count++;
-
-    spinlock_no_dpc_unlock(&cache->slab_lock);
-}
-
-void slab_cache_destroy(slab_cache_t* cache) {
-    if(!cache)
-        return;
-
-    spinlock_no_dpc_lock(&g_slab_caches_lock);
-    list_node_delete(&g_slab_caches, &cache->list_node);
-    spinlock_no_dpc_unlock(&g_slab_caches_lock);
-
-    if(cache->cpu_cached) {
-        for(size_t i = 0; i < g_init_boot_info->core_count; i++) {
-            slab_cpu_cache_t* cc = &cache->cpu_caches[i];
-            spinlock_no_dpc_lock(&cc->lock);
-            if(cc->primary) {
-                for(size_t j = 0; j < cc->primary->rounds; j++) {
-                    slab_cache_free_to_slab(cache, cc->primary->objects[j]);
-                }
-                cc->primary->rounds = 0;
-                slab_cache_free(&g_alloc_magazine, cc->primary);
-                cc->primary = nullptr;
-            }
-            if(cc->secondary) {
-                for(size_t j = 0; j < cc->secondary->rounds; j++) {
-                    slab_cache_free_to_slab(cache, cc->secondary->objects[j]);
-                }
-                cc->secondary->rounds = 0;
-                slab_cache_free(&g_alloc_magazine, cc->secondary);
-                cc->secondary = nullptr;
-            }
-            spinlock_no_dpc_unlock(&cc->lock);
-        }
-    }
-
-    spinlock_no_dpc_lock(&cache->magazine_lock);
-    while(cache->magazine_full_list.count > 0) {
-        slab_magazine_t* magazine = CONTAINER_OF(list_pop_front(&cache->magazine_full_list), slab_magazine_t, list_node);
-        for(size_t i = 0; i < magazine->rounds; i++) {
-            slab_cache_free_to_slab(cache, magazine->objects[i]);
-        }
-        magazine->rounds = 0;
-        slab_cache_free(&g_alloc_magazine, magazine);
-    }
-
-    while(cache->magazine_empty_list.count > 0) {
-        slab_magazine_t* magazine = CONTAINER_OF(list_pop_front(&cache->magazine_empty_list), slab_magazine_t, list_node);
-        slab_cache_free(&g_alloc_magazine, magazine);
-    }
-
-    spinlock_no_dpc_unlock(&cache->magazine_lock);
-
-    spinlock_no_dpc_lock(&cache->slab_lock);
-    assert(cache->slab_full_list.count == 0 && "Attempted to destroy slab cache with full slabs (leaked objects)");
-    assert(cache->slab_partial_list.count == 0 && "Attempted to destroy slab cache with partial slabs (leaked objects)");
-
-    if(cache->slab_empty) {
-        slab_cache_destroy_slab(cache, cache->slab_empty);
-        cache->slab_empty = nullptr;
-    }
-    spinlock_no_dpc_unlock(&cache->slab_lock);
-
-    slab_cache_free(&g_alloc_cache, cache);
-}
-
-static void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
-    spinlock_no_dpc_lock(&cache->slab_lock);
-
+// @safety: assumes cache->slab_lock is held, **will** try to unlock it if required
+static void* slab_cache_alloc_from_slab_lockless(slab_cache_t* cache) {
     if(cache->slab_partial_list.count == 0) {
         if(cache->slab_empty) {
             list_push(&cache->slab_partial_list, &cache->slab_empty->list_node);
@@ -161,12 +71,47 @@ static void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
         list_push(&cache->slab_full_list, &slab->list_node);
     }
 
-    spinlock_no_dpc_unlock(&cache->slab_lock);
     return ptr;
 }
 
+static void* slab_cache_alloc_from_slab(slab_cache_t* cache) {
+    spinlock_no_dpc_lock(&cache->slab_lock);
+    void* object = slab_cache_alloc_from_slab_lockless(cache);
+    spinlock_no_dpc_unlock(&cache->slab_lock);
+    return object;
+}
 
-// Since we only ever touch the cpu cache on it's owning cpu, so we don't need to do any preemption/DPC bookkeeping, disabling interrupts is enough
+// @safety: assumes cache->slab_lock is held
+static void slab_cache_free_to_slab_lockless(slab_cache_t* cache, void* object) {
+    slab_t* slab = (slab_t*) (ALIGN_DOWN((uintptr_t) object, cache->slab_align) + cache->slab_size - sizeof(slab_t));
+
+    if(slab->free_count == 0) {
+        list_node_delete(&cache->slab_full_list, &slab->list_node);
+        list_push(&cache->slab_partial_list, &slab->list_node);
+    }
+
+    if(slab->free_count + 1 == (cache->slab_size - sizeof(slab_t)) / cache->object_size) {
+        list_node_delete(&cache->slab_partial_list, &slab->list_node);
+
+        if(cache->slab_empty) {
+            slab_cache_destroy_slab(cache, cache->slab_empty);
+        }
+        cache->slab_empty = slab;
+    }
+
+    *(void**) object = slab->free_list;
+    assert(object != nullptr);
+    slab->free_list = object;
+    slab->free_count++;
+}
+
+static void slab_cache_free_to_slab(slab_cache_t* cache, void* object) {
+    spinlock_no_dpc_lock(&cache->slab_lock);
+    slab_cache_free_to_slab_lockless(cache, object);
+    spinlock_no_dpc_unlock(&cache->slab_lock);
+}
+
+// @safety: we call this function with dpcs and preemption already disabled
 static inline void* slab_cpu_alloc(slab_cpu_cache_t* cc) {
     if(cc->primary->rounds == 0 && cc->secondary->rounds == SLAB_MAGAZINE_SIZE) {
         slab_magazine_t* temp = cc->secondary;
@@ -181,6 +126,7 @@ static inline void* slab_cpu_alloc(slab_cpu_cache_t* cc) {
     return cc->primary->objects[--cc->primary->rounds];
 }
 
+// @safety: we call this function with dpcs and preemption already disabled
 static inline bool slab_cpu_free(slab_cpu_cache_t* cc, void* ptr) {
     if(cc->primary->rounds < SLAB_MAGAZINE_SIZE) {
         cc->primary->objects[cc->primary->rounds++] = ptr;
@@ -197,114 +143,6 @@ static inline bool slab_cpu_free(slab_cpu_cache_t* cc, void* ptr) {
     }
 
     return false;
-}
-
-static void* slab_cache_alloc_slow(slab_cache_t* cache) {
-    sched_preempt_disable();
-    dpc_disable();
-    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
-
-    (void) spinlock_no_dpc_lock(&cc->lock);
-
-    void* ptr = slab_cpu_alloc(cc);
-    if(ptr != nullptr) {
-        spinlock_no_dpc_unlock(&cc->lock);
-        dpc_enable();
-        sched_preempt_enable();
-        return ptr;
-    }
-
-    spinlock_no_dpc_lock(&cache->magazine_lock);
-
-    if(cache->magazine_full_list.count != 0) {
-        list_push(&cache->magazine_empty_list, &cc->secondary->list_node);
-        cc->secondary = cc->primary;
-        cc->primary = CONTAINER_OF(list_pop_front(&cache->magazine_full_list), slab_magazine_t, list_node);
-        spinlock_no_dpc_unlock(&cache->magazine_lock);
-        ptr = cc->primary->objects[--cc->primary->rounds];
-        spinlock_no_dpc_unlock(&cc->lock);
-        dpc_enable();
-        sched_preempt_enable();
-        return ptr;
-    }
-
-    spinlock_no_dpc_unlock(&cache->magazine_lock);
-    spinlock_no_dpc_unlock(&cc->lock);
-
-    ptr = slab_cache_alloc_from_slab(cache);
-    dpc_enable();
-    sched_preempt_enable();
-    return ptr;
-}
-
-void* slab_cache_alloc(slab_cache_t* cache) {
-    if(!cache->cpu_cached) {
-        return slab_cache_alloc_from_slab(cache);
-    }
-
-    arch_interrupt_state_t state = arch_interrupt_disable();
-    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
-    void* ptr = slab_cpu_alloc(cc);
-    arch_interrupt_restore(state);
-
-    if(ptr != nullptr) {
-        return ptr;
-    }
-
-    return slab_cache_alloc_slow(cache);
-}
-
-static void slab_cache_free_slow(slab_cache_t* cache, void* ptr) {
-    sched_preempt_disable();
-    dpc_disable();
-    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
-
-    spinlock_no_dpc_lock(&cc->lock);
-
-    if(slab_cpu_free(cc, ptr)) {
-        spinlock_no_dpc_unlock(&cc->lock);
-        dpc_enable();
-        sched_preempt_enable();
-        return;
-    }
-
-    spinlock_no_dpc_lock(&cache->magazine_lock);
-
-    if(cache->magazine_empty_list.count != 0) {
-        list_push(&cache->magazine_full_list, &cc->secondary->list_node);
-        cc->secondary = cc->primary;
-        cc->primary = CONTAINER_OF(list_pop_front(&cache->magazine_empty_list), slab_magazine_t, list_node);
-        spinlock_no_dpc_unlock(&cache->magazine_lock);
-
-        cc->primary->objects[cc->primary->rounds++] = ptr;
-        spinlock_no_dpc_unlock(&cc->lock);
-        dpc_enable();
-        sched_preempt_enable();
-        return;
-    }
-
-    spinlock_no_dpc_unlock(&cache->magazine_lock);
-    spinlock_no_dpc_unlock(&cc->lock);
-
-    slab_cache_free_to_slab(cache, ptr);
-    dpc_enable();
-    sched_preempt_enable();
-}
-
-void slab_cache_free(slab_cache_t* cache, void* ptr) {
-    if(!cache->cpu_cached) {
-        slab_cache_free_to_slab(cache, ptr);
-        return;
-    }
-
-    arch_interrupt_state_t state = arch_interrupt_disable();
-    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
-    bool freed = slab_cpu_free(cc, ptr);
-    arch_interrupt_restore(state);
-
-    if(!freed) {
-        slab_cache_free_slow(cache, ptr);
-    }
 }
 
 slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t alignment) {
@@ -344,7 +182,6 @@ slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t ali
             magazine_secondary->rounds = 0;
             for(size_t j = 0; j < SLAB_MAGAZINE_SIZE; j++) magazine_secondary->objects[j] = nullptr;
 
-            cache->cpu_caches[i].lock = SPINLOCK_NO_DPC_INIT;
             cache->cpu_caches[i].primary = magazine_primary;
             cache->cpu_caches[i].secondary = magazine_secondary;
         }
@@ -357,18 +194,78 @@ slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t ali
     return cache;
 }
 
-void slab_reclaim() {
-    spinlock_no_dpc_lock(&g_slab_caches_lock);
-    LIST_FOR_EACH(&g_slab_caches, node) {
-        slab_cache_t* cache = CONTAINER_OF(node, slab_cache_t, list_node);
-        spinlock_no_dpc_lock(&cache->slab_lock);
-        if(cache->slab_empty) {
-            slab_cache_destroy_slab(cache, cache->slab_empty);
-            cache->slab_empty = nullptr;
-        }
-        spinlock_no_dpc_unlock(&cache->slab_lock);
+void* slab_cache_alloc(slab_cache_t* cache) {
+    if(!cache->cpu_cached) {
+        return slab_cache_alloc_from_slab(cache);
     }
-    spinlock_no_dpc_unlock(&g_slab_caches_lock);
+
+    sched_preempt_disable();
+    dpc_disable();
+
+    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
+    void* ptr = slab_cpu_alloc(cc);
+    if(ptr != nullptr) {
+        dpc_enable();
+        sched_preempt_enable();
+        return ptr;
+    }
+    spinlock_no_dpc_lock(&cache->magazine_lock);
+
+    if(cache->magazine_full_list.count != 0) {
+        list_push(&cache->magazine_empty_list, &cc->secondary->list_node);
+        cc->secondary = cc->primary;
+        cc->primary = CONTAINER_OF(list_pop_front(&cache->magazine_full_list), slab_magazine_t, list_node);
+        spinlock_no_dpc_unlock(&cache->magazine_lock);
+        ptr = cc->primary->objects[--cc->primary->rounds];
+        dpc_enable();
+        sched_preempt_enable();
+        return ptr;
+    }
+
+    spinlock_no_dpc_unlock(&cache->magazine_lock);
+
+    ptr = slab_cache_alloc_from_slab(cache);
+
+    dpc_enable();
+    sched_preempt_enable();
+    return ptr;
+}
+
+void slab_cache_free(slab_cache_t* cache, void* ptr) {
+    if(!cache->cpu_cached) {
+        slab_cache_free_to_slab(cache, ptr);
+        return;
+    }
+
+    sched_preempt_disable();
+    dpc_disable();
+
+    slab_cpu_cache_t* cc = &cache->cpu_caches[arch_get_core_id()];
+    if(slab_cpu_free(cc, ptr)) {
+        dpc_enable();
+        sched_preempt_enable();
+        return;
+    }
+
+    spinlock_no_dpc_lock(&cache->magazine_lock);
+
+    if(cache->magazine_empty_list.count != 0) {
+        list_push(&cache->magazine_full_list, &cc->secondary->list_node);
+        cc->secondary = cc->primary;
+        cc->primary = CONTAINER_OF(list_pop_front(&cache->magazine_empty_list), slab_magazine_t, list_node);
+        spinlock_no_dpc_unlock(&cache->magazine_lock);
+
+        cc->primary->objects[cc->primary->rounds++] = ptr;
+        dpc_enable();
+        sched_preempt_enable();
+        return;
+    }
+
+    spinlock_no_dpc_unlock(&cache->magazine_lock);
+    slab_cache_free_to_slab(cache, ptr);
+
+    dpc_enable();
+    sched_preempt_enable();
 }
 
 void slab_init() {
