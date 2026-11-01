@@ -93,6 +93,7 @@ syscall_ret_t syscall_from_vfs_result(vfs_result_t result) {
     }
 }
 
+#if defined(__DEBUG__)
 static void print_value_with_type(sc_kind_t kind, uint64_t value) {
     switch(kind) {
         case SC_U64:  log_print_lockless(LOG_LEVEL_STRC, "%lu", (int64_t) value); break;
@@ -139,6 +140,7 @@ static void syscall_log_noreturn(const syscall_meta_t* meta, const syscall_args_
     log_print_lockless(LOG_LEVEL_STRC, ") = [no return]\n");
     log_lock_release(state);
 }
+#endif
 
 syscall_ret_t syscall_dispatch(syscall_args_t* args) {
     user_assert(args->syscall_nr < SYSCALL_HIGHEST_NR);
