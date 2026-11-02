@@ -14,12 +14,12 @@
 #include <lib/list.h>
 #include <memory/heap.h>
 
-void sched_preempt_disable() {
+[[clang::always_inline]] void sched_preempt_disable() {
     assert(CPU_LOCAL_READ(scheduler.preempt_counter) < UINT32_MAX);
     CPU_LOCAL_INC(scheduler.preempt_counter);
 }
 
-void sched_preempt_enable() {
+[[clang::always_inline]] void sched_preempt_enable() {
     size_t count = CPU_LOCAL_READ(scheduler.preempt_counter);
     assert(count > 0);
 

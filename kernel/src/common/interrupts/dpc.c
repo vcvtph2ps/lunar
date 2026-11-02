@@ -103,12 +103,12 @@ void dpc_process() {
     sched_preempt_enable();
 }
 
-void dpc_disable() {
+[[clang::always_inline]] void dpc_disable() {
     assert(CPU_LOCAL_READ(dpc_queue.counter) < UINT32_MAX);
     CPU_LOCAL_INC(dpc_queue.counter);
 }
 
-void dpc_enable() {
+[[clang::always_inline]] void dpc_enable() {
     if(internal_enable() && CPU_LOCAL_READ(dpc_queue.queue.count) != 0) {
         dpc_process();
     }
