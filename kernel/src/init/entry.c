@@ -3,6 +3,7 @@
 #include <common/cpu_local.h>
 #include <common/init.h>
 #include <common/log.h>
+#include <common/lunar_build_info.h>
 #include <lib/helpers.h>
 #include <lib/ksym.h>
 #include <lib/string.h>
@@ -65,6 +66,8 @@ const char* memmap_type_to_string(uint64_t type) {
 
     LOG_KTRC("kernel booted on core %u :3\n", CPU_LOCAL_READ(core_id));
     LOG_KTRC("cmdline=%s\n", boot_info->command_line);
+
+    LOG_INFO("Lunar %s (built %s)\n", LUNAR_BUILD_INFO_VERSION, LUNAR_BUILD_INFO_BUILD_DATE);
 
 #if defined(__riscv) && __riscv_xlen == 64
     LOG_INFO("Platform: %s (riscv64)\n", boot_info->riscv_base_isa_string);

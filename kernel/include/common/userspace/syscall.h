@@ -30,6 +30,7 @@ typedef enum : uint64_t {
 
     SYSCALL_SYS_DEBUG_LOG = 20,
     SYSCALL_SYS_TCB_SET = 21,
+    SYSCALL_SYS_UNAME = 22,
 
     SYSCALL_VM_MAP = 30,
     SYSCALL_VM_UNMAP = 31,
