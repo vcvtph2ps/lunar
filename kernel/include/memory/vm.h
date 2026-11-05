@@ -179,7 +179,7 @@ void vm_rewrite_cache(vm_address_space_t* address_space, void* address, size_t l
 /**
  * @brief Handles a page fault that occurred in the given address space at the specified virtual address, with the given fault reason.
  */
-bool vm_fault(uintptr_t address, vm_fault_reason_t fault);
+bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault);
 
 /**
  * @brief Copies data from the global address space into the specified address space, handling any necessary page faults that may occur during the copy.

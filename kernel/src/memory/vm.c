@@ -743,9 +743,10 @@ static void vm_fault_dpc(void* data) {
     thread->vm_fault.in_process = false;
 }
 
-bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
+bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault) {
     if(fault == VM_FAULT_UKKNOWN)
         return false;
+
     if(address_in_bounds(address, g_vm_global_address_space->start, g_vm_global_address_space->end))
         return false;
 
@@ -763,7 +764,6 @@ bool vm_fault(uintptr_t address, vm_fault_reason_t fault) {
     current_thread->vm_fault.dpc.fn = vm_fault_dpc;
 
     dpc_queue(&current_thread->vm_fault.dpc);
-
     return true;
 }
 

@@ -320,7 +320,7 @@ static void page_fault_handler(arch_interrupt_frame_t* frame, void* ctx) {
         reason = VM_FAULT_WRITE_TO_RO;
     }
     LOG_UTRC("addr=0x%016lx, type=%s\n", frame->interrupt_data, vm_fault_reason_to_string(reason));
-    if(!vm_fault(frame->interrupt_data, reason)) {
+    if(!vm_handle_page_fault(frame->interrupt_data, reason)) {
         // @todo: SIGSEGV
         user_assert(false && "SIGSEGV unimplemented");
         return;
