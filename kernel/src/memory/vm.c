@@ -12,6 +12,7 @@
 #include <lib/rb.h>
 #include <lib/string.h>
 #include <memory/heap.h>
+#include <memory/page_cache.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
@@ -156,8 +157,51 @@ static bool region_map(vm_region_t* region, uintptr_t address, uintptr_t length)
                ))
                 return false;
             break;
+        case VM_REGION_TYPE_FILE:
+            /// File backed regions are always populated on demand via the page cache
+            ASSERT_UNREACHABLE();
     }
     return true;
+}
+
+/// @brief Unmaps a range of a file backed region, freeing any private copy on write pages it owns
+static void region_unmap_file(vm_region_t* region, uintptr_t address, uintptr_t length) {
+    enum {
+        UNMAP_BATCH_PAGES = 32
+    };
+    uintptr_t batch_phys[UNMAP_BATCH_PAGES];
+
+    vfs_page_cache_object_t* object = region->type_data.file.object;
+    size_t file_offset = region->type_data.file.offset;
+
+    size_t i = 0;
+    while(i < length) {
+        size_t batch_start = i;
+        size_t phys_count = 0;
+
+        for(; i < length && (i - batch_start) / PAGE_SIZE_DEFAULT < UNMAP_BATCH_PAGES; i += PAGE_SIZE_DEFAULT) {
+            uintptr_t phys;
+            if(!ptm_physical(region->address_space, address + i, &phys))
+                continue;
+
+            /// If the mapped frame is the page cache's page for this offset, it is owned by the cache and must not be freed
+            uint64_t index = (file_offset + (address + i - region->base)) / PAGE_SIZE_DEFAULT;
+            page_cache_page_t* cache_page = page_cache_peek(object, index);
+            if(cache_page != nullptr && cache_page->physical == phys)
+                continue;
+
+            pagedb_page_t* page = pagedb_get_page(phys / ARCH_PAGE_SIZE_4K);
+            if(page != nullptr && ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED) == 1) {
+                batch_phys[phys_count++] = phys;
+            }
+        }
+
+        ptm_unmap(region->address_space, address + batch_start, i - batch_start, region->no_pagedb);
+
+        for(size_t k = 0; k < phys_count; k++) {
+            pmm_free_page(batch_phys[k]);
+        }
+    }
 }
 
 static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t length) {
@@ -195,6 +239,11 @@ static void region_unmap(vm_region_t* region, uintptr_t address, uintptr_t lengt
         return;
     }
 
+    if(region->type == VM_REGION_TYPE_FILE) {
+        region_unmap_file(region, address, length);
+        return;
+    }
+
     ptm_unmap(region->address_space, address, length, region->no_pagedb);
 }
 
@@ -223,6 +272,12 @@ static bool regions_mergeable(vm_region_t* left, vm_region_t* right) {
             if(!segment_in_bounds(left->type_data.direct.physical_address, left->length, 0, ARCH_MEM_PHYS_MAX))
                 return false;
             if(left->type_data.direct.physical_address + left->length != right->type_data.direct.physical_address)
+                return false;
+            break;
+        case VM_REGION_TYPE_FILE:
+            if(left->type_data.file.object != right->type_data.file.object)
+                return false;
+            if(left->type_data.file.offset + left->length != right->type_data.file.offset)
                 return false;
             break;
     }
@@ -306,6 +361,16 @@ static vm_region_t* clone_to(bool global_lock_acquired, uintptr_t base, size_t l
             }
             region->type_data.direct.physical_address = new_physical_address;
             break;
+        case VM_REGION_TYPE_FILE:
+            region->type_data.file.object = from->type_data.file.object;
+            if(base > from->base) {
+                assert(UINTPTR_MAX - region->type_data.file.offset > base - from->base);
+                region->type_data.file.offset += base - from->base;
+            } else {
+                assert(region->type_data.file.offset >= from->base - base);
+                region->type_data.file.offset -= from->base - base;
+            }
+            break;
     }
 
     region->base = base;
@@ -354,10 +419,93 @@ static vm_region_t* addr_to_region(vm_address_space_t* address_space, uintptr_t 
     return region;
 }
 
+/// @brief Maps the resident page cache page backing a file region at `vaddr`.
+static bool file_map_cache_page(vm_region_t* region, uintptr_t vaddr, vm_protection_t prot, bool mark_dirty) {
+    uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
+    size_t offset = region->type_data.file.offset + (page_address - region->base);
+    uint64_t index = offset / PAGE_SIZE_DEFAULT;
+
+    page_cache_page_t* cache_page = page_cache_get(region->type_data.file.object, index);
+    if(cache_page == nullptr)
+        return false;
+
+    bool is_global = region->address_space == g_vm_global_address_space;
+    bool result = ptm_map(region->address_space, page_address, cache_page->physical, PAGE_SIZE_DEFAULT, prot, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false);
+
+    if(result && mark_dirty)
+        page_cache_mark_dirty(cache_page);
+
+    page_cache_put(cache_page);
+    return result;
+}
+
+/// @brief Faults a file page in
+/// The first access is always mapped read only.
+/// For shared mappings: a later write causes the page to remaped as read write, and dirtied in the page cache
+/// For private mappings: the page is copied on write
+static bool file_region_fault(vm_region_t* region, uintptr_t vaddr) {
+    vm_protection_t prot = region->protection;
+    prot.write = false;
+    return file_map_cache_page(region, vaddr, prot, false);
+}
+
+/// @brief Handles a write fault on a shared writable file mapping
+static bool file_shared_write_fault(vm_region_t* region, uintptr_t vaddr) {
+    return file_map_cache_page(region, vaddr, region->protection, true);
+}
+
+/// @brief Handles a write fault on a private writable file mapping by copying the page
+static bool file_cow_fault(vm_region_t* region, uintptr_t vaddr) {
+    uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
+    size_t offset = region->type_data.file.offset + (page_address - region->base);
+    uint64_t index = offset / PAGE_SIZE_DEFAULT;
+
+    page_cache_page_t* cache_page = page_cache_get(region->type_data.file.object, index);
+    if(cache_page == nullptr)
+        return false;
+
+    uintptr_t new_physical = pmm_alloc_page(PMM_FLAG_NONE);
+    if(new_physical == 0) {
+        page_cache_put(cache_page);
+        return false;
+    }
+
+    memory_copy((void*) PTM_TO_HHDM(new_physical), (void*) PTM_TO_HHDM(cache_page->physical), PAGE_SIZE_DEFAULT);
+    page_cache_put(cache_page);
+
+    bool is_global = region->address_space == g_vm_global_address_space;
+    ptm_unmap(region->address_space, page_address, PAGE_SIZE_DEFAULT, region->no_pagedb);
+
+    if(!ptm_map(region->address_space, page_address, new_physical, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false)) {
+        pmm_free_page(new_physical);
+        return false;
+    }
+
+    return true;
+}
+
 static bool address_space_fix_page(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
     vm_region_t* region = addr_to_region(address_space, vaddr);
     if(region == nullptr)
         return false;
+
+    if(region->type == VM_REGION_TYPE_FILE) {
+        if(reason == VM_FAULT_NOT_PRESENT) {
+            return file_region_fault(region, vaddr);
+        }
+
+        if(reason == VM_FAULT_WRITE_TO_RO) {
+            if(!region->protection.write) {
+                return false;
+            }
+            if(region->shared) {
+                return file_shared_write_fault(region, vaddr);
+            }
+            return file_cow_fault(region, vaddr);
+        }
+
+        return false;
+    }
 
     if(reason == VM_FAULT_NOT_PRESENT) {
         if(!region->dynamically_backed)
@@ -370,6 +518,10 @@ static bool address_space_fix_page(vm_address_space_t* address_space, vm_fault_r
     }
 
     ASSERT_UNREACHABLE();
+}
+
+bool vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
+    return address_space_fix_page(address_space, reason, vaddr);
 }
 
 static bool memory_exists(vm_address_space_t* address_space, uintptr_t address, size_t length) {
@@ -516,7 +668,19 @@ static void rewrite_common(vm_address_space_t* address_space, void* address, siz
 }
 
 
-static void* map_common(vm_address_space_t* address_space, void* hint, size_t length, size_t align, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags, vm_region_type_t type, uintptr_t direct_physical_address) {
+static void* map_common(
+    vm_address_space_t* address_space,
+    void* hint,
+    size_t length,
+    size_t align,
+    vm_protection_t prot,
+    vm_cache_t cache,
+    vm_flags_t flags,
+    vm_region_type_t type,
+    uintptr_t direct_physical_address,
+    vfs_page_cache_object_t* file_object,
+    size_t file_offset
+) {
     assert(IS_POWER_OF_TWO(align) && align % PAGE_SIZE_DEFAULT == 0);
 
     uintptr_t address = (uintptr_t) hint;
@@ -568,6 +732,14 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
             assert(direct_physical_address % PAGE_SIZE_DEFAULT == 0);
             region->type_data.direct.physical_address = direct_physical_address;
             break;
+        case VM_REGION_TYPE_FILE:
+            assert(file_object != nullptr);
+            assert(file_offset % PAGE_SIZE_DEFAULT == 0);
+            region->type_data.file.object = file_object;
+            region->type_data.file.offset = file_offset;
+            /// File regions are always populated dynamically
+            region->dynamically_backed = true;
+            break;
     }
 
     if(!region->dynamically_backed) {
@@ -584,15 +756,19 @@ static void* map_common(vm_address_space_t* address_space, void* hint, size_t le
 }
 
 void* vm_map_anon(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags) {
-    return map_common(address_space, hint, length, PAGE_SIZE_DEFAULT, prot, cache, flags, VM_REGION_TYPE_ANON, 0);
+    return map_common(address_space, hint, length, PAGE_SIZE_DEFAULT, prot, cache, flags, VM_REGION_TYPE_ANON, 0, nullptr, 0);
 }
 
 void* vm_map_anon_aligned(vm_address_space_t* address_space, void* hint, size_t length, size_t align, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags) {
-    return map_common(address_space, hint, length, align, prot, cache, flags, VM_REGION_TYPE_ANON, 0);
+    return map_common(address_space, hint, length, align, prot, cache, flags, VM_REGION_TYPE_ANON, 0, nullptr, 0);
 }
 
 void* vm_map_direct(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, uintptr_t physical_address, vm_flags_t flags) {
-    return map_common(address_space, hint, length, PAGE_SIZE_DEFAULT, prot, cache, flags, VM_REGION_TYPE_DIRECT, physical_address);
+    return map_common(address_space, hint, length, PAGE_SIZE_DEFAULT, prot, cache, flags, VM_REGION_TYPE_DIRECT, physical_address, nullptr, 0);
+}
+
+void* vm_map_file(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags, vfs_page_cache_object_t* object, size_t offset) {
+    return map_common(address_space, hint, length, PAGE_SIZE_DEFAULT, prot, cache, flags | VM_FLAG_DYNAMICALLY_BACKED, VM_REGION_TYPE_FILE, 0, object, offset);
 }
 
 void vm_unmap(vm_address_space_t* address_space, void* address, size_t length) {

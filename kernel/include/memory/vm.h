@@ -7,9 +7,12 @@
 
 #include "common/assert.h"
 
+typedef struct vfs_page_cache_object vfs_page_cache_object_t; // NOLINT
+
 typedef enum {
     VM_REGION_TYPE_ANON,
-    VM_REGION_TYPE_DIRECT
+    VM_REGION_TYPE_DIRECT,
+    VM_REGION_TYPE_FILE
 } vm_region_type_t;
 
 typedef enum {
@@ -88,6 +91,10 @@ typedef struct {
         struct {
             uintptr_t physical_address;
         } direct;
+        struct {
+            vfs_page_cache_object_t* object;
+            size_t offset;
+        } file;
     } type_data;
 } vm_region_t;
 
@@ -148,6 +155,29 @@ void* vm_map_anon_aligned(vm_address_space_t* address_space, void* hint, size_t 
  * hint, if the requested address is unavailable.
  */
 void* vm_map_direct(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, uintptr_t physical_address, vm_flags_t flags);
+
+/**
+ * @brief Maps a file's contents into an address space, backed on demand by the page cache.
+ * @param address_space The address space to map into
+ * @param hint The desired page aligned virtual address to place the mapping at, or VM_NO_HINT to allow the kernel to choose the virtual address freely
+ * @param length The length of the mapping, in bytes. Must be page-aligned.
+ * @param prot The desired protection flags. File mappings are currently read-only.
+ * @param cache The desired caching behavior for the mapping
+ * @param flags Additional flags. VM_FLAG_DYNAMICALLY_BACKED is implied.
+ * @param object The page cache object backing the file
+ * @param offset The byte offset into the object that the mapping starts at. Must be page-aligned.
+ * @return The base virtual address of the new mapping, or nullptr on failure
+ */
+void* vm_map_file(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags, vfs_page_cache_object_t* object, size_t offset);
+
+/**
+ * @brief Resolves a page fault at the given address by populating the backing page.
+ * @param address_space The address space the fault occurred in
+ * @param reason Why the fault occurred
+ * @param vaddr The faulting virtual address
+ * @return true if the fault was resolved, false if it could not be handled
+ */
+bool vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr);
 
 /**
  * @brief Unmaps a region of memory previously mapped into the given address space. The region to unmap is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space.
