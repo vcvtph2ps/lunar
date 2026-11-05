@@ -1,4 +1,5 @@
 #include <common/fs/vfs.h>
+#include <common/fs/vfs_inode.h>
 #include <common/log.h>
 #include <common/sync/lock.h>
 #include <lib/string.h>
@@ -59,7 +60,35 @@ typedef struct {
 
 #define MAKE_RDSK_VERSION(major, minor) ((major << 8) | minor)
 
+/// @brief The private data of a file inode
+typedef struct {
+    rdsk_file_t* file;
+    rdsk_header_t* header;
+} rdsk_inode_data_t;
+
 static vfs_node_ops_t g_node_ops;
+
+/// @brief inode read_page op, copies one page out of the initramfs archive
+static bool rdsk_read_page(vfs_inode_t* inode, uint64_t index, void* dest) {
+    rdsk_inode_data_t* data = inode->private_data;
+    rdsk_file_t* file = data->file;
+
+    size_t offset = index * PAGE_SIZE_DEFAULT;
+    if(offset >= file->size)
+        return true;
+
+    size_t count = file->size - offset;
+    if(count > PAGE_SIZE_DEFAULT)
+        count = PAGE_SIZE_DEFAULT;
+
+    memory_copy(dest, (void*) (((uintptr_t) data->header + file->data_offset) + offset), count);
+    return true;
+}
+
+static const vfs_inode_ops_t g_rdsk_file_inode_ops = {
+    .read_page = rdsk_read_page,
+    .write_page = nullptr,
+};
 
 static const char* get_name(vfs_t* vfs, uint64_t offset) {
     info_t* info = (info_t*) vfs->private_data;
@@ -119,6 +148,12 @@ static vfs_node_t* create_vfs_file_node(vfs_t* vfs, rdsk_index_t index) {
     node->type = file->is_symlink ? VFS_NODE_TYPE_LINK : VFS_NODE_TYPE_FILE;
     node->private_data = file;
     node->ops = &g_node_ops;
+
+    rdsk_inode_data_t* inode_data = heap_alloc(sizeof(rdsk_inode_data_t));
+    inode_data->file = file;
+    inode_data->header = INFO(vfs)->header;
+    node->inode = vfs_inode_create(&g_rdsk_file_inode_ops, inode_data, file->size);
+
     info->file_cache[index - 1] = node;
     return vfs_node_get(node);
 }
@@ -225,41 +260,6 @@ static vfs_result_t rdsk_node_readdir(vfs_node_t* node, size_t* offset, vfs_node
     return VFS_RESULT_OK;
 }
 
-static vfs_result_t rdsk_node_read(vfs_node_t* node, void* buffer, size_t size, size_t offset, size_t* read_count) {
-    if(node->type == VFS_NODE_TYPE_DIR)
-        return VFS_RESULT_ERR_IS_DIR;
-
-    if(buffer == nullptr || size == 0) {
-        assert(buffer == nullptr && size == 0);
-        assert(read_count != nullptr);
-        *read_count = FILE(node)->size;
-        return VFS_RESULT_OK;
-    }
-
-    if(offset >= FILE(node)->size) {
-        if(read_count)
-            *read_count = 0;
-        return VFS_RESULT_OK;
-    }
-    size_t count = FILE(node)->size - offset;
-    if(count > size)
-        count = size;
-    memory_copy(buffer, (void*) (((uintptr_t) INFO(node->current_vfs)->header + FILE(node)->data_offset) + offset), count);
-    if(read_count)
-        *read_count = count;
-    return VFS_RESULT_OK;
-}
-
-static vfs_result_t rdsk_perform_io(vfs_node_t* node, io_request_t* request) {
-    if(request->type == IO_REQUEST_READ) {
-        return rdsk_node_read(node, request->read.buffer, request->read.count, request->read.offset, &request->read.bytes_read);
-    } else if(request->type == IO_REQUEST_WRITE) {
-        return VFS_RESULT_ERR_READ_ONLY;
-    } else {
-        return VFS_RESULT_ERR_UNSUPPORTED;
-    }
-}
-
 static vfs_result_t rdsk_umount(vfs_t* vfs) {
     (void) vfs;
     return VFS_RESULT_ERR_UNSUPPORTED;
@@ -292,6 +292,6 @@ static vfs_result_t rdsk_root(vfs_t* vfs, vfs_node_t** root_node) {
     return VFS_RESULT_OK;
 }
 
-static vfs_node_ops_t g_node_ops = { .lookup = rdsk_node_lookup, .perform_io = rdsk_perform_io, .read_dir = rdsk_node_readdir, .get_attributes = rdsk_node_attr };
+static vfs_node_ops_t g_node_ops = { .lookup = rdsk_node_lookup, .read_dir = rdsk_node_readdir, .get_attributes = rdsk_node_attr };
 
 const vfs_ops_t g_vfs_rdsk_ops = { .name = "rdsk", .mount = rdsk_mount, .unmount = rdsk_umount, .get_root_node = rdsk_root };

@@ -1,6 +1,7 @@
 #include <common/fs/dentry.h>
 #include <common/fs/io.h>
 #include <common/fs/vfs.h>
+#include <common/fs/vfs_inode.h>
 #include <common/sync/lock.h>
 #include <common/sync/rwspinlock.h>
 #include <lib/string.h>
@@ -109,6 +110,9 @@ void vfs_node_put(vfs_node_t* node) {
     if(node != nullptr) {
         size_t previous = ATOMIC_LOAD_SUB(&node->refcount, 1, ATOMIC_SEQ_CST);
         if(previous == 1) {
+            if(node->inode != nullptr) {
+                vfs_inode_put(node->inode);
+            }
             if(node->ops && node->ops->release) {
                 node->ops->release(node);
             } else {
@@ -116,6 +120,12 @@ void vfs_node_put(vfs_node_t* node) {
             }
         }
     }
+}
+
+vfs_inode_t* vfs_node_get_inode(vfs_node_t* node) {
+    if(node == nullptr)
+        return nullptr;
+    return node->inode;
 }
 
 vfs_result_t vfs_mount(const vfs_ops_t* ops, const vfs_path_t* mount_point, void* private_data) {
@@ -211,6 +221,39 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node) {
     return VFS_RESULT_OK;
 }
 
+/**
+ * @brief Performs IO on a node while its lock is held.
+ * @note vnodes backed by an inode is served entirely through the page cache, so its fs never has to tell read/write from mmap
+ * @note vnodes without an inode (devices, directories, ...) fall through to the fs's own perform_io.
+ */
+static vfs_result_t node_perform_io_locked(vfs_node_t* node, io_request_t* request) {
+    if(node->inode != nullptr) {
+        if(request->type == IO_REQUEST_READ) {
+            size_t read = 0;
+            if(!vfs_inode_read(node->inode, request->read.offset, request->read.buffer, request->read.count, &read))
+                return VFS_RESULT_ERR_NO_SPACE;
+            request->read.bytes_read = read;
+            return VFS_RESULT_OK;
+        }
+
+        if(request->type == IO_REQUEST_WRITE) {
+            if(node->inode->ops->write_page == nullptr)
+                return VFS_RESULT_ERR_READ_ONLY;
+
+            size_t written = 0;
+            if(!vfs_inode_write(node->inode, request->write.offset, request->write.buffer, request->write.count, &written))
+                return VFS_RESULT_ERR_NO_SPACE;
+            request->write.bytes_written = written;
+            return VFS_RESULT_OK;
+        }
+    }
+
+    if(node->ops->perform_io == nullptr)
+        return VFS_RESULT_ERR_UNSUPPORTED;
+
+    return node->ops->perform_io(node, request);
+}
+
 vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
     vfs_node_t* node;
     vfs_result_t res = vfs_lookup(path, true, &node);
@@ -219,7 +262,7 @@ vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request) {
 
     // @todo: read/write lock
     lock_acquire(&node->lock);
-    res = node->ops->perform_io(node, request);
+    res = node_perform_io_locked(node, request);
     lock_release(&node->lock);
 
     vfs_node_put(node);
@@ -232,7 +275,7 @@ vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request) {
 
     // @todo: read/write lock
     lock_acquire(&node->lock);
-    res = node->ops->perform_io(node, request);
+    res = node_perform_io_locked(node, request);
     lock_release(&node->lock);
 
     vfs_node_put(node);
@@ -296,7 +339,7 @@ static vfs_result_t read_link_target(vfs_node_t* node, char** out_buf, size_t* o
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;
     io_req.no_block = false;
-    res = node->ops->perform_io(node, &io_req);
+    res = node_perform_io_locked(node, &io_req);
     lock_release(&node->lock);
 
     if(res != VFS_RESULT_OK) {

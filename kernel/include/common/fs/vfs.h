@@ -37,6 +37,7 @@ typedef struct vfs_ops vfs_ops_t;
 typedef struct vfs_node_ops vfs_node_ops_t;
 typedef struct vfs_dentry vfs_dentry_t;
 typedef struct vfs_dentry_ops vfs_dentry_ops_t;
+typedef struct vfs_inode vfs_inode_t;
 
 typedef uint8_t vfs_permissions_t;
 
@@ -123,6 +124,10 @@ struct vfs_node {
 
     /// The operations for this node
     vfs_node_ops_t* ops;
+
+    /// The inode backing this node's contents, or nullptr if the node is not backed by a cacheable file
+    /// @note the vnode holds a reference on it
+    vfs_inode_t* inode;
 
     /// dentries aliased to this node, one per hardlink
     list_t dentries;
@@ -254,3 +259,9 @@ vfs_node_t* vfs_node_get(vfs_node_t* node);
  * @param node The node to dereference
  */
 void vfs_node_put(vfs_node_t* node);
+
+/**
+ * @brief Gets the inode backing the contents of the given node
+ * @return The inode, or nullptr if the node is not backed by a cacheable file
+ */
+vfs_inode_t* vfs_node_get_inode(vfs_node_t* node);

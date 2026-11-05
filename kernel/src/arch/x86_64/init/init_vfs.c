@@ -11,6 +11,7 @@
 #include <lib/string.h>
 #include <lib/types.h>
 #include <memory/heap.h>
+#include <memory/page_cache.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <memory/vm.h>
@@ -65,6 +66,8 @@ void init_stage_vfs(uint32_t core_id) {
     if(!INIT_CORE_IS_BSP(core_id)) {
         return;
     }
+
+    page_cache_init();
 
     bootinfo_module_t* initramfs_module = nullptr;
     for(size_t i = 0; i < g_init_boot_info->module_count; i++) {
