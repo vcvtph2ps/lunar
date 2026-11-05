@@ -66,11 +66,13 @@ typedef enum : int64_t {
     SYSCALL_ERROR_AGAIN = 11, // Try again (EAGAIN)
     SYSCALL_ERROR_NOMEM = 12, // Out of memory
     SYSCALL_ERROR_FAULT = 14, // Bad address
+    SYSCALL_ERROR_EXIST = 17, // File exists (EEXIST)
     SYSCALL_ERROR_NOTDIR = 20, // Not a directory (ENOTDIR)
     SYSCALL_ERROR_ISDIR = 21, // Resource is directory (EISDIR)
     SYSCALL_ERROR_INVAL = 22, // Invalid argument
     SYSCALL_ERROR_NOSYS = 38, // Function not implemented.
     SYSCALL_ERROR_NOTTY = 25, // Not a TTY
+    SYSCALL_ERROR_NOSPC = 28, // No space left on device (ENOSPC)
     SYSCALL_ERROR_SPIPE = 29, // Illegal seek
     SYSCALL_ERROR_ROFS = 30, // Read-only file system
     SYSCALL_ERROR_RANGE = 34, // Out of range

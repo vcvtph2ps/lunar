@@ -65,11 +65,13 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_AGAIN:    return "ERROR_AGAIN";
         case SYSCALL_ERROR_NOMEM:    return "ERROR_NOMEM";
         case SYSCALL_ERROR_FAULT:    return "ERROR_FAULT";
+        case SYSCALL_ERROR_EXIST:    return "ERROR_EXIST";
         case SYSCALL_ERROR_NOTDIR:   return "ERROR_NOTDIR";
         case SYSCALL_ERROR_ISDIR:    return "ERROR_ISDIR";
         case SYSCALL_ERROR_INVAL:    return "ERROR_INVAL";
         case SYSCALL_ERROR_NOSYS:    return "ERROR_NOSYS";
         case SYSCALL_ERROR_NOTTY:    return "ERROR_NOTTY";
+        case SYSCALL_ERROR_NOSPC:    return "ERROR_NOSPC";
         case SYSCALL_ERROR_SPIPE:    return "ERROR_SPIPE";
         case SYSCALL_ERROR_ROFS:     return "ERROR_ROFS";
         case SYSCALL_ERROR_RANGE:    return "ERROR_RANGE";
@@ -84,11 +86,15 @@ syscall_ret_t syscall_from_vfs_result(vfs_result_t result) {
     switch(result) {
         case VFS_RESULT_OK:              return SYSCALL_RET_VALUE(0);
         case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        case VFS_RESULT_ERR_EXISTS:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_EXIST);
         case VFS_RESULT_ERR_NOT_DIR:     return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
         case VFS_RESULT_ERR_IS_DIR:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
         case VFS_RESULT_ERR_LOOP:        return SYSCALL_RET_ERROR(SYSCALL_ERROR_LOOP);
+        case VFS_RESULT_ERR_READ_ONLY:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_ROFS);
         case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
+        case VFS_RESULT_ERR_NO_SPACE:    return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSPC);
         case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
+        case VFS_RESULT_ERR_UNSUPPORTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSYS);
         default:                         user_assert(false && "Invalid vfs return value");
     }
 }
