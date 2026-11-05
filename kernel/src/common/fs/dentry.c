@@ -2,6 +2,7 @@
 #include <common/fs/vfs.h>
 #include <common/sync/lock.h>
 #include <common/sync/rwspinlock.h>
+#include <lib/hashmap.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
@@ -9,44 +10,78 @@
 #define VFS_DCACHE_BUCKET_COUNT 64
 #define VFS_DCACHE_MAX_ENTRIES 256
 
+/// @brief The key a dentry is filed under.
+typedef struct {
+    const vfs_dentry_t* parent;
+    const char* name;
+} dcache_key_t;
+
+static size_t dcache_hash(const void* key);
+static bool dcache_equal(const hashmap_node_t* node, const void* key);
+
+static list_t g_dcache_buckets[VFS_DCACHE_BUCKET_COUNT];
+
 static struct {
     spinlock_t lock;
-    list_t buckets[VFS_DCACHE_BUCKET_COUNT];
+    hashmap_t map;
     list_t lru;
-    size_t count;
-} g_dcache;
+} g_dcache = {
+    .map = {
+        .buckets = g_dcache_buckets,
+        .bucket_count = VFS_DCACHE_BUCKET_COUNT,
+        .count = 0,
+        .hash = dcache_hash,
+        .equal = dcache_equal,
+    },
+};
 
-static size_t dcache_hash(const vfs_dentry_t* parent, const char* name) {
-    size_t hash = 5381;
+/// @brief The dentry ops to use, or nullptr unless the fs supplies both hash and compare
+static const vfs_dentry_ops_t* dcache_ops(const vfs_dentry_t* parent) {
+    const vfs_dentry_ops_t* ops = parent != nullptr ? parent->ops : nullptr;
+    if(ops != nullptr && ops->hash != nullptr && ops->compare != nullptr)
+        return ops;
+    return nullptr;
+}
 
-    if(parent != nullptr) {
-        hash = ((hash << 5) + hash) ^ (size_t) parent;
+static size_t dcache_hash(const void* key) {
+    const dcache_key_t* dentry_key = key;
+    const vfs_dentry_ops_t* ops = dcache_ops(dentry_key->parent);
 
-        if(parent->ops != nullptr && parent->ops->hash != nullptr) {
-            hash = ((hash << 5) + hash) ^ parent->ops->hash(name);
-            return hash;
-        }
-
-        hash = dcache_hash(parent->parent, parent->name);
+    uint64_t hash = ((uint64_t) (uintptr_t) dentry_key->parent >> 4) * 0x9E3779B97F4A7C15ull;
+    if(ops != nullptr) {
+        hash ^= (uint64_t) ops->hash(dentry_key->name) * 0xC2B2AE3D27D4EB4Full;
+    } else {
+        for(const unsigned char* c = (const unsigned char*) dentry_key->name; *c != '\0'; c++) hash = (hash ^ *c) * 0xC2B2AE3D27D4EB4Full;
     }
 
-    for(const unsigned char* c = (const unsigned char*) name; *c != '\0'; c++) {
-        hash = ((hash << 5) + hash) ^ *c;
-    }
+    hash ^= hash >> 29;
+    return (size_t) hash;
+}
 
-    return hash;
+static bool dcache_equal(const hashmap_node_t* node, const void* key) {
+    const vfs_dentry_t* dentry = CONTAINER_OF(node, vfs_dentry_t, hash_node);
+    const dcache_key_t* dentry_key = key;
+
+    if(dentry->parent != dentry_key->parent)
+        return false;
+
+    const vfs_dentry_ops_t* ops = dcache_ops(dentry->parent);
+    if(ops != nullptr)
+        return ops->compare(dentry->name, dentry_key->name) == 0;
+
+    return string_compare(dentry->name, dentry_key->name) == 0;
 }
 
 void vfs_dcache_insert(vfs_dentry_t* dentry) {
     vfs_dentry_t* evicted = nullptr;
 
     spinlock_lock(&g_dcache.lock);
-    list_t* bucket = &g_dcache.buckets[dcache_hash(dentry->parent, dentry->name) & (VFS_DCACHE_BUCKET_COUNT - 1)];
-    list_push_back(bucket, &dentry->hash_node);
-    list_push_back(&g_dcache.lru, &dentry->lru_node);
-    g_dcache.count++;
 
-    for(size_t i = 0; g_dcache.count > VFS_DCACHE_MAX_ENTRIES && i < g_dcache.count; i++) {
+    dcache_key_t key = (dcache_key_t) { .parent = dentry->parent, .name = dentry->name };
+    hashmap_insert(&g_dcache.map, &key, &dentry->hash_node);
+    list_push_back(&g_dcache.lru, &dentry->lru_node);
+
+    for(size_t i = 0; g_dcache.map.count > VFS_DCACHE_MAX_ENTRIES && i < g_dcache.map.count; i++) {
         vfs_dentry_t* candidate = CONTAINER_OF(g_dcache.lru.head, vfs_dentry_t, lru_node);
         if(candidate->refcount > 1) {
             list_node_delete(&g_dcache.lru, &candidate->lru_node);
@@ -54,10 +89,9 @@ void vfs_dcache_insert(vfs_dentry_t* dentry) {
             continue;
         }
 
-        list_node_delete(&g_dcache.buckets[dcache_hash(candidate->parent, candidate->name) & (VFS_DCACHE_BUCKET_COUNT - 1)], &candidate->hash_node);
+        hashmap_remove(&g_dcache.map, &candidate->hash_node);
         list_node_delete(&g_dcache.lru, &candidate->lru_node);
 
-        g_dcache.count--;
         evicted = candidate;
         break;
     }
@@ -68,30 +102,24 @@ void vfs_dcache_insert(vfs_dentry_t* dentry) {
 }
 
 vfs_dentry_t* vfs_dcache_lookup(vfs_dentry_t* parent, const char* name) {
+    dcache_key_t key = { .parent = parent, .name = name };
+
     spinlock_lock(&g_dcache.lock);
-    list_t* bucket = &g_dcache.buckets[dcache_hash(parent, name) & (VFS_DCACHE_BUCKET_COUNT - 1)];
-    LIST_FOR_EACH(bucket, node) {
-        vfs_dentry_t* dentry = CONTAINER_OF(node, vfs_dentry_t, hash_node);
-        if(dentry->parent == parent) {
-            int cmp;
-            if(parent->ops != nullptr && parent->ops->compare != nullptr) {
-                cmp = parent->ops->compare(dentry->name, name);
-            } else {
-                cmp = string_compare(dentry->name, name);
-            }
-            if(cmp == 0) {
-                dentry->refcount++;
 
-                list_node_delete(&g_dcache.lru, &dentry->lru_node);
-                list_push_back(&g_dcache.lru, &dentry->lru_node);
-
-                spinlock_unlock(&g_dcache.lock);
-                return dentry;
-            }
-        }
+    hashmap_node_t* node = hashmap_find(&g_dcache.map, &key);
+    if(node == nullptr) {
+        spinlock_unlock(&g_dcache.lock);
+        return nullptr;
     }
+
+    vfs_dentry_t* dentry = CONTAINER_OF(node, vfs_dentry_t, hash_node);
+    dentry->refcount++;
+
+    list_node_delete(&g_dcache.lru, &dentry->lru_node);
+    list_push_back(&g_dcache.lru, &dentry->lru_node);
+
     spinlock_unlock(&g_dcache.lock);
-    return nullptr;
+    return dentry;
 }
 
 vfs_dentry_t* vfs_dentry_get(vfs_dentry_t* dentry) {

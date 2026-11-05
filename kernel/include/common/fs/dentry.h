@@ -1,6 +1,7 @@
 #pragma once
 
 #include <common/fs/vfs.h>
+#include <lib/hashmap.h>
 
 struct vfs_dentry_ops {
     /// Computes a hash for a path component name
@@ -45,7 +46,7 @@ typedef struct vfs_dentry {
     list_node_t alias_node;
 
     /// The list node for the hash table of the dentry cache
-    list_node_t hash_node;
+    hashmap_node_t hash_node;
 
     /// The list node for the LRU list of the dentry cache
     list_node_t lru_node;
