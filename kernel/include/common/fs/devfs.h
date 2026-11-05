@@ -37,6 +37,3 @@ vfs_result_t devfs_bind(const char* name, const devfs_device_ops_t* ops, void* c
  * @return VFS_RESULT_OK if the entry was found and removed, VFS_RESULT_ERR_NOT_FOUND if no such entry exists
  */
 vfs_result_t devfs_unbind(const char* name);
-
-/// @brief The VFS driver operations for devfs
-extern const vfs_ops_t g_vfs_devfs_ops;
