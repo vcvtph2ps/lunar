@@ -68,6 +68,7 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_
     store->fds[fd].access.write = false;
     store->fds[fd].flags.non_blocking = false;
     store->fds[fd].flags.close_on_execute = false;
+    store->fds[fd].flags.append = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
@@ -88,6 +89,7 @@ uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd,
     store->fds[fd].access.write = false;
     store->fds[fd].flags.non_blocking = false;
     store->fds[fd].flags.close_on_execute = false;
+    store->fds[fd].flags.append = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);

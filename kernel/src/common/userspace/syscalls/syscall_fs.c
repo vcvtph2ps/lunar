@@ -17,10 +17,18 @@
 #include <uapi/limits.h>
 #include <uapi/stat.h>
 
+/// @brief Turns the POSIX mode bits passed to open() into VFS permission bits.
+static vfs_node_permissions_t permissions_from_posix_mode(uint32_t mode) {
+    return (vfs_node_permissions_t) {
+        .user = (vfs_permissions_t) ((mode >> 6) & 0x7),
+        .group = (vfs_permissions_t) ((mode >> 3) & 0x7),
+        .other = (vfs_permissions_t) (mode & 0x7),
+    };
+}
+
 SYSCALL_DEFINE(syscall_fs_open, SYSCALL_FS_OPEN, int32_t, void*, path, int, flags, uint32_t, mode);
 static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_ptr, int flags, uint32_t mode) {
     (void) argument_data;
-    (void) mode;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
     userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
@@ -44,15 +52,32 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
     path[upath->size] = '\0';
     heap_free(upath, sizeof(userptr_t));
 
-    vfs_node_t* out_result_node;
-    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, path), (flags & UAPI_O_NOFOLLOW) == 0, &out_result_node);
+    vfs_path_t vfs_path = VFS_MAKE_REL_PATH(process->current_working_dir, path);
+
+    vfs_node_t* out_result_node = nullptr;
+    vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_O_NOFOLLOW) == 0, &out_result_node);
+
+    bool writable = (flags & UAPI_O_WRONLY) != 0;
+
+    if(result == VFS_RESULT_OK && (flags & UAPI_O_CREATE) != 0 && (flags & UAPI_O_EXCL) != 0) {
+        /// The entry already exists and O_EXCL was passed
+        vfs_node_put(out_result_node);
+        out_result_node = nullptr;
+        result = VFS_RESULT_ERR_EXISTS;
+    } else if(result == VFS_RESULT_ERR_NOT_FOUND && (flags & UAPI_O_CREATE) != 0) {
+        result = vfs_create(&vfs_path, VFS_NODE_TYPE_FILE, permissions_from_posix_mode(mode), &out_result_node);
+    } else if(result == VFS_RESULT_OK && (flags & UAPI_O_TRUNC) != 0 && writable) {
+        /// O_TRUNC is ignored unless the file is opened for writing
+        result = vfs_truncate_node(out_result_node, 0);
+        if(result != VFS_RESULT_OK) {
+            vfs_node_put(out_result_node);
+            out_result_node = nullptr;
+        }
+    }
+    // @todo: UAPI_O_DIRECTORY
 
     LOG_UTRC("pathname=%s, flags=%x, mode=%d | result=%d\n", path, flags, mode, result);
     heap_free(path, path_size);
-    if(flags & UAPI_O_CREATE) {
-        LOG_UTRC("O_CREATE unimplemented\n");
-    }
-    // @todo: UAPI_O_DIRECTORY
 
     if(syscall_from_vfs_result(result).is_error) {
         return syscall_from_vfs_result(result);
@@ -63,11 +88,11 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
     // @note: since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
     vfs_node_put(out_result_node);
 
-    int access_flags = flags & UAPI_O_RDWR;
-    entry->access.read = (access_flags & UAPI_O_RDONLY) != 0;
-    entry->access.write = (access_flags & UAPI_O_WRONLY) != 0;
+    entry->access.read = (flags & UAPI_O_RDONLY) != 0;
+    entry->access.write = writable;
     entry->flags.non_blocking = (flags & UAPI_O_NONBLOCK) != 0;
     entry->flags.close_on_execute = (flags & UAPI_O_CLOEXEC) != 0;
+    entry->flags.append = (flags & UAPI_O_APPEND) != 0;
     return SYSCALL_RET_VALUE(fd);
 }
 
@@ -149,6 +174,17 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     char* buffer = heap_alloc(count);
     vm_copy_from(buffer, process->address_space, (uintptr_t) buffer_ptr, count);
 
+    /// With O_APPEND every write goes to the current end of the file
+    if(entry->flags.append) {
+        vfs_node_attr_t attr = { 0 };
+        vfs_result_t attr_result = vfs_get_attributes_node(entry->node, &attr);
+        if(syscall_from_vfs_result(attr_result).is_error) {
+            heap_free(buffer, count);
+            return syscall_from_vfs_result(attr_result);
+        }
+        entry->offset = attr.size;
+    }
+
     io_request_t io_req;
     io_req.type = IO_REQUEST_WRITE;
     io_req.write.buffer = buffer;
@@ -159,6 +195,7 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
 
     vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
     if(syscall_from_vfs_result(result).is_error) {
+        heap_free(buffer, count);
         return syscall_from_vfs_result(result);
     }
 
@@ -722,4 +759,36 @@ static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32
 
     LOG_UTRC("fd=%d, buffer=0x%lx, max_size=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, io_req.read.bytes_read);
     return SYSCALL_RET_VALUE(io_req.read.bytes_read);
+}
+
+SYSCALL_DEFINE(syscall_fs_ftruncate, SYSCALL_FS_FTRUNCATE, void, uint32_t, fd, int64_t, size);
+static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_t fd, int64_t size) {
+    (void) argument_data;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        LOG_UTRC("fd=%d, size=%ld | result=BADFD\n", fd, size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+    }
+
+    if(!entry->access.write) {
+        LOG_UTRC("fd=%d, size=%ld, access.write=false | result=EINVAL\n", fd, size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    if(size < 0) {
+        LOG_UTRC("fd=%d, size=%ld | result=EINVAL\n", fd, size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    vfs_result_t result = vfs_truncate_node(entry->node, (size_t) size);
+    LOG_UTRC("fd=%d, size=%ld | result=%d\n", fd, size, result);
+
+    /// posix wants EINVAL when the fd does not refer to a regular file
+    if(result == VFS_RESULT_ERR_UNSUPPORTED)
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+
+    return syscall_from_vfs_result(result);
 }

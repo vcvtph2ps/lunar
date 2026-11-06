@@ -81,3 +81,10 @@ vfs_dentry_t* vfs_dcache_lookup(vfs_dentry_t* parent, const char* name); // NOLI
  * @param dentry The dentry to insert
  */
 void vfs_dcache_insert(vfs_dentry_t* dentry); // NOLINT
+
+/**
+ * @brief Removes the cached dentry for a name from the dentry cache and drops the cache's reference on it.
+ * @param parent The parent directory dentry
+ * @param name The name of the entry to evict
+ */
+void vfs_dcache_invalidate(vfs_dentry_t* parent, const char* name); // NOLINT

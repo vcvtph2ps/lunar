@@ -52,6 +52,7 @@ typedef enum : uint64_t {
     SYSCALL_FS_DUP2 = 53,
     SYSCALL_FS_GETDENTS = 54,
     SYSCALL_FS_READLINKAT = 55,
+    SYSCALL_FS_FTRUNCATE = 56,
 
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;

@@ -101,6 +101,27 @@ bool vfs_inode_read(vfs_inode_t* inode, size_t offset, void* buffer, size_t coun
     return true;
 }
 
+bool vfs_inode_resize(vfs_inode_t* inode, size_t new_size) {
+    if(inode == nullptr || inode->ops == nullptr || inode->ops->resize == nullptr)
+        return false;
+
+    if(!inode->ops->resize(inode, new_size))
+        return false;
+
+    /// Shrinking makes any cached page entirely past the new end unreachable, so evict it.
+    if(new_size < inode->size) {
+        uint64_t first_page = (new_size + PAGE_SIZE_DEFAULT - 1) / PAGE_SIZE_DEFAULT;
+        uint64_t last_page = (inode->size + PAGE_SIZE_DEFAULT - 1) / PAGE_SIZE_DEFAULT;
+        for(uint64_t index = first_page; index < last_page; index++) vfs_inode_mark_unreadable(inode, index);
+    }
+
+    inode->size = new_size;
+    if(inode->cache != nullptr)
+        inode->cache->size = new_size;
+
+    return true;
+}
+
 bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const void* buffer, size_t count, size_t* out_written) {
     if(out_written != nullptr)
         *out_written = 0;
@@ -108,11 +129,16 @@ bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const void* buffer, size
     if(inode == nullptr || buffer == nullptr || inode->ops->write_page == nullptr)
         return false;
 
-    if(offset >= inode->size || count == 0)
+    if(count == 0)
         return true;
 
-    if(count > inode->size - offset)
-        count = inode->size - offset;
+    if(offset > SIZE_MAX - count)
+        return false;
+
+    /// A write past the end of the file extends it to cover the written range.
+    size_t end = offset + count;
+    if(end > inode->size && !vfs_inode_resize(inode, end))
+        return false;
 
     size_t done = 0;
     while(done < count) {

@@ -26,6 +26,15 @@ struct vfs_inode_ops {
      * @note nullptr for read only inodes.
      */
     bool (*write_page)(vfs_inode_t* inode, uint64_t index, const void* src);
+
+    /**
+     * @brief Called before the inode's size changes so the filesystem can grow or shrink its backing store.
+     * @param new_size The new size of the file in bytes.
+     * @return true on success, false if the backing store could not be resized.
+     * @note nullptr for inodes whose size cannot change (read only or fixed size).
+     * @note Any region between the old and new size must read back as zero.
+     */
+    bool (*resize)(vfs_inode_t* inode, size_t new_size);
 };
 
 /**
@@ -86,6 +95,13 @@ bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const void* buffer, size
  * @brief Returns the page cache object backing the inode
  */
 vfs_page_cache_object_t* vfs_inode_cache(vfs_inode_t* inode);
+
+/**
+ * @brief Changes the size of the inode, resizing its backing store through the inode's resize op.
+ * @param new_size The new size of the file in bytes.
+ * @return true on success, false if the filesystem cannot resize the inode or the allocation failed.
+ */
+bool vfs_inode_resize(vfs_inode_t* inode, size_t new_size);
 
 /**
  * @brief Writes back every dirty page of the inode

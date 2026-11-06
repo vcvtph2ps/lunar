@@ -101,6 +101,27 @@ void vfs_dcache_insert(vfs_dentry_t* dentry) {
         vfs_dentry_put(evicted);
 }
 
+void vfs_dcache_invalidate(vfs_dentry_t* parent, const char* name) {
+    dcache_key_t key = { .parent = parent, .name = name };
+
+    spinlock_lock(&g_dcache.lock);
+
+    hashmap_node_t* node = hashmap_find(&g_dcache.map, &key);
+    if(node == nullptr) {
+        spinlock_unlock(&g_dcache.lock);
+        return;
+    }
+
+    vfs_dentry_t* dentry = CONTAINER_OF(node, vfs_dentry_t, hash_node);
+    hashmap_remove(&g_dcache.map, &dentry->hash_node);
+    list_node_delete(&g_dcache.lru, &dentry->lru_node);
+
+    spinlock_unlock(&g_dcache.lock);
+
+    /// Drop the reference the cache was holding, the caller must be responsible for any reference it holds
+    vfs_dentry_put(dentry);
+}
+
 vfs_dentry_t* vfs_dcache_lookup(vfs_dentry_t* parent, const char* name) {
     dcache_key_t key = { .parent = parent, .name = name };
 

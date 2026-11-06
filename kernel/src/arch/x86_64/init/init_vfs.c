@@ -3,6 +3,7 @@
 #include <common/assert.h>
 #include <common/fs/devfs.h>
 #include <common/fs/io.h>
+#include <common/fs/tmpfs.h>
 #include <common/fs/vfs.h>
 #include <common/init.h>
 #include <common/kgz.h>
@@ -104,4 +105,18 @@ void init_stage_vfs(uint32_t core_id) {
         arch_panic("Failed to mount devfs at /dev (%d) ensure /dev exists in initramfs\n", res);
     }
     LOG_OKAY("mounted devfs at /dev\n");
+
+    static const uint8_t tmpfs_demo_data[] = "meowmeowmeowmeow\n";
+    static const tmpfs_mount_file_t tmpfs_demo_files[] = {
+        { .name = "hello", .data = tmpfs_demo_data, .size = sizeof(tmpfs_demo_data) - 1 },
+    };
+    tmpfs_mount_data_t tmpfs_data = { .files = tmpfs_demo_files, .file_count = 1 };
+
+    vfs_path_t tmp_path = VFS_MAKE_ABS_PATH("/tmp");
+    res = vfs_mount(&g_vfs_tmpfs_ops, &tmp_path, &tmpfs_data);
+    if(res != VFS_RESULT_OK) {
+        LOG_WARN("failed to mount tmpfs at /tmp (%d), skipping\n", res);
+    } else {
+        LOG_OKAY("mounted tmpfs at /tmp\n");
+    }
 }

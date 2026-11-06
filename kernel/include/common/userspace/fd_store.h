@@ -16,6 +16,7 @@ typedef struct {
     struct {
         bool close_on_execute : 1;
         bool non_blocking     : 1;
+        bool append           : 1;
     } flags;
 } fd_store_entry_t;
 

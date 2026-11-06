@@ -45,6 +45,13 @@ typedef uint8_t vfs_permissions_t;
 #define VFS_PERM_WRITE (1 << 1)
 #define VFS_PERM_EXECUTE (1 << 0)
 
+/// @brief The permission bits of a node, split by the class they apply to
+typedef struct {
+    vfs_permissions_t user;
+    vfs_permissions_t group;
+    vfs_permissions_t other;
+} vfs_node_permissions_t;
+
 typedef struct {
     /// The size of the node in bytes, or 0 for directories
     size_t size;
@@ -55,11 +62,7 @@ typedef struct {
     /// The filesystem's inode number for this vnode
     uint64_t inode;
 
-    struct {
-        vfs_permissions_t user;
-        vfs_permissions_t group;
-        vfs_permissions_t other;
-    } permissions;
+    vfs_node_permissions_t permissions;
 } vfs_node_attr_t;
 
 struct vfs_ops {
@@ -100,6 +103,18 @@ struct vfs_node_ops {
 
     /// @brief Reads the next entry in the directory represented by the given node, starting at the given offset
     vfs_result_t (*read_dir)(vfs_node_t* node, size_t* offset, vfs_node_t** out_node, const char** out_name);
+
+    /**
+     * @brief Creates a new child node named name inside the given directory node.
+     * @param node The directory node to create the child in.
+     * @param name The name of the child to create.
+     * @param type The type of node to create.
+     * @param permissions The permission bits to create the node with.
+     * @param out_node Receives the newly created node, with a reference owned by the caller.
+     * @return VFS_RESULT_ERR_EXISTS if a node with that name already exists.
+     * @note May be nullptr for read only filesystems.
+     */
+    vfs_result_t (*create)(vfs_node_t* node, const char* name, vfs_node_type_t type, vfs_node_permissions_t permissions, vfs_node_t** out_node);
 
     /// @brief Performs IO on the given node
     vfs_result_t (*perform_io)(vfs_node_t* node, io_request_t* request);
@@ -221,6 +236,15 @@ vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_att
 vfs_result_t vfs_get_attributes_node(vfs_node_t* node, vfs_node_attr_t* out_attr);
 
 /**
+ * @brief Changes the size of the file backing the given node
+ * @param node The node to truncate
+ * @param size The new size of the file in bytes
+ * @return VFS_RESULT_ERR_IS_DIR if the node is a directory, VFS_RESULT_ERR_UNSUPPORTED if the node is not a resizable file, or VFS_RESULT_ERR_NO_SPACE if the backing store could not be resized
+ * @note Extending reads back as zeroes, shrinking discards the cached pages past the new end
+ */
+vfs_result_t vfs_truncate_node(vfs_node_t* node, size_t size);
+
+/**
  * @brief Constructs a path representing the absolute path to the given node
  * @param node The vfs_node_t to construct the absolute path for
  * @param out_buf A pointer to a char* variable to receive the path. The caller is responsible for freeing this buffer using heap_free().
@@ -237,6 +261,17 @@ vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size);
  */
 vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_dentry);
 
+/**
+ * @brief Creates a new node at the given path
+ * @param path The path of the node to create
+ * @param type The type of node to create
+ * @param permissions The permission bits to create the node with
+ * @param out_node Optional. Receives the newly created node with a reference owned by the caller.
+ * @return VFS_RESULT_ERR_EXISTS if the final path component already exists, or VFS_RESULT_ERR_NOT_FOUND if the parent does not exist.
+ * @note The final path component must not already exist and the parent must be a directory
+ */
+vfs_result_t vfs_create(const vfs_path_t* path, vfs_node_type_t type, vfs_node_permissions_t permissions, vfs_node_t** out_node);
+
 /// @brief The global list of vfs instances
 extern spinlock_t g_vfs_list_lock;
 extern list_t g_vfs_list;
@@ -246,6 +281,9 @@ extern const vfs_ops_t g_vfs_rdsk_ops;
 
 /// @brief The vfs_ops_t instance for devfs (/dev)
 extern const vfs_ops_t g_vfs_devfs_ops;
+
+/// @brief The vfs_ops_t instance for tmpfs (default /tmp, but mountable anywhere)
+extern const vfs_ops_t g_vfs_tmpfs_ops;
 
 /**
  * @brief Increment the reference count of a VFS node

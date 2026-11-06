@@ -309,6 +309,30 @@ vfs_result_t vfs_get_attributes_node(vfs_node_t* node, vfs_node_attr_t* out_attr
     return res;
 }
 
+vfs_result_t vfs_truncate_node(vfs_node_t* node, size_t size) {
+    if(node == nullptr)
+        return VFS_RESULT_ERR_NOT_FOUND;
+
+    vfs_node_get(node);
+
+    lock_acquire(&node->lock);
+
+    vfs_result_t res;
+    if(node->type == VFS_NODE_TYPE_DIR) {
+        res = VFS_RESULT_ERR_IS_DIR;
+    } else if(node->inode == nullptr || node->inode->ops->resize == nullptr) {
+        res = VFS_RESULT_ERR_UNSUPPORTED;
+    } else if(!vfs_inode_resize(node->inode, size)) {
+        res = VFS_RESULT_ERR_NO_SPACE;
+    } else {
+        res = VFS_RESULT_OK;
+    }
+
+    lock_release(&node->lock);
+    vfs_node_put(node);
+    return res;
+}
+
 static vfs_dentry_t* root_dentry(void) {
     vfs_node_t* root_node;
     if(vfs_root_node(&root_node) != VFS_RESULT_OK)
@@ -598,4 +622,87 @@ vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_d
     vfs_node_put(node);
     *out_dentry = child_dentry;
     return res;
+}
+
+vfs_result_t vfs_create(const vfs_path_t* path, vfs_node_type_t type, vfs_node_permissions_t permissions, vfs_node_t** out_node) {
+    const char* rel_path = path->rel_path;
+    size_t rel_length = string_length(rel_path);
+
+    if(rel_length == 0 || rel_path[rel_length - 1] == '/')
+        return VFS_RESULT_ERR_NOT_DIR;
+
+    size_t name_start = 0;
+    for(size_t i = 0; i < rel_length; i++) {
+        if(rel_path[i] == '/')
+            name_start = i + 1;
+    }
+
+    const char* name = rel_path + name_start;
+
+    char* parent_path = heap_alloc(name_start + 1);
+    if(parent_path == nullptr)
+        return VFS_RESULT_ERR_NO_SPACE;
+    memory_copy(parent_path, rel_path, name_start);
+    parent_path[name_start] = '\0';
+
+    vfs_dentry_t* parent_dentry;
+    vfs_result_t res = vfs_lookup_dentry(&VFS_MAKE_REL_PATH(path->node, parent_path), true, &parent_dentry);
+    heap_free(parent_path, name_start + 1);
+    if(res != VFS_RESULT_OK)
+        return res;
+
+    if(parent_dentry->node == nullptr) {
+        vfs_dentry_put(parent_dentry);
+        return VFS_RESULT_ERR_NOT_FOUND;
+    }
+
+    if(parent_dentry->node->type != VFS_NODE_TYPE_DIR) {
+        vfs_dentry_put(parent_dentry);
+        return VFS_RESULT_ERR_NOT_DIR;
+    }
+
+    rwspinlock_write_t* parent_lock = rwspinlock_lock_write(&parent_dentry->rwspinlock);
+
+    if(parent_dentry->node->ops->create == nullptr) {
+        rwspinlock_unlock_write(parent_lock);
+        vfs_dentry_put(parent_dentry);
+        return VFS_RESULT_ERR_UNSUPPORTED;
+    }
+
+    vfs_node_t* new_node = nullptr;
+    lock_acquire(&parent_dentry->node->lock);
+    res = parent_dentry->node->ops->create(parent_dentry->node, name, type, permissions, &new_node);
+    lock_release(&parent_dentry->node->lock);
+
+    if(res != VFS_RESULT_OK) {
+        rwspinlock_unlock_write(parent_lock);
+        vfs_dentry_put(parent_dentry);
+        return res;
+    }
+
+    /// The name was previously a cached lookup miss, forget it so the new entry is visible to lookups
+    vfs_dcache_invalidate(parent_dentry, name);
+
+    vfs_dentry_t* new_dentry;
+    res = vfs_dentry_create(parent_dentry, name, new_node, false, &new_dentry);
+    if(res == VFS_RESULT_OK) {
+        /// vfs_dcache_insert takes ownership of the reference
+        vfs_dcache_insert(new_dentry);
+    }
+
+    rwspinlock_unlock_write(parent_lock);
+    vfs_dentry_put(parent_dentry);
+
+    if(res != VFS_RESULT_OK) {
+        vfs_node_put(new_node);
+        return res;
+    }
+
+    if(out_node != nullptr) {
+        *out_node = new_node;
+    } else {
+        vfs_node_put(new_node);
+    }
+
+    return VFS_RESULT_OK;
 }
