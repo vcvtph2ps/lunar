@@ -18,11 +18,75 @@
 
 #include "common/sched/process.h"
 
-SYSCALL_DEFINE(syscall_proc_sig_action, SYSCALL_PROC_SIG_ACTION, void, int32_t, signal_number, void*, new_action, void*, old_action);
-static syscall_ret_t syscall_proc_sig_action(syscall_args_t* argument_data, int32_t signal_number, void* new_action_ptr, void* old_action_ptr) {
+static const char* signal_name(int signal_number) {
+    switch(signal_number) {
+        case UAPI_SIGNAL_HUP:    return "SIGHUP";
+        case UAPI_SIGNAL_INT:    return "SIGINT";
+        case UAPI_SIGNAL_QUIT:   return "SIGQUIT";
+        case UAPI_SIGNAL_CONT:   return "SIGCONT";
+        case UAPI_SIGNAL_BUS:    return "SIGBUS";
+        case UAPI_SIGNAL_ABRT:   return "SIGABRT";
+        case UAPI_SIGNAL_CHLD:   return "SIGCHLD";
+        case UAPI_SIGNAL_FPE:    return "SIGFPE";
+        case UAPI_SIGNAL_KILL:   return "SIGKILL";
+        case UAPI_SIGNAL_ILL:    return "SIGILL";
+        case UAPI_SIGNAL_PIPE:   return "SIGPIPE";
+        case UAPI_SIGNAL_SEGV:   return "SIGSEGV";
+        case UAPI_SIGNAL_STOP:   return "SIGSTOP";
+        case UAPI_SIGNAL_ALRM:   return "SIGALRM";
+        case UAPI_SIGNAL_TERM:   return "SIGTERM";
+        case UAPI_SIGNAL_TSTP:   return "SIGTSTP";
+        case UAPI_SIGNAL_TTIN:   return "SIGTTIN";
+        case UAPI_SIGNAL_TTOU:   return "SIGTTOU";
+        case UAPI_SIGNAL_USR1:   return "SIGUSR1";
+        case UAPI_SIGNAL_USR2:   return "SIGUSR2";
+        case UAPI_SIGNAL_IO:     return "SIGIO";
+        case UAPI_SIGNAL_PROF:   return "SIGPROF";
+        case UAPI_SIGNAL_SYS:    return "SIGSYS";
+        case UAPI_SIGNAL_TRAP:   return "SIGTRAP";
+        case UAPI_SIGNAL_URG:    return "SIGURG";
+        case UAPI_SIGNAL_VTALRM: return "SIGVTALRM";
+        case UAPI_SIGNAL_XCPU:   return "SIGXCPU";
+        case UAPI_SIGNAL_XFSZ:   return "SIGXFSZ";
+        case UAPI_SIGNAL_WINCH:  return "SIGWINCH";
+        case UAPI_SIGNAL_PWR:    return "SIGPWR";
+        case UAPI_SIGNAL_CANCEL: return "SIGCANCEL";
+        default:                 return nullptr;
+    }
+}
+
+static void log_signal_number(int signal_number) {
+    const char* name = signal_name(signal_number);
+    if(name != nullptr) {
+        log_print_lockless(LOG_LEVEL_STRC, "%s(%d)", name, signal_number);
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%d", signal_number);
+    }
+}
+
+static const char* signal_how_name(int how) {
+    switch(how) {
+        case UAPI_SIGNAL_HOW_BLOCK:   return "BLOCK";
+        case UAPI_SIGNAL_HOW_UNBLOCK: return "UNBLOCK";
+        case UAPI_SIGNAL_HOW_SETMASK: return "SETMASK";
+        default:                      return nullptr;
+    }
+}
+
+SYSCALL_DEFINE_TRACED(syscall_proc_sig_action, SYSCALL_PROC_SIG_ACTION, void, syscall_proc_sig_action_trace, int32_t, signal_number, void*, new_action, void*, old_action);
+
+static void syscall_proc_sig_action_trace(syscall_args_t* argument_data, int32_t signal_number, void* new_action, void* old_action) {
     (void) argument_data;
 
-    LOG_UTRC("signum=%d\n", signal_number);
+    log_print_lockless(LOG_LEVEL_STRC, "signal=");
+    log_signal_number(signal_number);
+    log_print_lockless(
+        LOG_LEVEL_STRC, ", new_action=0x%lx, old_action=0x%lx\n", (unsigned long) (uintptr_t) new_action, (unsigned long) (uintptr_t) old_action
+    );
+}
+
+static syscall_ret_t syscall_proc_sig_action(syscall_args_t* argument_data, int32_t signal_number, void* new_action_ptr, void* old_action_ptr) {
+    (void) argument_data;
 
     if(signal_number <= 0 || signal_number > UAPI_SIGNAL_MAX_SIGNAL) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
@@ -59,7 +123,21 @@ static syscall_ret_t syscall_proc_sig_action(syscall_args_t* argument_data, int3
     return SYSCALL_RET_VALUE(0);
 }
 
-SYSCALL_DEFINE(syscall_proc_sig_mask, SYSCALL_PROC_SIG_MASK, void, int32_t, how, void*, set, void*, retrieve);
+SYSCALL_DEFINE_TRACED(syscall_proc_sig_mask, SYSCALL_PROC_SIG_MASK, void, syscall_proc_sig_mask_trace, int32_t, how, void*, set, void*, retrieve);
+
+static void syscall_proc_sig_mask_trace(syscall_args_t* argument_data, int32_t how, void* set, void* retrieve) {
+    (void) argument_data;
+
+    const char* how_name = signal_how_name(how);
+    log_print_lockless(LOG_LEVEL_STRC, "how=");
+    if(how_name != nullptr) {
+        log_print_lockless(LOG_LEVEL_STRC, "%s", how_name);
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%d", how);
+    }
+    log_print_lockless(LOG_LEVEL_STRC, ", set=0x%lx, retrieve=0x%lx\n", (unsigned long) (uintptr_t) set, (unsigned long) (uintptr_t) retrieve);
+}
+
 static syscall_ret_t syscall_proc_sig_mask(syscall_args_t* argument_data, int32_t how, void* set_ptr, void* retrieve_ptr) {
     (void) argument_data;
 
@@ -95,7 +173,22 @@ static syscall_ret_t syscall_proc_sig_mask(syscall_args_t* argument_data, int32_
     return SYSCALL_RET_VALUE(0);
 }
 
-SYSCALL_DEFINE(syscall_proc_sig_send_simple, SYSCALL_PROC_SIG_SEND_SIMPLE, void, int32_t, pid, uint32_t, tid, int32_t, signal);
+SYSCALL_DEFINE_TRACED(syscall_proc_sig_send_simple, SYSCALL_PROC_SIG_SEND_SIMPLE, void, syscall_proc_sig_send_simple_trace, int32_t, pid, uint32_t, tid, int32_t, signal);
+
+static void syscall_proc_sig_send_simple_trace(syscall_args_t* argument_data, int32_t pid, uint32_t tid, int32_t signal) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "pid=%d, tid=", pid);
+    if(tid == UINT32_MAX) {
+        log_print_lockless(LOG_LEVEL_STRC, "ALL");
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%u", tid);
+    }
+    log_print_lockless(LOG_LEVEL_STRC, ", signal=");
+    log_signal_number(signal);
+    log_print_lockless(LOG_LEVEL_STRC, "\n");
+}
+
 static syscall_ret_t syscall_proc_sig_send_simple(syscall_args_t* argument_data, int32_t pid, uint32_t tid, int32_t signal) {
     (void) argument_data;
 

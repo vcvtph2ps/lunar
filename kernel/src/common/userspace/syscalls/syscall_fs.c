@@ -346,6 +346,48 @@ static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
     return SYSCALL_RET_VALUE(0);
 }
 
+static void log_dir_fd(uint32_t fd) {
+    if(fd == (uint32_t) UAPI_AT_FDCWD) {
+        log_print_lockless(LOG_LEVEL_STRC, "AT_FDCWD");
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%u", fd);
+    }
+}
+
+static void log_at_flags(uint32_t flags) {
+    static const struct {
+        uint32_t bit;
+        const char* name;
+    } at_flags[] = {
+        { UAPI_AT_SYMLINK_NOFOLLOW, "SYMLINK_NOFOLLOW" },
+        { UAPI_AT_SYMLINK_FOLLOW,   "SYMLINK_FOLLOW"   },
+        { UAPI_AT_REMOVEDIR,        "REMOVEDIR"        },
+        { UAPI_AT_EACCESS,          "EACCESS"          },
+        { UAPI_AT_EMPTY_PATH,       "EMPTY_PATH"       },
+    };
+
+    bool first = true;
+    uint32_t remaining = flags;
+
+    for(size_t i = 0; i < sizeof(at_flags) / sizeof(at_flags[0]); i++) {
+        if((flags & at_flags[i].bit) == 0) {
+            continue;
+        }
+        log_print_lockless(LOG_LEVEL_STRC, "%s%s", first ? "" : "|", at_flags[i].name);
+        remaining &= ~at_flags[i].bit;
+        first = false;
+    }
+
+    if(remaining != 0) {
+        log_print_lockless(LOG_LEVEL_STRC, "%sunknown=0x%x", first ? "" : "|", remaining);
+        first = false;
+    }
+
+    if(first) {
+        log_print_lockless(LOG_LEVEL_STRC, "-");
+    }
+}
+
 SYSCALL_DEFINE(syscall_fs_stat, SYSCALL_FS_STAT, void, uint32_t, fd, void*, stat);
 static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd, void* stat_ptr) {
     (void) argument_data;
@@ -365,7 +407,17 @@ static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd,
     return stat_internal(stat_buf, entry->node);
 }
 
-SYSCALL_DEFINE(syscall_fs_stat_at, SYSCALL_FS_STAT_AT, void, uint32_t, fd, void*, path, void*, stat, uint32_t, flags);
+SYSCALL_DEFINE_TRACED(syscall_fs_stat_at, SYSCALL_FS_STAT_AT, void, syscall_fs_stat_at_trace, uint32_t, fd, void*, path, void*, stat, uint32_t, flags);
+static void syscall_fs_stat_at_trace(syscall_args_t* argument_data, uint32_t fd, void* path, void* stat, uint32_t flags) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "fd=");
+    log_dir_fd(fd);
+    log_print_lockless(LOG_LEVEL_STRC, ", path=0x%lx, stat=0x%lx, flags=[", (unsigned long) (uintptr_t) path, (unsigned long) (uintptr_t) stat);
+    log_at_flags(flags);
+    log_print_lockless(LOG_LEVEL_STRC, "]\n");
+}
+
 static syscall_ret_t syscall_fs_stat_at(syscall_args_t* argument_data, uint32_t fd, void* path_ptr, void* stat_ptr, uint32_t flags) {
     (void) argument_data;
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;

@@ -59,6 +59,36 @@ static process_t* find_self_or_child(process_t* parent, uint32_t pid) {
 #define SYSCALL_PROC_INFO_THREAD_ID 6
 #define SYSCALL_PROC_INFO_PROCESS_GROUP_ID 7
 
+static const char* proc_query_name(uint64_t query) {
+    switch(query) {
+        case SYSCALL_PROC_INFO_GROUP_ID:         return "GROUP_ID";
+        case SYSCALL_PROC_INFO_EGROUP_ID:        return "EGROUP_ID";
+        case SYSCALL_PROC_INFO_USER_ID:          return "USER_ID";
+        case SYSCALL_PROC_INFO_EUSER_ID:         return "EUSER_ID";
+        case SYSCALL_PROC_INFO_PROCESS_ID:       return "PROCESS_ID";
+        case SYSCALL_PROC_INFO_PARENT_PROCESS:   return "PARENT_PROCESS";
+        case SYSCALL_PROC_INFO_THREAD_ID:        return "THREAD_ID";
+        case SYSCALL_PROC_INFO_PROCESS_GROUP_ID: return "PROCESS_GROUP_ID";
+        default:                                 return nullptr;
+    }
+}
+
+static void log_pid(uint64_t pid) {
+    if(pid == UINT64_MAX) {
+        log_print_lockless(LOG_LEVEL_STRC, "PID_SELF");
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%lu", (unsigned long) pid);
+    }
+}
+
+static void log_pid_i32(int32_t pid) {
+    switch(pid) {
+        case -1: log_print_lockless(LOG_LEVEL_STRC, "PID_ANY"); break;
+        case 0:  log_print_lockless(LOG_LEVEL_STRC, "PID_SELF_GROUP"); break;
+        default: log_print_lockless(LOG_LEVEL_STRC, "%d", pid); break;
+    }
+}
+
 static syscall_ret_t internal_setpgid(process_t* target, int32_t pgid) {
     if(sched_arch_thread_current()->process == target) {
         LOG_UTRC("pid=%d, pgid=%d\n", target->process_id, pgid);
@@ -81,7 +111,25 @@ static syscall_ret_t internal_setpgid(process_t* target, int32_t pgid) {
     return SYSCALL_RET_VALUE(0);
 }
 
-SYSCALL_DEFINE(syscall_proc_setinfo, SYSCALL_PROC_SETINFO, void, uint64_t, pid, uint64_t, query, uint64_t, value);
+SYSCALL_DEFINE_TRACED(syscall_proc_setinfo, SYSCALL_PROC_SETINFO, void, syscall_proc_setinfo_trace, uint64_t, pid, uint64_t, query, uint64_t, value);
+
+static void syscall_proc_setinfo_trace(syscall_args_t* argument_data, uint64_t pid, uint64_t query, uint64_t value) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "pid=");
+    log_pid(pid);
+
+    const char* query_name = proc_query_name(query);
+    log_print_lockless(LOG_LEVEL_STRC, ", query=");
+    if(query_name != nullptr) {
+        log_print_lockless(LOG_LEVEL_STRC, "%s", query_name);
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%lu", (unsigned long) query);
+    }
+
+    log_print_lockless(LOG_LEVEL_STRC, ", value=0x%lx\n", (unsigned long) value);
+}
+
 static syscall_ret_t syscall_proc_setinfo(syscall_args_t* argument_data, uint64_t pid, uint64_t query, uint64_t value) {
     (void) argument_data;
     process_t* process;
@@ -110,7 +158,25 @@ static syscall_ret_t syscall_proc_setinfo(syscall_args_t* argument_data, uint64_
     ASSERT_UNREACHABLE();
 }
 
-SYSCALL_DEFINE(syscall_proc_getinfo, SYSCALL_PROC_GETINFO, uint64_t, uint64_t, pid, uint64_t, query);
+SYSCALL_DEFINE_TRACED(syscall_proc_getinfo, SYSCALL_PROC_GETINFO, uint64_t, syscall_proc_getinfo_trace, uint64_t, pid, uint64_t, query);
+
+static void syscall_proc_getinfo_trace(syscall_args_t* argument_data, uint64_t pid, uint64_t query) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "pid=");
+    log_pid(pid);
+
+    const char* query_name = proc_query_name(query);
+    log_print_lockless(LOG_LEVEL_STRC, ", query=");
+    if(query_name != nullptr) {
+        log_print_lockless(LOG_LEVEL_STRC, "%s", query_name);
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "%lu", (unsigned long) query);
+    }
+
+    log_print_lockless(LOG_LEVEL_STRC, "\n");
+}
+
 static syscall_ret_t syscall_proc_getinfo(syscall_args_t* argument_data, uint64_t pid, uint64_t query) {
     (void) argument_data;
 
@@ -166,7 +232,24 @@ static syscall_ret_t syscall_proc_fork(syscall_args_t* argument_data) {
 /// Return immediately if no child has exited yet
 #define SYSCALL_WAITPID_NOHANG 1
 
-SYSCALL_DEFINE(syscall_proc_waitpid, SYSCALL_PROC_WAITPID, int32_t, int32_t, pid, void*, status_ptr, int, flags, void*, ru);
+SYSCALL_DEFINE_TRACED(syscall_proc_waitpid, SYSCALL_PROC_WAITPID, int32_t, syscall_proc_waitpid_trace, int32_t, pid, void*, status_ptr, int, flags, void*, ru);
+
+static void syscall_proc_waitpid_trace(syscall_args_t* argument_data, int32_t pid, void* status, int flags, void* ru) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "pid=");
+    log_pid_i32(pid);
+
+    log_print_lockless(LOG_LEVEL_STRC, ", status=0x%lx, flags=", (unsigned long) (uintptr_t) status);
+    if((flags & SYSCALL_WAITPID_NOHANG) != 0) {
+        log_print_lockless(LOG_LEVEL_STRC, "NOHANG");
+    } else {
+        log_print_lockless(LOG_LEVEL_STRC, "0x%x", flags);
+    }
+
+    log_print_lockless(LOG_LEVEL_STRC, ", ru=0x%lx\n", (unsigned long) (uintptr_t) ru);
+}
+
 static syscall_ret_t syscall_proc_waitpid(syscall_args_t* argument_data, int32_t pid, void* status_ptr, int flags, void* ru) {
     (void) argument_data;
     (void) ru;

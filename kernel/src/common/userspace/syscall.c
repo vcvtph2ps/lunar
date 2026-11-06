@@ -111,39 +111,57 @@ static void print_value_with_type(sc_kind_t kind, uint64_t value) {
     }
 }
 
-static void syscall_log(const syscall_meta_t* meta, const syscall_args_t* arguments, syscall_ret_t ret) {
-    arch_interrupt_state_t state = log_lock_acquire();
-    log_print_lockless(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: (", sched_arch_thread_current()->process->process_id, meta->name);
+static void syscall_log_prefix(const syscall_meta_t* meta) {
+    log_print_lockless(
+        LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: ", sched_arch_thread_current()->process->process_id, meta->name
+    );
+}
+
+static void syscall_log_generic_args(const syscall_meta_t* meta, const syscall_args_t* arguments) {
+    log_print_lockless(LOG_LEVEL_STRC, "(");
     for(size_t i = 0; i < meta->nargs; i++) {
         const syscall_arg_desc_t* d = &meta->args[i];
         log_print_lockless(LOG_LEVEL_STRC, "%s%s=", i ? ", " : "", d->name);
         print_value_with_type(d->kind, arguments->args[i]);
     }
-    log_print_lockless(LOG_LEVEL_STRC, ") = ");
-    if(!ret.is_error) {
-        print_value_with_type(meta->ret_type, ret.value);
-        log_print_lockless(LOG_LEVEL_STRC, "\n");
+    log_print_lockless(LOG_LEVEL_STRC, ")");
+}
+
+static void syscall_log(const syscall_meta_t* meta, syscall_args_t* arguments, syscall_ret_t ret) {
+    arch_interrupt_state_t state = log_lock_acquire();
+    syscall_log_prefix(meta);
+
+    if(meta->trace != nullptr) {
+        meta->trace(arguments, &ret);
     } else {
-        log_print_lockless(LOG_LEVEL_STRC, "%s\n", userspace_syscall_ret_to_string(ret));
+        syscall_log_generic_args(meta, arguments);
+        log_print_lockless(LOG_LEVEL_STRC, " = ");
+        if(!ret.is_error) {
+            print_value_with_type(meta->ret_type, ret.value);
+            log_print_lockless(LOG_LEVEL_STRC, "\n");
+        } else {
+            log_print_lockless(LOG_LEVEL_STRC, "%s\n", userspace_syscall_ret_to_string(ret));
+        }
     }
 
     if(meta->ret_type == SC_VOID && ret.value != 0 && !ret.is_error) {
         arch_panic("void syscall returned with value 0x%lx\n", ret.value);
     }
 
-
     log_lock_release(state);
 }
 
-static void syscall_log_noreturn(const syscall_meta_t* meta, const syscall_args_t* arguments) {
+static void syscall_log_noreturn(const syscall_meta_t* meta, syscall_args_t* arguments) {
     arch_interrupt_state_t state = log_lock_acquire();
-    log_print_lockless(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: (", sched_arch_thread_current()->process->process_id, meta->name);
-    for(size_t i = 0; i < meta->nargs; i++) {
-        const syscall_arg_desc_t* d = &meta->args[i];
-        log_print_lockless(LOG_LEVEL_STRC, "%s%s=", i ? ", " : "", d->name);
-        print_value_with_type(d->kind, arguments->args[i]);
+    syscall_log_prefix(meta);
+
+    if(meta->trace != nullptr) {
+        meta->trace(arguments, nullptr);
+    } else {
+        syscall_log_generic_args(meta, arguments);
+        log_print_lockless(LOG_LEVEL_STRC, " = [no return]\n");
     }
-    log_print_lockless(LOG_LEVEL_STRC, ") = [no return]\n");
+
     log_lock_release(state);
 }
 #endif

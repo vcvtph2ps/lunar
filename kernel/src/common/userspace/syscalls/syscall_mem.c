@@ -12,11 +12,52 @@
 #include <uapi/mmem.h>
 
 
-SYSCALL_DEFINE(syscall_vm_map, SYSCALL_VM_MAP, void*, void*, hint, size_t, size, size_t, prot, size_t, flags, size_t, fd, size_t, offset);
-static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, size_t size, size_t prot, size_t flags, size_t fd, size_t offset) {
+static void log_prot(size_t prot) {
+    log_print_lockless(LOG_LEVEL_STRC, "[%c%c%c]", (prot & UAPI_PROT_READ) != 0 ? 'R' : '-', (prot & UAPI_PROT_WRITE) != 0 ? 'W' : '-', (prot & UAPI_PROT_EXEC) != 0 ? 'E' : '-');
+}
+
+static void log_map_flags(size_t flags) {
+    bool anon = (flags & UAPI_MAP_ANON) != 0;
+    log_print_lockless(LOG_LEVEL_STRC, "%s", anon ? "ANON" : "FILE");
+
+    static const struct {
+        size_t bit;
+        const char* name;
+    } map_flags[] = {
+        { UAPI_MAP_SHARED,  "SHARED"  },
+        { UAPI_MAP_PRIVATE, "PRIVATE" },
+        { UAPI_MAP_FIXED,   "FIXED"   },
+    };
+
+    size_t remaining = flags & ~UAPI_MAP_ANON;
+
+    for(size_t i = 0; i < sizeof(map_flags) / sizeof(map_flags[0]); i++) {
+        if((flags & map_flags[i].bit) == 0) {
+            continue;
+        }
+        log_print_lockless(LOG_LEVEL_STRC, "|%s", map_flags[i].name);
+        remaining &= ~map_flags[i].bit;
+    }
+
+    if(remaining != 0) {
+        log_print_lockless(LOG_LEVEL_STRC, "|unknown=0x%lx", (unsigned long) remaining);
+    }
+}
+
+SYSCALL_DEFINE_TRACED(syscall_vm_map, SYSCALL_VM_MAP, void*, syscall_vm_map_trace, void*, hint, size_t, size, size_t, prot, size_t, flags, size_t, fd, size_t, offset);
+
+static void syscall_vm_map_trace(syscall_args_t* argument_data, void* hint, size_t size, size_t prot, size_t flags, size_t fd, size_t offset) {
     (void) argument_data;
 
-    // LOG_UTRC("hint=0x%016lx size=%zu prot=[%c%c%c] flags=0x%lx fd=%ld offset=0x%lx\n", hint, size, (prot & UAPI_PROT_READ) != 0 ? 'R' : '-', (prot & UAPI_PROT_WRITE) != 0 ? 'W' : '-', (prot & UAPI_PROT_EXEC) != 0 ? 'E' : '-', flags, fd, offset);
+    log_print_lockless(LOG_LEVEL_STRC, "hint=0x%016lx size=%zu prot=", (unsigned long) (uintptr_t) hint, size);
+    log_prot(prot);
+    log_print_lockless(LOG_LEVEL_STRC, " flags=[");
+    log_map_flags(flags);
+    log_print_lockless(LOG_LEVEL_STRC, "] fd=%ld offset=0x%lx\n", (long) fd, (unsigned long) offset);
+}
+
+static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, size_t size, size_t prot, size_t flags, size_t fd, size_t offset) {
+    (void) argument_data;
 
     // @note: non readable mappings aren't supported
     vm_protection_t vm_prot = VM_PROT_RO;
@@ -80,7 +121,16 @@ static syscall_ret_t syscall_vm_unmap(syscall_args_t* argument_data, void* addr,
     return SYSCALL_RET_VOID();
 }
 
-SYSCALL_DEFINE(syscall_vm_protect, SYSCALL_VM_PROTECT, void, void*, addr, size_t, size, size_t, prot);
+SYSCALL_DEFINE_TRACED(syscall_vm_protect, SYSCALL_VM_PROTECT, void, syscall_vm_protect_trace, void*, addr, size_t, size, size_t, prot);
+
+static void syscall_vm_protect_trace(syscall_args_t* argument_data, void* addr, size_t size, size_t prot) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "addr=0x%lx size=%zu prot=", (unsigned long) (uintptr_t) addr, size);
+    log_prot(prot);
+    log_print_lockless(LOG_LEVEL_STRC, "\n");
+}
+
 syscall_ret_t syscall_vm_protect(syscall_args_t* argument_data, void* addr, size_t size, size_t prot) {
     (void) argument_data;
     // @note: non readable mappings aren't supported
