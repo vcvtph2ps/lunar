@@ -100,9 +100,6 @@ static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, s
         if(offset % PAGE_SIZE_DEFAULT != 0 || offset >= inode->size)
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
 
-        size_t available = inode->size - offset;
-        if(aligned_size > available)
-            aligned_size = ALIGN_UP(available, PAGE_SIZE_DEFAULT);
 
         vaddr = (virt_addr_t) vm_map_file(current_process->address_space, (void*) hint, aligned_size, vm_prot, VM_CACHE_NORMAL, vm_flags, vfs_inode_cache(inode), offset);
     }

@@ -3,6 +3,7 @@
 #include <memory/heap.h>
 #include <memory/page_cache.h>
 #include <memory/ptm.h>
+#include <memory/vm.h>
 
 static bool inode_cache_fill(void* context, uint64_t index, void* dest) {
     vfs_inode_t* inode = context;
@@ -108,16 +109,24 @@ bool vfs_inode_resize(vfs_inode_t* inode, size_t new_size) {
     if(!inode->ops->resize(inode, new_size))
         return false;
 
-    /// Shrinking makes any cached page entirely past the new end unreachable, so evict it.
-    if(new_size < inode->size) {
-        uint64_t first_page = (new_size + PAGE_SIZE_DEFAULT - 1) / PAGE_SIZE_DEFAULT;
-        uint64_t last_page = (inode->size + PAGE_SIZE_DEFAULT - 1) / PAGE_SIZE_DEFAULT;
-        for(uint64_t index = first_page; index < last_page; index++) vfs_inode_mark_unreadable(inode, index);
-    }
+    size_t old_size = inode->size;
 
+    /// Commit the new size first so any fault past the new end is rejected immediately, even while we tear mappings down.
     inode->size = new_size;
     if(inode->cache != nullptr)
         inode->cache->size = new_size;
+
+    /// Shrinking invalidates the page holding the new end and everything after it.
+    if(new_size < old_size && inode->cache != nullptr) {
+        uint64_t first_page = new_size / PAGE_SIZE_DEFAULT;
+        uint64_t last_page = (old_size + PAGE_SIZE_DEFAULT - 1) / PAGE_SIZE_DEFAULT;
+
+        /// Drop mappings at or past the new end first, so their ptes stop pinning the cached frames.
+        vm_unmap_file_range(inode->cache, first_page * PAGE_SIZE_DEFAULT);
+
+        /// Evicting those pages makes the page holding the new end refill with a zeroed tail.
+        for(uint64_t index = first_page; index < last_page; index++) vfs_inode_mark_unreadable(inode, index);
+    }
 
     return true;
 }

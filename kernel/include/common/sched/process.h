@@ -13,6 +13,11 @@ typedef struct process process_t;
 typedef struct thread thread_t; // NOLINT
 typedef struct process_group process_group_t; // NOLINT
 
+/// @brief The global list of every live process
+/// @note a process is only unlinked (and later destroyed) while holding this lock, so holding it keeps every listed process and its address space alive
+extern spinlock_t g_process_list_lock;
+extern list_t g_process_list;
+
 typedef enum {
     PROCESS_RUNNING,
     PROCESS_EXITED,

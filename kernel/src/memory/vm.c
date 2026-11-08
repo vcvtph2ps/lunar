@@ -419,55 +419,75 @@ static vm_region_t* addr_to_region(vm_address_space_t* address_space, uintptr_t 
     return region;
 }
 
-/// @brief Maps the resident page cache page backing a file region at `vaddr`.
-static bool file_map_cache_page(vm_region_t* region, uintptr_t vaddr, vm_protection_t prot, bool mark_dirty) {
+/// @brief Resolves the file byte offset a virtual address maps to, reporting a bus error when it is past the end of the file.
+static bool file_offset_of(vm_region_t* region, uintptr_t vaddr, uint64_t* out_index, vm_fault_result_t* out_result) {
     uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
     size_t offset = region->type_data.file.offset + (page_address - region->base);
-    uint64_t index = offset / PAGE_SIZE_DEFAULT;
+
+    if(offset >= region->type_data.file.object->size) {
+        *out_result = VM_FAULT_FILE;
+        return false;
+    }
+
+    *out_index = offset / PAGE_SIZE_DEFAULT;
+    return true;
+}
+
+/// @brief Maps the page cache page backing a file region at `vaddr`.
+static vm_fault_result_t file_map_cache_page(vm_region_t* region, uintptr_t vaddr, vm_protection_t prot, bool mark_dirty) {
+    uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
+
+    uint64_t index;
+    vm_fault_result_t result;
+    if(!file_offset_of(region, vaddr, &index, &result))
+        return result;
 
     page_cache_page_t* cache_page = page_cache_get(region->type_data.file.object, index);
     if(cache_page == nullptr)
-        return false;
+        return VM_FAULT_UNRESOLVED;
 
     bool is_global = region->address_space == g_vm_global_address_space;
-    bool result = ptm_map(region->address_space, page_address, cache_page->physical, PAGE_SIZE_DEFAULT, prot, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false);
+    bool mapped = ptm_map(region->address_space, page_address, cache_page->physical, PAGE_SIZE_DEFAULT, prot, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false);
 
-    if(result && mark_dirty)
+    if(mapped && mark_dirty)
         page_cache_mark_dirty(cache_page);
 
     page_cache_put(cache_page);
-    return result;
+    return mapped ? VM_FAULT_RESOLVED : VM_FAULT_UNRESOLVED;
 }
 
 /// @brief Faults a file page in
 /// The first access is always mapped read only.
 /// For shared mappings: a later write causes the page to remaped as read write, and dirtied in the page cache
 /// For private mappings: the page is copied on write
-static bool file_region_fault(vm_region_t* region, uintptr_t vaddr) {
+static vm_fault_result_t file_region_fault(vm_region_t* region, uintptr_t vaddr) {
     vm_protection_t prot = region->protection;
     prot.write = false;
     return file_map_cache_page(region, vaddr, prot, false);
 }
 
 /// @brief Handles a write fault on a shared writable file mapping
-static bool file_shared_write_fault(vm_region_t* region, uintptr_t vaddr) {
+static vm_fault_result_t file_shared_write_fault(vm_region_t* region, uintptr_t vaddr) {
     return file_map_cache_page(region, vaddr, region->protection, true);
 }
 
 /// @brief Handles a write fault on a private writable file mapping by copying the page
-static bool file_cow_fault(vm_region_t* region, uintptr_t vaddr) {
+static vm_fault_result_t file_cow_fault(vm_region_t* region, uintptr_t vaddr) {
     uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
-    size_t offset = region->type_data.file.offset + (page_address - region->base);
-    uint64_t index = offset / PAGE_SIZE_DEFAULT;
+
+    uint64_t index;
+    vm_fault_result_t result;
+    if(!file_offset_of(region, vaddr, &index, &result))
+        return result;
 
     page_cache_page_t* cache_page = page_cache_get(region->type_data.file.object, index);
     if(cache_page == nullptr)
-        return false;
+        return VM_FAULT_UNRESOLVED;
 
     uintptr_t new_physical = pmm_alloc_page(PMM_FLAG_NONE);
     if(new_physical == 0) {
         page_cache_put(cache_page);
-        return false;
+        return VM_FAULT_UNRESOLVED;
     }
 
     memory_copy((void*) PTM_TO_HHDM(new_physical), (void*) PTM_TO_HHDM(cache_page->physical), PAGE_SIZE_DEFAULT);
@@ -478,49 +498,46 @@ static bool file_cow_fault(vm_region_t* region, uintptr_t vaddr) {
 
     if(!ptm_map(region->address_space, page_address, new_physical, PAGE_SIZE_DEFAULT, region->protection, region->cache, is_global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER, is_global, false)) {
         pmm_free_page(new_physical);
-        return false;
+        return VM_FAULT_UNRESOLVED;
     }
 
-    return true;
+    return VM_FAULT_RESOLVED;
 }
 
-static bool address_space_fix_page(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
+static vm_fault_result_t address_space_fix_page(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
     vm_region_t* region = addr_to_region(address_space, vaddr);
     if(region == nullptr)
-        return false;
+        return VM_FAULT_UNRESOLVED;
 
     if(region->type == VM_REGION_TYPE_FILE) {
-        if(reason == VM_FAULT_NOT_PRESENT) {
+        if(reason == VM_FAULT_NOT_PRESENT)
             return file_region_fault(region, vaddr);
-        }
 
         if(reason == VM_FAULT_WRITE_TO_RO) {
-            if(!region->protection.write) {
-                return false;
-            }
-            if(region->shared) {
+            if(!region->protection.write)
+                return VM_FAULT_UNRESOLVED;
+            if(region->shared)
                 return file_shared_write_fault(region, vaddr);
-            }
             return file_cow_fault(region, vaddr);
         }
 
-        return false;
+        return VM_FAULT_UNRESOLVED;
     }
 
     if(reason == VM_FAULT_NOT_PRESENT) {
         if(!region->dynamically_backed)
-            return false;
-        return region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT);
+            return VM_FAULT_UNRESOLVED;
+        return region_map(region, MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT), PAGE_SIZE_DEFAULT) ? VM_FAULT_RESOLVED : VM_FAULT_UNRESOLVED;
     } else if(reason == VM_FAULT_WRITE_TO_RO) {
         if(!region->protection.write)
-            return false;
-        return ptm_cow_fault(address_space, vaddr, region->protection, region->cache, region->address_space == g_vm_global_address_space);
+            return VM_FAULT_UNRESOLVED;
+        return ptm_cow_fault(address_space, vaddr, region->protection, region->cache, region->address_space == g_vm_global_address_space) ? VM_FAULT_RESOLVED : VM_FAULT_UNRESOLVED;
     }
 
     ASSERT_UNREACHABLE();
 }
 
-bool vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
+vm_fault_result_t vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr) {
     return address_space_fix_page(address_space, reason, vaddr);
 }
 
@@ -775,6 +792,49 @@ void vm_unmap(vm_address_space_t* address_space, void* address, size_t length) {
     rewrite_common(address_space, address, length, REWRITE_TYPE_DELETE, (vm_protection_t) {}, VM_CACHE_NORMAL);
 }
 
+/// @brief Unmaps the tail of every file region of `object` in one address space, starting at the page aligned file offset `offset`.
+static void unmap_object_in_address_space(vm_address_space_t* address_space, vfs_page_cache_object_t* object, size_t offset) {
+    if(address_space == nullptr)
+        return;
+
+    spinlock_no_dpc_lock(&address_space->lock);
+
+    rb_node_t* node = rb_find_first(&address_space->regions_tree);
+    while(node != nullptr) {
+        vm_region_t* region = CONTAINER_OF(node, vm_region_t, region_tree_node);
+        node = rb_find_next(&address_space->regions_tree, node);
+
+        if(region->type != VM_REGION_TYPE_FILE || region->type_data.file.object != object)
+            continue;
+
+        size_t region_start = region->type_data.file.offset;
+        size_t region_end = region_start + region->length;
+        if(region_end <= offset)
+            continue;
+
+        size_t unmap_start = math_max(region_start, offset);
+        uintptr_t vaddr = region->base + (unmap_start - region_start);
+        region_unmap(region, vaddr, region_end - unmap_start);
+    }
+
+    spinlock_no_dpc_unlock(&address_space->lock);
+}
+
+void vm_unmap_file_range(vfs_page_cache_object_t* object, size_t offset) {
+    if(object == nullptr)
+        return;
+
+    assert(offset % PAGE_SIZE_DEFAULT == 0);
+
+    /// Holding the process list lock keeps every listed process (and its address space) alive while we walk it.
+    spinlock_lock(&g_process_list_lock);
+    LIST_FOR_EACH(&g_process_list, node) {
+        process_t* process = CONTAINER_OF(node, process_t, list_node_global);
+        unmap_object_in_address_space(process->address_space, object, offset);
+    }
+    spinlock_unlock(&g_process_list_lock);
+}
+
 void vm_rewrite_prot(vm_address_space_t* address_space, void* address, size_t length, vm_protection_t prot) {
     rewrite_common(address_space, address, length, REWRITE_TYPE_PROTECTION, prot, VM_CACHE_NORMAL);
 }
@@ -793,7 +853,7 @@ size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* 
         size_t offset = (dest_addr + i) % PAGE_SIZE_DEFAULT;
         uintptr_t phys;
         if(!ptm_physical(dest_as, dest_addr + i, &phys)) {
-            if(!address_space_fix_page(dest_as, VM_FAULT_NOT_PRESENT, dest_addr + i))
+            if(address_space_fix_page(dest_as, VM_FAULT_NOT_PRESENT, dest_addr + i) != VM_FAULT_RESOLVED)
                 return i;
             bool success = ptm_physical(dest_as, dest_addr + i, &phys);
             assert(success);
@@ -817,7 +877,7 @@ size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, 
         size_t offset = (src_addr + i) % PAGE_SIZE_DEFAULT;
         uintptr_t phys;
         if(!ptm_physical(src_as, src_addr + i, &phys)) {
-            if(!address_space_fix_page(src_as, VM_FAULT_NOT_PRESENT, src_addr + i))
+            if(address_space_fix_page(src_as, VM_FAULT_NOT_PRESENT, src_addr + i) != VM_FAULT_RESOLVED)
                 return i;
             bool success = ptm_physical(src_as, src_addr + i, &phys);
             assert(success);
@@ -839,7 +899,7 @@ bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t addr, size_t 
     for(virt_addr_t i = addr; i < addr + size; i += PAGE_SIZE_DEFAULT) {
         phys_addr_t phys;
         if(!ptm_physical(target_as, i, &phys)) {
-            if(!address_space_fix_page(target_as, VM_FAULT_NOT_PRESENT, i))
+            if(address_space_fix_page(target_as, VM_FAULT_NOT_PRESENT, i) != VM_FAULT_RESOLVED)
                 return false;
             bool success = ptm_physical(target_as, i, &phys);
             assert(success);
@@ -910,10 +970,12 @@ static void vm_fault_dpc(void* data) {
     assert(thread->vm_fault.in_process);
     assert(thread->process != nullptr);
 
-    bool ok = address_space_fix_page(thread->process->address_space, thread->vm_fault.reason, thread->vm_fault.address);
-    if(EXPECT_UNLIKELY(!ok)) {
-        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed\n", thread->vm_fault.address, thread->process->process_id);
-        process_kill(thread->process, PROCESS_TERMINATED, UAPI_SIGNAL_SEGV);
+    vm_fault_result_t result = address_space_fix_page(thread->process->address_space, thread->vm_fault.reason, thread->vm_fault.address);
+    if(EXPECT_UNLIKELY(result != VM_FAULT_RESOLVED)) {
+        /// A file mapping accessed past the end of the file is a bus error, anything else is a segmentation fault.
+        uapi_signal_t signal = result == VM_FAULT_FILE ? UAPI_SIGNAL_BUS : UAPI_SIGNAL_SEGV;
+        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed, signalling %s\n", thread->vm_fault.address, thread->process->process_id, signal == UAPI_SIGNAL_BUS ? "SIGBUS" : "SIGSEGV");
+        process_kill(thread->process, PROCESS_TERMINATED, signal);
     }
 
     thread->vm_fault.in_process = false;

@@ -21,6 +21,16 @@ typedef enum {
     VM_FAULT_WRITE_TO_RO
 } vm_fault_reason_t;
 
+/// @brief The outcome of trying to resolve a page fault.
+typedef enum {
+    /// The fault was resolved, the faulting access can be retried.
+    VM_FAULT_RESOLVED,
+    /// The fault could not be resolved for a generic reason
+    VM_FAULT_UNRESOLVED,
+    /// The access was to a file backed page past the end of the file
+    VM_FAULT_FILE
+} vm_fault_result_t;
+
 static inline const char* vm_fault_reason_to_string(vm_fault_reason_t reason) {
     switch(reason) {
         case VM_FAULT_UKKNOWN:     return "VM_FAULT_UKKNOWN";
@@ -175,9 +185,9 @@ void* vm_map_file(vm_address_space_t* address_space, void* hint, size_t length, 
  * @param address_space The address space the fault occurred in
  * @param reason Why the fault occurred
  * @param vaddr The faulting virtual address
- * @return true if the fault was resolved, false if it could not be handled
+ * @return VM_FAULT_RESOLVED if the fault was handled, otherwise why it could not be, so the caller can pick the right signal
  */
-bool vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr);
+vm_fault_result_t vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr);
 
 /**
  * @brief Unmaps a region of memory previously mapped into the given address space. The region to unmap is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space.
@@ -186,6 +196,15 @@ bool vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reaso
  * @param length The length of the region to unmap, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space.
  */
 void vm_unmap(vm_address_space_t* address_space, void* address, size_t length);
+
+/**
+ * @brief Unmaps every file-backed page of the given page cache object that lies at or past `offset`, in every user address space.
+ * @param object The page cache object backing the file.
+ * @param offset The page-aligned file offset from which mappings should be dropped.
+ * @note Used on truncate: pages wholly past the new end of the file are unmapped so their frames stop pinning
+ * the cache. A subsequent access faults and, because the page is now out of range, the fault fails.
+ */
+void vm_unmap_file_range(vfs_page_cache_object_t* object, size_t offset);
 
 /**
  * @brief Changes the protection flags of an existing mapping in the given address space. The region to change is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space.
