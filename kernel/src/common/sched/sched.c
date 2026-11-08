@@ -25,8 +25,11 @@
 
     bool yield = false;
     if(count == 1 && CPU_LOCAL_READ(scheduler.yield_pending)) {
-        (void) CPU_LOCAL_EXCHANGE(scheduler.yield_pending, false);
-        yield = true;
+        // @hack: only allow yielding if interrupts are enabled
+        if(arch_interrupt_get_state().enabled) {
+            (void) CPU_LOCAL_EXCHANGE(scheduler.yield_pending, false);
+            yield = true;
+        }
     }
 
     CPU_LOCAL_DEC(scheduler.preempt_counter);
