@@ -96,7 +96,7 @@ static void print_type(const char* label, const struct tu_type_descriptor* type)
 [[noreturn]] static void report(const char* message, const struct tu_source_location loc, const struct tu_type_descriptor* type) {
     print_location(message, loc);
     print_type("value", type);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 
 #pragma clang diagnostic push
@@ -119,13 +119,13 @@ static void print_type(const char* label, const struct tu_type_descriptor* type)
 }
 [[gnu::used, noreturn]] void __ubsan_handle_pointer_overflow(struct tu_pointer_overflow_data* data) {
     print_location("pointer overflow", data->location);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_shift_out_of_bounds(struct tu_shift_out_of_bounds_data* data) {
     print_location("shift out of bounds", data->location);
     print_type("left", data->left_type);
     print_type("right", data->right_type);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_load_invalid_value(struct tu_invalid_value_data* data) {
     report("invalid load value", data->location, data->type);
@@ -134,7 +134,7 @@ static void print_type(const char* label, const struct tu_type_descriptor* type)
     print_location("array out of bounds", data->location);
     print_type("array", data->array_type);
     print_type("index", data->index_type);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_type_mismatch_v1(struct tu_type_mismatch_v1_data* data, uintptr_t ptr) {
     if(!ptr) {
@@ -165,62 +165,62 @@ static void print_type(const char* label, const struct tu_type_descriptor* type)
 }
 [[gnu::used, noreturn]] void __ubsan_handle_add_overflow_abort(struct tu_overflow_data* data) {
     __ubsan_handle_add_overflow(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_sub_overflow_abort(struct tu_overflow_data* data) {
     __ubsan_handle_sub_overflow(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_mul_overflow_abort(struct tu_overflow_data* data) {
     __ubsan_handle_mul_overflow(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_divrem_overflow_abort(struct tu_overflow_data* data) {
     __ubsan_handle_divrem_overflow(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_negate_overflow_abort(struct tu_overflow_data* data) {
     __ubsan_handle_negate_overflow(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_pointer_overflow_abort(struct tu_pointer_overflow_data* data) {
     __ubsan_handle_pointer_overflow(data);
 }
 [[gnu::used, noreturn]] void __ubsan_handle_shift_out_of_bounds_abort(struct tu_shift_out_of_bounds_data* data) {
     __ubsan_handle_shift_out_of_bounds(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_load_invalid_value_abort(struct tu_invalid_value_data* data) {
     __ubsan_handle_load_invalid_value(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_out_of_bounds_abort(struct tu_array_out_of_bounds_data* data) {
     __ubsan_handle_out_of_bounds(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_type_mismatch_v1_abort(struct tu_type_mismatch_v1_data* data, uintptr_t ptr) {
     __ubsan_handle_type_mismatch_v1(data, ptr);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_vla_bound_not_positive_abort(struct tu_negative_vla_data* data) {
     __ubsan_handle_vla_bound_not_positive(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_nonnull_return_abort(struct tu_nonnull_return_data* data) {
     __ubsan_handle_nonnull_return(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_nonnull_arg_abort(struct tu_nonnull_arg_data* data) {
     __ubsan_handle_nonnull_arg(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_builtin_unreachable_abort(struct tu_unreachable_data* data) {
     __ubsan_handle_builtin_unreachable(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 [[gnu::used, noreturn]] void __ubsan_handle_invalid_builtin_abort(struct tu_invalid_builtin_data* data) {
     __ubsan_handle_invalid_builtin(data);
-    arch_panic("ubsan");
+    arch_panic("ubsan\n");
 }
 
 #pragma clang diagnostic pop

@@ -157,7 +157,7 @@ static void lapic_write64(uint32_t reg, uint64_t value) {
     if(g_x2apic_mode) {
         arch_msr_write(ARCH_MSR_X2APIC_BASE_MSR + (reg >> 4), value);
     } else {
-        arch_panic("lapic_write64 is not supported in xAPIC mode");
+        arch_panic("lapic_write64 is not supported in xAPIC mode\n");
     }
 }
 
@@ -289,7 +289,7 @@ void arch_lapic_send_init(uint32_t apic_id) {
 void arch_lapic_send_startup(uint32_t apic_id, uintptr_t startup_page) {
     size_t startup_cs = startup_page / PAGE_SIZE_DEFAULT;
     if(startup_cs > 0xFF) {
-        arch_panic("lapic: startup page 0x%lx exceeds 0xFF000", startup_page);
+        arch_panic("lapic: startup page 0x%lx exceeds 0xFF000\n", startup_page);
     }
 
     uint64_t icr = 0;

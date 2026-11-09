@@ -67,7 +67,7 @@ uint32_t pagedb_page_unmap(uint64_t pfn) {
 void pagedb_set_page_state(uint64_t pfn, uint8_t entry_type) {
     pagedb_page_t* page = pagedb_get_page(pfn);
     if(page == nullptr) {
-        arch_panic("called pagedb_set_page_state on invalid page");
+        arch_panic("called pagedb_set_page_state on invalid page\n");
     }
 
     ATOMIC_STORE(&page->type, entry_type, ATOMIC_RELAXED);
@@ -78,6 +78,6 @@ void pagedb_set_page_state(uint64_t pfn, uint8_t entry_type) {
         ATOMIC_STORE(&page->allocated.map_count, 0, ATOMIC_RELAXED);
         ATOMIC_STORE(&page->allocated.page_level_mapping_count, 0, ATOMIC_RELAXED);
     } else {
-        arch_panic("called pagedb_set_page with invaild state");
+        arch_panic("called pagedb_set_page with invaild state\n");
     }
 }

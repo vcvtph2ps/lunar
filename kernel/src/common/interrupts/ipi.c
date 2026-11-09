@@ -69,6 +69,6 @@ void ipi_handle(ipi_message_t message) {
         case IPI_TLB_FLUSH:     ptm_flush_tlb(message.tlb_flush.vaddr, message.tlb_flush.length); break;
         case IPI_TLB_FLUSH_ALL: ptm_flush_tlb_all(); break;
         case IPI_HALT:          arch_halt_cpu();
-        default:                arch_panic("Received unknown IPI type %d on core %d", message.type, CPU_LOCAL_READ(core_id));
+        default:                arch_panic("Received unknown IPI type %d on core %d\n", message.type, CPU_LOCAL_READ(core_id));
     }
 }

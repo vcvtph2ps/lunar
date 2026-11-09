@@ -23,7 +23,7 @@
 
 static void setup_control_registers() {
     if(!arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_FXSR)) {
-        arch_panic("x86_64: FXSR is not supported on this CPU");
+        arch_panic("x86_64: FXSR is not supported on this CPU\n");
     }
 
     // PE, MP, ET, WP, PG

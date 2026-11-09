@@ -78,7 +78,7 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_LOOP:     return "ERROR_LOOP";
         case SYSCALL_ERROR_BADFD:    return "ERROR_BADFD";
         case SYSCALL_ERROR_TIMEDOUT: return "ERROR_TIMEDOUT";
-        default:                     arch_panic("Unknown syscall error code: %lu", ret.err);
+        default:                     arch_panic("Unknown syscall error code: %lu\n", ret.err);
     }
 }
 

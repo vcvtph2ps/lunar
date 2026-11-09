@@ -71,10 +71,10 @@ void arch_start_aps() {
 
     size_t apinit_size = (uintptr_t) g_apinit_end - (uintptr_t) g_apinit_start;
     if(apinit_size % _Alignof(ap_info_t) != 0) {
-        arch_panic("AP trampoline is not aligned for ap_info_t");
+        arch_panic("AP trampoline is not aligned for ap_info_t\n");
     }
     if(apinit_size + sizeof(ap_info_t) > PAGE_SIZE_DEFAULT) {
-        arch_panic("AP trampoline does not fit in a single page");
+        arch_panic("AP trampoline does not fit in a single page\n");
     }
 
     phys_addr_t trampoline_phys = pmm_alloc_page_low(PMM_FLAG_PANIC);
@@ -103,7 +103,7 @@ void arch_start_aps() {
 
         void* stack = vm_map_anon(g_vm_global_address_space, VM_NO_HINT, AP_STACK_SIZE, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
         if(stack == nullptr) {
-            arch_panic("failed to allocate the stack for core %lu", i);
+            arch_panic("failed to allocate the stack for core %lu\n", i);
         }
 
         ap_info->stack = (uintptr_t) stack + AP_STACK_SIZE;

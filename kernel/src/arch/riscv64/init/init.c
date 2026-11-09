@@ -37,7 +37,7 @@ void arch_init_bsp() {
     run_stage(INIT_STAGE_ARCH_CPU, 0);
     run_stage(INIT_STAGE_TIME, 0);
     run_stage(INIT_STAGE_SCHED, 0);
-    arch_panic("mroaww");
+    arch_panic("mroaww\n");
 
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) {

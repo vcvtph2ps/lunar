@@ -300,11 +300,11 @@ static vm_region_t* region_alloc(bool global_lock_acquired) {
 
         uintptr_t address;
         if(!find_hole(g_vm_global_address_space, VM_NO_HINT, PAGE_SIZE_DEFAULT, PAGE_SIZE_DEFAULT, &address)) {
-            arch_panic("vm: out of global address space");
+            arch_panic("vm: out of global address space\n");
         }
 
         if(!ptm_map(g_vm_global_address_space, address, page, PAGE_SIZE_DEFAULT, VM_PROT_RW, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, false)) {
-            arch_panic("failed to map region cache page");
+            arch_panic("failed to map region cache page\n");
         }
 
         vm_region_t* region = (vm_region_t*) address;

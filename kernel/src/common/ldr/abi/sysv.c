@@ -97,7 +97,7 @@ bool sysv_load_abi(vm_address_space_t* address_space, uintptr_t* inout_user_stac
     sysv_info_block_out_t info_block;
     uintptr_t arg_block = create_info_block(address_space, load_info, &info_block);
     if(arg_block == 0 && (load_info->argc != 0 || load_info->envc != 0)) {
-        arch_panic("sysv: failed to allocate arg block");
+        arch_panic("sysv: failed to allocate arg block\n");
     }
 
     buffer_t* stack_buf = buffer_create(128);

@@ -44,12 +44,12 @@ void ksym_load(void* symbol_data) {
     if(g_kernel_symbols_header != nullptr)
         LOG_WARN("ksym: symbol data reloaded");
     if(symbol_data == nullptr)
-        arch_panic("ksym: symbol data is null");
+        arch_panic("ksym: symbol data is null\n");
     if(memory_compare(symbol_data, IDENTIFIER, 4) != 0)
-        arch_panic("ksym: invalid kernel symbol file identifier");
+        arch_panic("ksym: invalid kernel symbol file identifier\n");
     header_t* header = (header_t*) symbol_data;
     if(header->revision > REVISION)
-        arch_panic("ksym: invalid kernel symbol file revision");
+        arch_panic("ksym: invalid kernel symbol file revision\n");
     g_kernel_symbols_header = header;
     LOG_OKAY("ksym: loaded %zu symbols\n", g_kernel_symbols_header->symbols_count);
 }
