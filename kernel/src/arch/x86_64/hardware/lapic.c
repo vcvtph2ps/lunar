@@ -170,6 +170,10 @@ uint32_t arch_lapic_get_id() {
     }
 }
 
+bool arch_lapic_in_x2apic_mode() {
+    return g_x2apic_mode;
+}
+
 bool arch_lapic_is_bsp() {
     uint64_t msr = arch_msr_read(ARCH_MSR_APIC_BASE_MSR);
     return (msr & APIC_BASE_BSP) != 0;

@@ -1,4 +1,5 @@
 #include <arch/x86_64/cpu_local.h>
+#include <arch/x86_64/hardware/16550uart.h>
 #include <arch/x86_64/hardware/lapic.h>
 #include <arch/x86_64/hardware/time/tsc.h>
 #include <arch/x86_64/internal/cpuid.h>
@@ -100,6 +101,15 @@ void arch_start_aps() {
     ap_info->gdtr.base = (uint32_t) PTM_FROM_HHDM(&ap_info->gdt);
 
     LOG_INFO("starting %lu application processor(s)\n", core_count - 1);
+    LOG_INFO(
+        "bsp lapic id=%u, %s mode, trampoline=0x%lx, cr3=0x%lx, set_nx=%u, set_la57=%u\n",
+        arch_lapic_get_id(),
+        arch_lapic_in_x2apic_mode() ? "x2APIC" : "xAPIC",
+        (uintptr_t) trampoline_phys,
+        (uintptr_t) ap_info->cr3,
+        ap_info->set_nx,
+        ap_info->set_la57
+    );
 
     time_timer_t* timer = arch_tsc_timer_get();
     for(uint64_t i = 1; i < core_count; i++) {
@@ -116,21 +126,32 @@ void arch_start_aps() {
         asm volatile("" ::: "memory");
 
         arch_lapic_send_init(lapic_id);
-        timer->sleep(timer, 10000);
+        timer->sleep(timer, AP_INIT_DELAY_US);
+
+        arch_lapic_send_startup(lapic_id, trampoline_phys);
+        timer->sleep(timer, 200);
         arch_lapic_send_startup(lapic_id, trampoline_phys);
 
         bool booted = false;
-        for(size_t retry = 0; retry < AP_BOOT_RETRIES; retry++) {
-            timer->sleep(timer, 10000);
+        size_t retry = 0;
+        for(; retry < AP_BOOT_RETRIES; retry++) {
+            timer->sleep(timer, AP_INIT_DELAY_US);
             if(ATOMIC_LOAD(&ap_info->booted_flag, ATOMIC_ACQUIRE) != 0) {
                 booted = true;
                 break;
             }
+
+            if(retry != 0 && retry % 100 == 0) {
+                LOG_WARN("ap[%lu]: still waiting (lapic id=%u, %zu ms)\n", i, lapic_id, retry * (AP_INIT_DELAY_US / 1000));
+                arch_lapic_send_startup(lapic_id, trampoline_phys);
+            }
         }
 
         if(!booted) {
-            arch_panic("failed to start core %lu (lapic id %u)", i, lapic_id);
+            LOG_FAIL("ap[%lu]: boot timed out after %zu ms (lapic id=%u)\n", i, retry * (AP_INIT_DELAY_US / 1000), lapic_id);
+            arch_panic("failed to start core %lu (lapic id %u)\n", i, lapic_id);
         }
+        LOG_OKAY("ap[%lu]: booted (lapic id=%u)\n", i, lapic_id);
     }
-    LOG_OKAY("sucessfully started all cores\n");
+    LOG_OKAY("successfully started all cores\n");
 }

@@ -69,3 +69,8 @@ uint32_t arch_lapic_read(uint32_t reg);
  * @param value The value to write to the specified LAPIC register.
  */
 void arch_lapic_write(uint32_t reg, uint32_t value);
+
+/**
+ * @brief Returns whether we are running in x2apic mode
+ */
+bool arch_lapic_in_x2apic_mode();
