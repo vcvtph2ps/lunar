@@ -967,23 +967,22 @@ void vm_init_kernel() {
 
 void vm_fault_process_pending() {
     thread_t* current_thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
+    process_t* current_process = current_thread->process;
+    typeof(current_thread->vm_fault)* vm_fault = &current_thread->vm_fault;
+
     if(!current_thread->vm_fault.pending) {
         return;
     }
 
-    process_t* current_process = current_thread->process;
-
-    typeof(current_thread->vm_fault) vm_fault = { 0 };
-    memory_copy(&vm_fault, &current_thread->vm_fault, sizeof(current_thread->vm_fault));
-
     current_thread->vm_fault.pending = false;
 
-    vm_fault_result_t result = address_space_fix_page(current_process->address_space, vm_fault.reason, vm_fault.address);
+    vm_fault_result_t result = address_space_fix_page(current_process->address_space, vm_fault->reason, vm_fault->address);
     if(EXPECT_UNLIKELY(result != VM_FAULT_RESOLVED)) {
         /// A file mapping accessed past the end of the file is a bus error, anything else is a segmentation fault.
         uapi_signal_t signal = result == VM_FAULT_FILE ? UAPI_SIGNAL_BUS : UAPI_SIGNAL_SEGV;
-        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed, signalling %s\n", vm_fault.address, current_process->process_id, signal == UAPI_SIGNAL_BUS ? "SIGBUS" : "SIGSEGV");
-        process_kill(current_process, PROCESS_TERMINATED, signal);
+        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed, signalling %s\n", vm_fault->address, current_process->process_id, signal == UAPI_SIGNAL_BUS ? "SIGBUS" : "SIGSEGV");
+        uapi_signal_info_t info = { .signal_number = signal, .code = UAPI_SIGNAL_KERNEL, .addr = (void*) vm_fault->address };
+        signal_thread(current_thread, signal, &info);
     }
 }
 
