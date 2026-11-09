@@ -965,20 +965,26 @@ void vm_init_kernel() {
     rb_insert(&g_vm_global_address_space->regions_tree, &g_pfndb_bitmap_region.region_tree_node);
 }
 
-static void vm_fault_dpc(void* data) {
-    thread_t* thread = data;
-    assert(thread->vm_fault.in_process);
-    assert(thread->process != nullptr);
+void vm_fault_process_pending() {
+    thread_t* current_thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
+    if(!current_thread->vm_fault.pending) {
+        return;
+    }
 
-    vm_fault_result_t result = address_space_fix_page(thread->process->address_space, thread->vm_fault.reason, thread->vm_fault.address);
+    process_t* current_process = current_thread->process;
+
+    typeof(current_thread->vm_fault) vm_fault = { 0 };
+    memory_copy(&vm_fault, &current_thread->vm_fault, sizeof(current_thread->vm_fault));
+
+    current_thread->vm_fault.pending = false;
+
+    vm_fault_result_t result = address_space_fix_page(current_process->address_space, vm_fault.reason, vm_fault.address);
     if(EXPECT_UNLIKELY(result != VM_FAULT_RESOLVED)) {
         /// A file mapping accessed past the end of the file is a bus error, anything else is a segmentation fault.
         uapi_signal_t signal = result == VM_FAULT_FILE ? UAPI_SIGNAL_BUS : UAPI_SIGNAL_SEGV;
-        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed, signalling %s\n", thread->vm_fault.address, thread->process->process_id, signal == UAPI_SIGNAL_BUS ? "SIGBUS" : "SIGSEGV");
-        process_kill(thread->process, PROCESS_TERMINATED, signal);
+        LOG_WARN("page fault at 0x%lx in process %d couldn't be fixed, signalling %s\n", vm_fault.address, current_process->process_id, signal == UAPI_SIGNAL_BUS ? "SIGBUS" : "SIGSEGV");
+        process_kill(current_process, PROCESS_TERMINATED, signal);
     }
-
-    thread->vm_fault.in_process = false;
 }
 
 bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault) {
@@ -989,19 +995,16 @@ bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault) {
         return false;
 
     thread_t* current_thread = &CPU_LOCAL_GET_CURRENT_THREAD()->common;
-    assert(!current_thread->vm_fault.in_process);
+    assert(!current_thread->vm_fault.pending);
+    assert(current_thread->process != nullptr);
 
     process_t* process = current_thread->process;
     if(process == nullptr)
         return false;
 
-    current_thread->vm_fault.in_process = true;
+    current_thread->vm_fault.pending = true;
     current_thread->vm_fault.reason = fault;
     current_thread->vm_fault.address = address;
-    current_thread->vm_fault.dpc.data = current_thread;
-    current_thread->vm_fault.dpc.fn = vm_fault_dpc;
-
-    dpc_queue(&current_thread->vm_fault.dpc);
     return true;
 }
 

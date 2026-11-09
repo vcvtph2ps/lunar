@@ -115,8 +115,10 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
     } else {
         LOG_WARN("No handler registered for interrupt vector 0x%02lx\n", frame->vector);
     }
+
     if(frame->vector >= 32)
         arch_lapic_eoi();
+
     CPU_LOCAL_WRITE(in_hardirq, false);
 
     if(is_threaded) {
@@ -132,6 +134,7 @@ void x86_64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         }
 
         if(frame->is_user) {
+            vm_fault_process_pending();
             signal_deliver_pending(frame);
         }
     }

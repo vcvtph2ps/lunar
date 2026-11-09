@@ -224,11 +224,15 @@ void vm_rewrite_prot(vm_address_space_t* address_space, void* address, size_t le
  */
 void vm_rewrite_cache(vm_address_space_t* address_space, void* address, size_t length, vm_cache_t cache);
 
-
 /**
  * @brief Handles a page fault that occurred in the given address space at the specified virtual address, with the given fault reason.
  */
 bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault);
+
+/**
+ * @brief Process any pending vm faults for the current thread
+ */
+void vm_fault_process_pending();
 
 /**
  * @brief Copies data from the global address space into the specified address space, handling any necessary page faults that may occur during the copy.

@@ -38,10 +38,9 @@ struct thread {
     list_node_t list_node_process;
 
     struct {
-        bool in_process;
+        bool pending;
         vm_fault_reason_t reason;
         virt_addr_t address;
-        dpc_t dpc;
     } vm_fault;
 
     struct {
