@@ -26,15 +26,10 @@ extern char __global_pointer[] __asm__("__global_pointer$"); // NOLINT
 #endif
 };
 
-ATOMIC static uint32_t g_ap_init_lock = 0;
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 [[noreturn]] void init_kernel_entry_ap(uint64_t core_id) {
-    while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0) {
-        arch_spin_hint();
-    }
     cpu_local_init(core_id);
 
     LOG_KTRC("kernel booted on core %ld :3\n", core_id);
@@ -186,7 +181,6 @@ const char* memmap_type_to_string(uint64_t type) {
     LOG_KTRC("cpu_count=%ld\n", boot_info->core_count);
     pagedb_init();
 
-    ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
     arch_init_bsp();
 }
 
