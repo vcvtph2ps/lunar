@@ -26,6 +26,9 @@ bool g_arch_pte_la57_enabled = false;
 static bool g_pat_supported = false;
 static bool g_huge_pages_support = false;
 
+/// @brief: we need to keep the page tables below 4 gigabytes for ap init, or else we cannot load them in protected mode, leading to a triple fault
+uintptr_t g_ptm_4g_reserved_page = 0;
+
 extern vm_address_space_t* g_vm_global_address_space;
 
 static bool map_page(arch_pte_entry_t* top_level_page_table, uintptr_t vaddr, uintptr_t paddr, page_size_t page_size, vm_protection_t prot, vm_cache_t cache, vm_privilege_t privilege, bool global, bool no_pagedb) {
@@ -358,8 +361,10 @@ void ptm_init_kernel(uint32_t core_id) {
         return;
     }
 
+    memory_zero((void*) PTM_TO_HHDM(g_ptm_4g_reserved_page), PAGE_SIZE_DEFAULT);
+
     g_vm_global_address_space = (void*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC));
-    g_vm_global_address_space->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
+    g_vm_global_address_space->ptm.top_level_page_table = g_ptm_4g_reserved_page;
     g_vm_global_address_space->ptm.ptm_lock = SPINLOCK_NO_DPC_INIT;
     g_vm_global_address_space->lock = SPINLOCK_NO_DPC_INIT;
     g_vm_global_address_space->regions_tree = vm_create_regions();

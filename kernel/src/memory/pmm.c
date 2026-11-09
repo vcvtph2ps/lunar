@@ -16,11 +16,26 @@
 // Memory below this address is carved off into its own freelist
 #define PMM_LOW_MEMORY_END 0x100000
 
+#if defined(__x86_64__)
+/// @see: g_ptm_4g_reserved_page in ptm.c
+#define PMM_MEMORY_4G 0xffffffff
+extern uintptr_t g_ptm_4g_reserved_page;
+static bool g_4g_page_reserved = false;
+#endif
+
 static pmm_t g_pmm;
 static pmm_t g_pmm_low;
 
 static void populate_list(pmm_t* pmm, uintptr_t start, uintptr_t end) {
     for(uintptr_t addr = start; addr < end; addr += ARCH_PAGE_SIZE_DEFAULT) {
+#if defined(__x86_64__)
+        if(EXPECT_UNLIKELY(!g_4g_page_reserved) && addr > PMM_LOW_MEMORY_END && addr <= PMM_MEMORY_4G) {
+            g_ptm_4g_reserved_page = addr;
+            g_4g_page_reserved = true;
+            continue;
+        }
+#endif
+
         uint64_t pfn = addr >> 12;
         pagedb_page_t* page = pagedb_get_page(pfn);
         assert(page != nullptr);
@@ -134,6 +149,16 @@ static void transfer_pages_from(pmm_t* src, pmm_t* dest, size_t num_pages) {
 void pmm_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         populate_global();
+#if defined(__x86_64__)
+        /// @see: g_ptm_4g_reserved_page in ptm.c
+        if(!g_4g_page_reserved) {
+            LOG_WARN("no usable page between 1M and 4G for page tables\n");
+            g_ptm_4g_reserved_page = pmm_alloc_page_low(PMM_FLAG_NONE);
+            if(g_ptm_4g_reserved_page == 0) {
+                arch_panic("no usable page below 4G for page tables\n");
+            }
+        }
+#endif
     }
 
     CPU_LOCAL_WRITE(pmm.num_pages, 0ul);

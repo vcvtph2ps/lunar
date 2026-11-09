@@ -77,7 +77,11 @@ void arch_start_aps() {
         arch_panic("AP trampoline does not fit in a single page\n");
     }
 
-    phys_addr_t trampoline_phys = pmm_alloc_page_low(PMM_FLAG_PANIC);
+    phys_addr_t trampoline_phys = pmm_alloc_page_low(PMM_FLAG_ZERO);
+    if(trampoline_phys == 0) {
+        LOG_WARN("no usable page below 1M\n");
+    }
+
     virt_addr_t trampoline_virt = (virt_addr_t) PTM_TO_HHDM(trampoline_phys);
     memory_copy((void*) trampoline_virt, (void*) g_apinit_start, apinit_size);
 
