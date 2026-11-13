@@ -29,6 +29,7 @@ void fd_store_free(fd_store_t* store) {
     heap_free(store, sizeof(fd_store_t));
 }
 
+
 fd_store_t* fd_store_clone(fd_store_t* parent_store) {
     spinlock_lock(&parent_store->lock);
 
@@ -52,6 +53,7 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store) {
     spinlock_unlock(&parent_store->lock);
     return store;
 }
+
 
 uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_t** out_entry) {
     spinlock_lock(&store->lock);
@@ -111,7 +113,7 @@ fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd) {
     return &store->fds[fd];
 }
 
-static vfs_result_t fd_store_free_lockless(fd_store_t* store, uint32_t fd) {
+static vfs_result_t fd_store_free_fd_lockless(fd_store_t* store, uint32_t fd) {
     bool valid = bitmap_get(store->bitmap, fd);
     if(!valid) {
         spinlock_unlock(&store->lock);
@@ -132,7 +134,7 @@ static vfs_result_t fd_store_free_lockless(fd_store_t* store, uint32_t fd) {
 
 bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
     spinlock_lock(&store->lock);
-    bool res = fd_store_free_lockless(store, fd);
+    bool res = fd_store_free_fd_lockless(store, fd);
     spinlock_unlock(&store->lock);
     return res;
 }
@@ -169,7 +171,7 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
 
     spinlock_lock(&store->lock);
     if(fd != target) {
-        fd_store_free_lockless(store, target);
+        fd_store_free_fd_lockless(store, target);
     }
 
     vfs_node_get(entry->node);
@@ -185,4 +187,17 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
 
     spinlock_unlock(&store->lock);
     return VFS_RESULT_OK;
+}
+
+void fd_store_handle_execute(fd_store_t* store) {
+    if(store->fds != nullptr) {
+        for(size_t i = 0; i < store->fds_elements_count; i++) {
+            if(bitmap_get(store->bitmap, i) && store->fds[i].node != nullptr) {
+                if(store->fds[i].flags.close_on_execute) {
+                    LOG_INFO("closing cloexec fd %ld\n", i);
+                    fd_store_free_fd_lockless(store, i);
+                }
+            }
+        }
+    }
 }

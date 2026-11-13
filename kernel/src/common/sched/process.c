@@ -285,7 +285,8 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
         thread_deref(sibling_threads[k]);
     }
 
-    // @todo: close all cloexec fd's
+
+    fd_store_handle_execute(current->fd_store);
 
     /// Swap to the new address space before taking the old one down, the current core may still have it loaded
     vm_address_space_t* old_address_space = current->address_space;

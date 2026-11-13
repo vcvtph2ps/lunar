@@ -28,10 +28,11 @@ typedef struct {
     size_t fds_elements_count;
 } fd_store_t;
 
-void fd_store_free(fd_store_t* store);
 fd_store_t* fd_store_create();
+void fd_store_free(fd_store_t* store);
 
 fd_store_t* fd_store_clone(fd_store_t* parent_store);
+void fd_store_handle_execute(fd_store_t* store);
 
 uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_t** out_entry);
 uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_entry_t** out_entry);
