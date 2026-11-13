@@ -22,7 +22,10 @@ typedef enum : uint8_t {
 
     VFS_RESULT_ERR_INTERRUPTED,
 
-    VFS_RESULT_ERR_UNSUPPORTED
+    VFS_RESULT_ERR_UNSUPPORTED,
+    VFS_RESULT_ERR_UNSUPPORTED_IOCTL,
+
+    VFS_RESULT_ERR_FAULT
 } vfs_result_t;
 
 typedef enum : uint8_t {

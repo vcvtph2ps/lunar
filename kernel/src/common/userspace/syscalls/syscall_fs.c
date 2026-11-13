@@ -17,6 +17,8 @@
 #include <uapi/limits.h>
 #include <uapi/stat.h>
 
+#include "common/fs/io.h"
+
 /// @brief Turns the POSIX mode bits passed to open() into VFS permission bits.
 static vfs_node_permissions_t permissions_from_posix_mode(uint32_t mode) {
     return (vfs_node_permissions_t) {
@@ -134,7 +136,7 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = buffer;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(buffer, count);
     io_req.read.count = count;
     io_req.read.offset = entry->offset;
     io_req.read.bytes_read = 0;
@@ -187,7 +189,7 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_WRITE;
-    io_req.write.buffer = buffer;
+    io_req.write.buffer = IO_BUFFER_CREATE_KERNEL(buffer, count);
     io_req.write.count = count;
     io_req.write.offset = entry->offset;
     io_req.write.bytes_written = 0;
@@ -205,21 +207,6 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, io_req.write.offset, io_req.write.bytes_written);
 
     return SYSCALL_RET_VALUE(io_req.write.bytes_written);
-}
-
-SYSCALL_DEFINE(syscall_fs_is_a_tty, SYSCALL_FS_ISATTY, void, uint32_t, fd);
-static syscall_ret_t syscall_fs_is_a_tty(syscall_args_t* argument_data, uint32_t fd) {
-    (void) argument_data;
-    LOG_UTRC("fd=%d\n", fd);
-
-    // @todo: STUB
-    if(fd == 0 || fd == 1 || fd == 2) {
-        return SYSCALL_RET_VALUE(0);
-    }
-
-    // fd_store_t* store = CPU_LOCAL_GET_CURRENT_THREAD()->common.process->fd_store;
-
-    return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTTY);
 }
 
 /// Seek from beginning of file.
@@ -740,7 +727,7 @@ static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = buffer;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(buffer, link_size);
     io_req.read.count = link_size;
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;
@@ -791,4 +778,30 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
 
     return syscall_from_vfs_result(result);
+}
+
+SYSCALL_DEFINE(syscall_sys_ioctl, SYSCALL_FS_IOCTL, void, int, fd, unsigned long, request, void*, buffer);
+static syscall_ret_t syscall_sys_ioctl(syscall_args_t* argument_data, int fd, unsigned long request, void* buffer) {
+    (void) argument_data;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+    if(entry == nullptr) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    io_request_t io_req;
+    io_req.type = IO_REQUEST_IOCTL;
+    // we don't actually know the size of the ioctl until the device processes it.... posix <3
+    io_req.ioctl.request = request;
+    io_req.ioctl.buffer = IO_BUFFER_CREATE_USER(process->address_space, buffer, 0);
+    io_req.no_block = entry->flags.non_blocking;
+
+    vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
+    }
+
+    return SYSCALL_RET_VOID();
 }

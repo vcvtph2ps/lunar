@@ -230,21 +230,22 @@ static vfs_result_t node_perform_io_locked(vfs_node_t* node, io_request_t* reque
     if(node->inode != nullptr) {
         if(request->type == IO_REQUEST_READ) {
             size_t read = 0;
-            if(!vfs_inode_read(node->inode, request->read.offset, request->read.buffer, request->read.count, &read))
+            if(!vfs_inode_read(node->inode, request->read.offset, &request->read.buffer, request->read.count, &read))
                 return VFS_RESULT_ERR_NO_SPACE;
             request->read.bytes_read = read;
             return VFS_RESULT_OK;
-        }
-
-        if(request->type == IO_REQUEST_WRITE) {
+        } else if(request->type == IO_REQUEST_WRITE) {
             if(node->inode->ops->write_page == nullptr)
                 return VFS_RESULT_ERR_READ_ONLY;
 
             size_t written = 0;
-            if(!vfs_inode_write(node->inode, request->write.offset, request->write.buffer, request->write.count, &written))
+            if(!vfs_inode_write(node->inode, request->write.offset, &request->write.buffer, request->write.count, &written))
                 return VFS_RESULT_ERR_NO_SPACE;
             request->write.bytes_written = written;
             return VFS_RESULT_OK;
+        } else {
+            // @note: inodes can only process read/write
+            return VFS_RESULT_ERR_UNSUPPORTED;
         }
     }
 
@@ -358,7 +359,7 @@ static vfs_result_t read_link_target(vfs_node_t* node, char** out_buf, size_t* o
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = buf;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(buf, size);
     io_req.read.count = attr.size;
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;

@@ -1,3 +1,4 @@
+#include <common/fs/io.h>
 #include <common/fs/vfs_inode.h>
 #include <lib/string.h>
 #include <memory/heap.h>
@@ -68,7 +69,7 @@ static bool inode_read_page(vfs_inode_t* inode, uint64_t index, void* buffer, si
     return true;
 }
 
-bool vfs_inode_read(vfs_inode_t* inode, size_t offset, void* buffer, size_t count, size_t* out_read) {
+bool vfs_inode_read(vfs_inode_t* inode, size_t offset, io_buffer_t* buffer, size_t count, size_t* out_read) {
     if(out_read != nullptr)
         *out_read = 0;
 
@@ -91,7 +92,8 @@ bool vfs_inode_read(vfs_inode_t* inode, size_t offset, void* buffer, size_t coun
         if(chunk > count - done)
             chunk = count - done;
 
-        if(!inode_read_page(inode, index, (uint8_t*) buffer + done, page_offset, chunk))
+        // @todo: user buffers
+        if(!inode_read_page(inode, index, (uint8_t*) buffer->buffer + done, page_offset, chunk))
             return false;
 
         done += chunk;
@@ -131,7 +133,7 @@ bool vfs_inode_resize(vfs_inode_t* inode, size_t new_size) {
     return true;
 }
 
-bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const void* buffer, size_t count, size_t* out_written) {
+bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const io_buffer_t* buffer, size_t count, size_t* out_written) {
     if(out_written != nullptr)
         *out_written = 0;
 
@@ -160,7 +162,7 @@ bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const void* buffer, size
             chunk = count - done;
 
         /// Writes go through the cache and mark the page dirty, the filesystem only sees them when the page is written back.
-        if(!page_cache_write(inode->cache, index, (const uint8_t*) buffer + done, page_offset, chunk))
+        if(!page_cache_write(inode->cache, index, (const uint8_t*) buffer->buffer + done, page_offset, chunk))
             return false;
 
         done += chunk;

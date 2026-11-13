@@ -1,4 +1,5 @@
 #pragma once
+#include <common/fs/io.h>
 #include <lib/helpers.h>
 #include <lib/types.h>
 #include <memory/page_cache.h>
@@ -79,7 +80,7 @@ void vfs_inode_put(vfs_inode_t* inode);
  * @param out_read Receives the number of bytes read
  * @return true on success, false if a page could not be populated
  */
-bool vfs_inode_read(vfs_inode_t* inode, size_t offset, void* buffer, size_t count, size_t* out_read);
+bool vfs_inode_read(vfs_inode_t* inode, size_t offset, io_buffer_t* buffer, size_t count, size_t* out_read);
 
 /**
  * @brief Writes up to `count` bytes at `offset` through the cache
@@ -89,7 +90,7 @@ bool vfs_inode_read(vfs_inode_t* inode, size_t offset, void* buffer, size_t coun
  * @param out_written Receives the number of bytes written
  * @return true on success, false if the inode is read only or a page failed
  */
-bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const void* buffer, size_t count, size_t* out_written);
+bool vfs_inode_write(vfs_inode_t* inode, size_t offset, const io_buffer_t* buffer, size_t count, size_t* out_written);
 
 /**
  * @brief Returns the page cache object backing the inode

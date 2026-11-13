@@ -6,6 +6,7 @@
 #include <lib/string.h>
 #include <memory/heap.h>
 
+#include "common/fs/io.h"
 #include "common/fs/vfs.h"
 
 #define LDR_MAGIC_SNIFF_SIZE 64
@@ -16,7 +17,7 @@ ldr_loader_t* g_loaders[] = { &g_elf_loader };
 static bool ldr_read(vfs_node_t* node, size_t offset, void* buffer, size_t size, size_t* out_read) {
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = buffer;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(buffer, size);
     io_req.read.count = size;
     io_req.read.offset = offset;
     io_req.read.bytes_read = 0;

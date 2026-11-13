@@ -3,6 +3,7 @@
 #include <common/ldr/bin/elf.h>
 #include <common/log.h>
 
+#include "common/fs/io.h"
 #include "common/fs/vfs.h"
 #include "common/ldr/ldr.h"
 #include "elf_fmt.h"
@@ -121,7 +122,7 @@ static bool internal_elf_handle_pt_load(vm_address_space_t* address_space, vfs_n
     void* phdr_data = heap_alloc(phdr->file_size);
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = phdr_data;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(phdr_data, phdr->file_size);
     io_req.read.count = phdr->file_size;
     io_req.read.offset = phdr->offset;
     io_req.read.bytes_read = 0;
@@ -143,7 +144,7 @@ static bool internal_elf_handle_pt_interp(vm_address_space_t* address_space, vfs
     void* phdr_data = heap_alloc(phdr->file_size);
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = phdr_data;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(phdr_data, phdr->file_size);
     io_req.read.count = phdr->file_size;
     io_req.read.offset = phdr->offset;
     io_req.read.bytes_read = 0;
@@ -186,7 +187,7 @@ static bool internal_elf_load_image(vm_address_space_t* address_space, elf64_elf
     for(size_t i = 0; i < elf_header->program_header_count; i++) {
         io_request_t io_req;
         io_req.type = IO_REQUEST_READ;
-        io_req.read.buffer = &phdr_cache[i];
+        io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(&phdr_cache[i], sizeof(elf64_program_header_t));
         io_req.read.count = sizeof(elf64_program_header_t);
         io_req.read.offset = elf_header->program_header_offset + i * elf_header->program_header_entry_size;
         io_req.read.bytes_read = 0;
@@ -272,7 +273,7 @@ bool elf_load_file(vm_address_space_t* address_space, vfs_node_t* node, elf_load
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_READ;
-    io_req.read.buffer = elf_header;
+    io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(elf_header, sizeof(elf_header));
     io_req.read.count = sizeof(elf64_elf_header_t);
     io_req.read.offset = 0;
     io_req.read.bytes_read = 0;

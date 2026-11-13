@@ -39,7 +39,7 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_FS_READ:       return "SYSCALL_FS_READ";
         case SYSCALL_FS_WRITE:      return "SYSCALL_FS_WRITE";
         case SYSCALL_FS_SEEK:       return "SYSCALL_FS_SEEK";
-        case SYSCALL_FS_ISATTY:     return "SYSCALL_FS_ISATTY";
+        case SYSCALL_FS_IOCTL:      return "SYSCALL_FS_IOCTL";
         case SYSCALL_FS_MOUNT:      return "SYSCALL_FS_MOUNT";
         case SYSCALL_FS_UNMOUNT:    return "SYSCALL_FS_UNMOUNT";
         case SYSCALL_FS_GETCWD:     return "SYSCALL_FS_GETCWD";
@@ -85,18 +85,20 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
 
 syscall_ret_t syscall_from_vfs_result(vfs_result_t result) {
     switch(result) {
-        case VFS_RESULT_OK:              return SYSCALL_RET_VALUE(0);
-        case VFS_RESULT_ERR_NOT_FOUND:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
-        case VFS_RESULT_ERR_EXISTS:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_EXIST);
-        case VFS_RESULT_ERR_NOT_DIR:     return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
-        case VFS_RESULT_ERR_IS_DIR:      return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
-        case VFS_RESULT_ERR_LOOP:        return SYSCALL_RET_ERROR(SYSCALL_ERROR_LOOP);
-        case VFS_RESULT_ERR_READ_ONLY:   return SYSCALL_RET_ERROR(SYSCALL_ERROR_ROFS);
-        case VFS_RESULT_ERR_WOULD_BLOCK: return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
-        case VFS_RESULT_ERR_NO_SPACE:    return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSPC);
-        case VFS_RESULT_ERR_INTERRUPTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
-        case VFS_RESULT_ERR_UNSUPPORTED: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSYS);
-        default:                         user_assert(false && "Invalid vfs return value");
+        case VFS_RESULT_OK:                    return SYSCALL_RET_VALUE(0);
+        case VFS_RESULT_ERR_NOT_FOUND:         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOENT);
+        case VFS_RESULT_ERR_EXISTS:            return SYSCALL_RET_ERROR(SYSCALL_ERROR_EXIST);
+        case VFS_RESULT_ERR_NOT_DIR:           return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
+        case VFS_RESULT_ERR_IS_DIR:            return SYSCALL_RET_ERROR(SYSCALL_ERROR_ISDIR);
+        case VFS_RESULT_ERR_LOOP:              return SYSCALL_RET_ERROR(SYSCALL_ERROR_LOOP);
+        case VFS_RESULT_ERR_READ_ONLY:         return SYSCALL_RET_ERROR(SYSCALL_ERROR_ROFS);
+        case VFS_RESULT_ERR_WOULD_BLOCK:       return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
+        case VFS_RESULT_ERR_NO_SPACE:          return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSPC);
+        case VFS_RESULT_ERR_INTERRUPTED:       return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
+        case VFS_RESULT_ERR_UNSUPPORTED:       return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSYS);
+        case VFS_RESULT_ERR_UNSUPPORTED_IOCTL: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTTY);
+        case VFS_RESULT_ERR_FAULT:             return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+        default:                               user_assert(false && "Invalid vfs return value");
     }
 }
 
@@ -113,9 +115,7 @@ static void print_value_with_type(sc_kind_t kind, uint64_t value) {
 }
 
 static void syscall_log_prefix(const syscall_meta_t* meta) {
-    log_print_lockless(
-        LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: ", sched_arch_thread_current()->process->process_id, meta->name
-    );
+    log_print_lockless(LOG_LEVEL_STRC, LOG_COLORIZE("utrc | ", "208") "(pid: %d) %s: ", sched_arch_thread_current()->process->process_id, meta->name);
 }
 
 static void syscall_log_generic_args(const syscall_meta_t* meta, const syscall_args_t* arguments) {

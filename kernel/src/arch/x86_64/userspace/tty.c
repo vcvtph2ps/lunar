@@ -12,6 +12,7 @@
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/heap.h>
+#include <uapi/ioctls.h>
 #include <uapi/signal.h>
 
 // default input characters handled by the canonical mode
@@ -384,7 +385,8 @@ void tty_signal_foreground(tty_t* tty, int signal_number) {
 }
 
 static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
-    uint8_t* read_buffer = request->read.buffer;
+    // @todo: user buffers
+    uint8_t* read_buffer = request->read.buffer.buffer;
     size_t count = request->read.count;
 
     lock_acquire(&tty->lock);
@@ -439,13 +441,36 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
     return VFS_RESULT_OK;
 }
 
+static vfs_result_t tty_ioctl(tty_t* tty, io_request_t* request) {
+    (void) tty;
+    if(request->ioctl.request == UAPI_IOCTLS_TIOCGWINSZ) {
+        uapi_ioctls_winsize_t winsize;
+        winsize.ws_col = 80;
+        winsize.ws_col = 20;
+        winsize.ws_xpixel = 0;
+        winsize.ws_ypixel = 0;
+        size_t sz = vm_copy_to(request->ioctl.buffer.address_space, (uintptr_t) request->ioctl.buffer.buffer, &winsize, sizeof(winsize));
+        if(sz != sizeof(winsize)) {
+            return VFS_RESULT_ERR_FAULT;
+        }
+        request->ioctl.buffer.size = sizeof(winsize);
+        return VFS_RESULT_OK;
+    }
+
+
+    return VFS_RESULT_ERR_UNSUPPORTED_IOCTL;
+}
+
 vfs_result_t tty_perform_io(void* ctx, io_request_t* request) {
     tty_t* tty = (tty_t*) ctx;
     if(request->type == IO_REQUEST_READ) {
         return tty_vfs_read(tty, request);
+    } else if(request->type == IO_REQUEST_IOCTL) {
+        return tty_ioctl(tty, request);
     } else if(request->type == IO_REQUEST_WRITE) {
         for(size_t i = 0; i < request->write.count; i++) {
-            bool success = tty_write(tty, ((uint8_t*) request->write.buffer)[i]);
+            // @todo: user buffers
+            bool success = tty_write(tty, ((uint8_t*) request->write.buffer.buffer)[i]);
             if(!success) {
                 request->write.bytes_written = i;
                 tty_flush(tty);
@@ -454,9 +479,10 @@ vfs_result_t tty_perform_io(void* ctx, io_request_t* request) {
         }
         request->write.bytes_written = request->write.count;
         tty_flush(tty);
+        return VFS_RESULT_OK;
     }
 
-    return VFS_RESULT_OK;
+    return VFS_RESULT_ERR_UNSUPPORTED;
 }
 
 const devfs_device_ops_t g_tty_devfs_ops = { .perform_io = tty_perform_io, .get_attributes = nullptr };
