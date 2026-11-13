@@ -61,6 +61,7 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_INTR:     return "ERROR_INTR";
         case SYSCALL_ERROR_TOO_BIG:  return "ERROR_TOO_BIG";
         case SYSCALL_ERROR_NO_EXEC:  return "ERROR_NO_EXEC";
+        case SYSCALL_ERROR_BADF:     return "ERROR_BADF";
         case SYSCALL_ERROR_CHILD:    return "ERROR_CHILD";
         case SYSCALL_ERROR_AGAIN:    return "ERROR_AGAIN";
         case SYSCALL_ERROR_NOMEM:    return "ERROR_NOMEM";

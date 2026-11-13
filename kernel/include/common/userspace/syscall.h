@@ -63,6 +63,7 @@ typedef enum : int64_t {
     SYSCALL_ERROR_INTR = 4, // Interrupted system call (EINTR)
     SYSCALL_ERROR_TOO_BIG = 7, // Argument list too long
     SYSCALL_ERROR_NO_EXEC = 8, // Exec format error
+    SYSCALL_ERROR_BADF = 9, // Bad file descriptor
     SYSCALL_ERROR_CHILD = 10, // No child processes (ECHILD)
     SYSCALL_ERROR_AGAIN = 11, // Try again (EAGAIN)
     SYSCALL_ERROR_NOMEM = 12, // Out of memory
@@ -72,13 +73,13 @@ typedef enum : int64_t {
     SYSCALL_ERROR_ISDIR = 21, // Resource is directory (EISDIR)
     SYSCALL_ERROR_INVAL = 22, // Invalid argument
     SYSCALL_ERROR_NOSYS = 38, // Function not implemented.
-    SYSCALL_ERROR_NOTTY = 25, // Not a TTY
+    SYSCALL_ERROR_NOTTY = 25, // Inappropriate I/O control operation
     SYSCALL_ERROR_NOSPC = 28, // No space left on device (ENOSPC)
     SYSCALL_ERROR_SPIPE = 29, // Illegal seek
     SYSCALL_ERROR_ROFS = 30, // Read-only file system
     SYSCALL_ERROR_RANGE = 34, // Out of range
     SYSCALL_ERROR_LOOP = 40, // Too many levels of symbolic links
-    SYSCALL_ERROR_BADFD = 77, // Bad file descriptor
+    SYSCALL_ERROR_BADFD = 77, // Bad file descriptor state
     SYSCALL_ERROR_TIMEDOUT = 110, // Connection timed out (ETIMEDOUT)
 } syscall_err_t;
 

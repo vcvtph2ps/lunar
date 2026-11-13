@@ -92,7 +92,7 @@ static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, s
 
         fd_store_entry_t* entry = fd_store_get_fd(current_process->fd_store, (uint32_t) fd);
         if(entry == nullptr)
-            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
 
         vfs_inode_t* inode = vfs_node_get_inode(entry->node);
         if(inode == nullptr)

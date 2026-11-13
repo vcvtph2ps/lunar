@@ -104,8 +104,8 @@ static syscall_ret_t syscall_fs_close(syscall_args_t* argument_data, uint32_t fd
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d | result=BADFD\n", fd);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d | result=EBADFD\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     fd_store_free_fd(process->fd_store, fd);
@@ -121,13 +121,13 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     if(!entry->access.read) {
-        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.read=false | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.read=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     char* buffer = heap_alloc(count);
@@ -162,13 +162,13 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     if(!entry->access.write) {
-        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.write=false | result=BADFD\n", fd, (uintptr_t) buffer_ptr, count);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.write=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     char* buffer = heap_alloc(count);
@@ -241,8 +241,8 @@ static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd,
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d | result=BADFD\n", fd);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d | result=EBADF\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     vfs_node_attr_t attr;
@@ -436,8 +436,8 @@ static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd,
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d | result=BADFD\n", fd);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d | result=EBADF\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     vfs_node_get(entry->node);
@@ -495,8 +495,8 @@ static syscall_ret_t syscall_fs_stat_at(syscall_args_t* argument_data, uint32_t 
     } else {
         fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
         if(entry == nullptr) {
-            LOG_UTRC("fd=%d | result=BADFD\n", fd);
-            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+            LOG_UTRC("fd=%d | result=EBADF\n", fd);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
         }
         vfs_node_get(entry->node);
         vfs_path.node = entry->node;
@@ -552,8 +552,8 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d | result=BADFD\n", fd);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d | result=EBADF\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     if(entry->node->type != VFS_NODE_TYPE_DIR) {
@@ -690,9 +690,9 @@ static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32
     } else {
         fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
         if(entry == nullptr) {
-            LOG_UTRC("fd=%d | result=BADFD\n", fd);
+            LOG_UTRC("fd=%d | result=EBADF\n", fd);
             heap_free(pathname, path_size);
-            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
         }
         vfs_node_get(entry->node);
         vfs_path.node = entry->node;
@@ -769,13 +769,13 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
 
     fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
     if(entry == nullptr) {
-        LOG_UTRC("fd=%d, size=%ld | result=BADFD\n", fd, size);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADFD);
+        LOG_UTRC("fd=%d, size=%ld | result=EBADF\n", fd, size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     if(!entry->access.write) {
-        LOG_UTRC("fd=%d, size=%ld, access.write=false | result=EINVAL\n", fd, size);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+        LOG_UTRC("fd=%d, size=%ld, access.write=false | result=EBADF\n", fd, size);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     if(size < 0) {
