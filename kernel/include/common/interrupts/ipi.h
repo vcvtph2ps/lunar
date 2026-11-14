@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/atomic_stack.h"
+
 typedef enum {
     IPI_TLB_FLUSH = 0,
     IPI_TLB_FLUSH_ALL,
@@ -24,10 +26,9 @@ typedef struct {
 
 typedef struct ipi_request {
     ipi_message_t message;
-    ATOMIC struct ipi_request* next;
 
-    /// Linked list to store nodes that need to be freed
-    list_node_t pending_free_node;
+    // Either in the ipi stack, or the pending free stack
+    atomic_stack_node_t node;
 } ipi_request_t;
 
 /**
@@ -44,17 +45,15 @@ void ipi_broadcast(ipi_message_t message);
 void ipi_send(uint32_t core_id, ipi_message_t message);
 
 /**
- * @brief Pops an IPI message from the queue.
- * @param message Pointer to an ipi_message_t structure to fill with the popped message.
- * @return if there is a message, returns true and fills the message, otherwise returns false
+ * @brief Handles all incoming IPI message.
  */
-bool ipi_pop(ipi_message_t* message);
+void ipi_handle();
 
 /**
- * @brief Handles an incoming IPI message.
- * @param message The IPI message to handle.
+ * @brief Reclaims any ipis sitting in the free ipi list
  */
-void ipi_handle(ipi_message_t message);
+void ipi_reclaim();
+
 
 /**
  * @brief Initializes the IPI system for the current core.

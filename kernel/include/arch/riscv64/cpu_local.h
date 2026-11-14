@@ -3,6 +3,7 @@
 #include <common/interrupts/dpc.h>
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
+#include <lib/atomic_stack.h>
 #include <lib/list.h>
 #include <memory/pmm.h>
 #include <stddef.h>
@@ -28,11 +29,11 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     scheduler_t scheduler;
 
     struct {
-        ipi_request_t* queue;
         dpc_t* dpc_free_item;
-
-        spinlock_no_int_t lock;
-        list_t pending_free_list;
+        // ipis that we have yet to execute
+        atomic_stack_t queue;
+        // ipis that we have executed but haven't freed
+        atomic_stack_t free_queue;
     } ipi;
 
     uint64_t timebase_frequency;

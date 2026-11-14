@@ -18,27 +18,13 @@ uint8_t g_ipi_vector = 0xff;
 
 static void ipi_handle_deferred(void* ctx) {
     (void) ctx;
-    while(true) {
-        arch_interrupt_state_t state = spinlock_noint_lock(&CPU_LOCAL_GET_SELF()->ipi.lock);
-        list_node_t* node = list_pop(&CPU_LOCAL_GET_SELF()->ipi.pending_free_list);
-        spinlock_noint_unlock(&CPU_LOCAL_GET_SELF()->ipi.lock, state);
-
-        if(node == nullptr) {
-            break;
-        }
-
-        ipi_request_t* request = CONTAINER_OF(node, ipi_request_t, pending_free_node);
-        pmm_free_page(PTM_FROM_HHDM(request));
-    }
+    ipi_reclaim();
 }
 
 static void ipi_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
     (void) frame;
-    ipi_message_t message;
-    while(ipi_pop(&message)) {
-        ipi_handle(message);
-    }
+    ipi_handle();
     dpc_queue(CPU_LOCAL_GET_SELF()->ipi.dpc_free_item);
 }
 

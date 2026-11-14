@@ -5,6 +5,7 @@
 #include <common/interrupts/ipi.h>
 #include <common/sched/sched.h>
 #include <common/sync/spinlock.h>
+#include <lib/atomic_stack.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
 #include <lib/string.h>
@@ -20,12 +21,10 @@ void ipi_send(uint32_t core_id, ipi_message_t message) {
         return;
     }
 
+    // @todo: figure out something better than just using a whole physical page here....
     ipi_request_t* request = (ipi_request_t*) PTM_TO_HHDM(pmm_alloc_page(PMM_FLAG_PANIC));
     memory_copy(&request->message, &message, sizeof(ipi_message_t));
-    ATOMIC_STORE(&request->next, nullptr, ATOMIC_SEQ_CST);
-
-    ipi_request_t* prev_head = ATOMIC_XCHG(&cpu_local->ipi.queue, request, ATOMIC_SEQ_CST);
-    ATOMIC_STORE(&request->next, prev_head, ATOMIC_SEQ_CST);
+    atomic_stack_push(&cpu_local->ipi.queue, &request->node);
 
     arch_send_ipi(core_id);
     sched_preempt_enable();
@@ -44,31 +43,44 @@ void ipi_broadcast(ipi_message_t message) {
     sched_preempt_enable();
 }
 
-bool ipi_pop(ipi_message_t* message) {
-    sched_preempt_disable();
-
-    arch_cpu_local_t* cpu_local = CPU_LOCAL_GET_SELF();
-
-    ipi_request_t* request = ATOMIC_XCHG(&cpu_local->ipi.queue, nullptr, ATOMIC_SEQ_CST);
-    if(request == nullptr) {
-        sched_preempt_enable();
-        return false;
-    }
-
-    ATOMIC_STORE(&cpu_local->ipi.queue, ATOMIC_LOAD(&request->next, ATOMIC_SEQ_CST), ATOMIC_SEQ_CST);
-    memory_copy(message, &request->message, sizeof(ipi_message_t));
-
-    list_push_back(&cpu_local->ipi.pending_free_list, &request->pending_free_node);
-
-    sched_preempt_enable();
-    return true;
-}
-
-void ipi_handle(ipi_message_t message) {
+static void process_ipi(ipi_message_t message) {
     switch(message.type) {
         case IPI_TLB_FLUSH:     ptm_flush_tlb(message.tlb_flush.vaddr, message.tlb_flush.length); break;
         case IPI_TLB_FLUSH_ALL: ptm_flush_tlb_all(); break;
         case IPI_HALT:          arch_halt_cpu();
         default:                arch_panic("Received unknown IPI type %d on core %d\n", message.type, CPU_LOCAL_READ(core_id));
     }
+}
+
+void ipi_handle() {
+    sched_preempt_disable();
+
+    stack_t stack = atomic_stack_take_all(&CPU_LOCAL_GET_SELF()->ipi.queue);
+    while(true) {
+        stack_node_t* node = stack_pop(&stack);
+        if(node == nullptr)
+            break;
+
+        ipi_request_t* request = CONTAINER_OF((atomic_stack_node_t*) node, ipi_request_t, node);
+        process_ipi(request->message);
+        atomic_stack_push(&CPU_LOCAL_GET_SELF()->ipi.free_queue, &request->node);
+    }
+
+    sched_preempt_enable();
+}
+
+void ipi_reclaim() {
+    sched_preempt_disable();
+
+    stack_t stack = atomic_stack_take_all(&CPU_LOCAL_GET_SELF()->ipi.free_queue);
+    while(true) {
+        stack_node_t* node = stack_pop(&stack);
+        if(node == nullptr)
+            break;
+
+        ipi_request_t* request = CONTAINER_OF((atomic_stack_node_t*) node, ipi_request_t, node);
+        pmm_free_page(PTM_FROM_HHDM(request));
+    }
+
+    sched_preempt_enable();
 }
