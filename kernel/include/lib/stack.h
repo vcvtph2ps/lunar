@@ -11,6 +11,8 @@ typedef struct {
     stack_node_t* head;
 } stack_t;
 
+#define STACK_FOR_EACH(LIST, VAR) for(stack_node_t* VAR = (LIST)->head; VAR != nullptr; VAR = VAR->next)
+
 static inline void stack_push(stack_t* stack, stack_node_t* node) {
     stack_node_t* old = stack->head;
     node->next = old;

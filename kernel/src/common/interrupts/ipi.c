@@ -13,6 +13,8 @@
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 
+#include "lib/types.h"
+
 void ipi_send(uint32_t core_id, ipi_message_t message) {
     sched_preempt_disable();
     arch_cpu_local_t* cpu_local = cpu_local_get_other(core_id);
@@ -72,17 +74,47 @@ static void process_ipi(ipi_message_t message) {
     arch_shutdown_cpu();
 }
 
+#define IPI_TLB_FLUSH_ALL_THRESHOLD 32
+
+#define IPI_IS_TLB_FLUSH(type) ((type) == IPI_TLB_FLUSH || (type) == IPI_TLB_FLUSH_ALL)
+
+static bool should_flush_all(stack_t* stack) {
+    size_t pages = 0;
+
+    STACK_FOR_EACH(stack, node) {
+        ipi_request_t* request = CONTAINER_OF((atomic_stack_node_t*) node, ipi_request_t, node);
+
+        switch(request->message.type) {
+            case IPI_TLB_FLUSH_ALL: return true;
+            case IPI_TLB_FLUSH:
+                pages += ALIGN_UP(request->message.tlb_flush.length, PAGE_SIZE_DEFAULT) / PAGE_SIZE_DEFAULT;
+                if(pages >= IPI_TLB_FLUSH_ALL_THRESHOLD)
+                    return true;
+                break;
+            default: break;
+        }
+    }
+
+    return false;
+}
+
 void ipi_handle() {
     sched_preempt_disable();
 
     stack_t stack = atomic_stack_take_all(&CPU_LOCAL_GET_SELF()->ipi.queue);
-    while(true) {
-        stack_node_t* node = stack_pop(&stack);
-        if(node == nullptr)
-            break;
 
+    bool ignore_tlb_flushes = should_flush_all(&stack);
+    if(ignore_tlb_flushes)
+        ptm_flush_tlb_all();
+
+    stack_node_t* node;
+    while((node = stack_pop(&stack)) != nullptr) {
         ipi_request_t* request = CONTAINER_OF((atomic_stack_node_t*) node, ipi_request_t, node);
-        process_ipi(request->message);
+
+        // We've already flushed the whole tlb, we can ignore all tlb flush requests
+        if(!(ignore_tlb_flushes && IPI_IS_TLB_FLUSH(request->message.type)))
+            process_ipi(request->message);
+
         atomic_stack_push(&CPU_LOCAL_GET_SELF()->ipi.free_queue, &request->node);
     }
 
