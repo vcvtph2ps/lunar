@@ -74,7 +74,6 @@ void init_stage_userspace(uint32_t core_id) {
         vfs_node_put(node);
         if(loaded)
             break;
-        }
     }
 
     if(process == nullptr) {
@@ -87,12 +86,6 @@ void init_stage_userspace(uint32_t core_id) {
     if(result != VFS_RESULT_OK) {
         arch_panic("init: failed to open /dev/tty (%d)\n", result);
     }
-
-    // @note: this is safe since we make sure pid/tid 1 is free
-    process->process_id = 1;
-
-    /// The process was created in a group named after its original id
-    process_group_join(process, process->process_id);
 
     /// The init process leads the foreground process group of the console
     tty_t* tty = tty_get_default();

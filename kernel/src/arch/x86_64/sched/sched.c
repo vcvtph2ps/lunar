@@ -119,7 +119,7 @@ thread_t* sched_arch_create_kernel_thread(virt_addr_t entry) {
     init_stack->thread_init = (virt_addr_t) arch_thread_init_common;
     init_stack->thread_exit = (virt_addr_t) sched_thread_exit_kernel;
 
-    return &sched_arch_create_thread_common(process_allocate_id(), nullptr, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack)->common;
+    return &sched_arch_create_thread_common(thread_allocate_id(), nullptr, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack)->common;
 }
 
 thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_stack_top, virt_addr_t entry, bool inherit_pid) {
@@ -134,7 +134,7 @@ thread_t* sched_arch_create_thread_user(process_t* process, virt_addr_t user_sta
     init_stack->entry = entry;
     init_stack->user_stack = user_stack_top;
 
-    uint32_t tid = inherit_pid ? process->process_id : process_allocate_id();
+    uint32_t tid = inherit_pid ? process->process_id : thread_allocate_id();
     return &sched_arch_create_thread_common(tid, process, &CPU_LOCAL_READ(self)->scheduler, kernel_stack_top, (uintptr_t) init_stack)->common;
 }
 

@@ -19,15 +19,15 @@
 #include <memory/vm.h>
 #include <stdint.h>
 
-// @note: 0 is reserved, 1 is for the init process
-ATOMIC uint32_t g_next_task_id = 2;
+// @note: 0 is reserved, the first process created becomes pid 1
+ATOMIC uint32_t g_next_process_id = 1;
 
 spinlock_t g_process_list_lock = SPINLOCK_INIT;
 list_t g_process_list = LIST_INIT;
 
 uint32_t process_allocate_id() {
     // @todo: don't bump allocate...
-    return ATOMIC_LOAD_ADD(&g_next_task_id, 1, ATOMIC_SEQ_CST);
+    return ATOMIC_LOAD_ADD(&g_next_process_id, 1, ATOMIC_SEQ_CST);
 }
 
 void process_free_id(uint32_t id) {
@@ -297,7 +297,7 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
     vm_address_space_destroy(old_address_space);
 
     // @hack: this sucks so bad
-    current_thread->tid = process_allocate_id();
+    current_thread->tid = thread_allocate_id();
     thread_t* thread = sched_arch_create_thread_user(current, user_stack_top, entry_point, true);
     assert(thread != nullptr);
 

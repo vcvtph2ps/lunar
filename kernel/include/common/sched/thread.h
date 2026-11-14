@@ -79,6 +79,13 @@ struct thread {
 };
 
 /**
+ * @brief Allocates a new thread ID.
+ * @return A unique thread ID.
+ * @note Process IDs and thread IDs come from separate namespaces.
+ */
+uint32_t thread_allocate_id();
+
+/**
  * @brief Acquires a new reference to a thread.
  * @param thread The thread to reference
  * @return The same thread
