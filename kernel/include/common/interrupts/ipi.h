@@ -23,8 +23,20 @@ typedef struct {
     };
 } ipi_message_t;
 
+/**
+ * @brief Tracks how many cores still have to process a synchronous IPI
+ * @note This lives on the sender's stack for the duration of the send
+ */
+typedef struct {
+    ATOMIC uint32_t remaining;
+} ipi_completion_t;
+
 typedef struct ipi_request {
     ipi_message_t message;
+
+    // Completion to signal once this request has been processed, or nullptr if
+    // the sender is not waiting for this request.
+    ipi_completion_t* completion;
 
     // Either in the ipi stack, or the pending free stack
     atomic_stack_node_t node;
@@ -33,6 +45,7 @@ typedef struct ipi_request {
 /**
  * @brief Broadcasts a control IPI message to all cores except the sender.
  * @param message The IPI message to broadcast.
+ * @note this is synchronous: it waits until every core that can currently take IPIs has processed the message
  */
 void ipi_broadcast(ipi_message_t message);
 
@@ -40,6 +53,7 @@ void ipi_broadcast(ipi_message_t message);
  * @brief Sends a control IPI message to a specific core.
  * @param core_id The ID of the core to send the message to.
  * @param message The IPI message to send.
+ * @note this is synchronous: it waits until the target core has processed the message (if the core is able to take IPIs)
  */
 void ipi_send(uint32_t core_id, ipi_message_t message);
 
