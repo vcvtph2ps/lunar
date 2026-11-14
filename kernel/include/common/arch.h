@@ -26,9 +26,11 @@ void arch_memory_fence(arch_memory_fence_type_t type);
 void arch_wait_for_interrupt();
 
 /**
- * @brief Halts the current core forever, never returning.
+ * @brief Hard shuts down the current core, never returning.
+ * @note This masks all maskable interrupts, so a normal IPI cannot wake the
+ *       core. Recovering it requires the INIT-SIPI-SIPI startup sequence.
  */
-[[noreturn]] void arch_halt_cpu();
+[[noreturn]] void arch_shutdown_cpu();
 
 /**
  * @brief Gets the ID of the current core
@@ -74,7 +76,13 @@ void arch_start_aps();
 void arch_log_init();
 
 /**
- * @brief Sends an inter-processor interrupt (IPI) to a specific core
+ * @brief Sends a control inter-processor interrupt (IPI) to a specific core
  * @param core_id The ID of the core to send the IPI to
  */
 void arch_send_ipi(uint32_t core_id);
+
+/**
+ * @brief Sends the dedicated panic IPI to a specific core
+ * @param core_id The ID of the core to send the IPI to
+ */
+void arch_send_panic_ipi(uint32_t core_id);

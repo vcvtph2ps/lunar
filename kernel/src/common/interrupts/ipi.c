@@ -43,13 +43,33 @@ void ipi_broadcast(ipi_message_t message) {
     sched_preempt_enable();
 }
 
+void ipi_send_panic(uint32_t core_id) {
+    arch_send_panic_ipi(core_id);
+}
+
+void ipi_broadcast_panic(void) {
+    if(g_init_boot_info == nullptr) {
+        return;
+    }
+
+    uint64_t self = CPU_LOCAL_READ(core_id);
+    for(uint32_t i = 0; i < g_init_boot_info->core_count; i++) {
+        if(i == self)
+            continue;
+        ipi_send_panic(i);
+    }
+}
+
 static void process_ipi(ipi_message_t message) {
     switch(message.type) {
         case IPI_TLB_FLUSH:     ptm_flush_tlb(message.tlb_flush.vaddr, message.tlb_flush.length); break;
         case IPI_TLB_FLUSH_ALL: ptm_flush_tlb_all(); break;
-        case IPI_HALT:          arch_halt_cpu();
         default:                arch_panic("Received unknown IPI type %d on core %d\n", message.type, CPU_LOCAL_READ(core_id));
     }
+}
+
+[[noreturn]] void ipi_handle_panic(void) {
+    arch_shutdown_cpu();
 }
 
 void ipi_handle() {

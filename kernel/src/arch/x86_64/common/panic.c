@@ -71,18 +71,18 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
 
     if(old_value == core_id) {
         log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %d (recursive panic)\n", core_id);
-        arch_halt_cpu();
+        arch_shutdown_cpu();
     }
 
     if(old_value != 0xffffffff) {
-        arch_halt_cpu();
+        arch_shutdown_cpu();
     }
 
     // @note: we set these to false, we need to be able to grab any kind of lock. and it doesn't matter anyway the kernel panicked
     CPU_LOCAL_WRITE(in_hardirq, false);
     CPU_LOCAL_WRITE(in_softirq, false);
 
-    ipi_broadcast((ipi_message_t) { .type = IPI_HALT });
+    ipi_broadcast_panic();
 
     uint64_t apic_id = arch_get_core_id();
     log_print_lockless(LOG_LEVEL_FAIL, "Kernel panic on core: %ld\n", apic_id);
@@ -98,10 +98,7 @@ typedef struct [[gnu::packed]] x86_64_debug_stack_frame {
     log_print_lockless(LOG_LEVEL_FAIL, "     ((____|    )_-\\ \\_-\\`\n");
     log_print_lockless(LOG_LEVEL_FAIL, "     `-----'`-----` `--`\n");
 
-    while(1) {
-        asm volatile("pause;hlt");
-    }
-    __builtin_unreachable();
+    arch_shutdown_cpu();
 }
 
 [[noreturn]] void arch_panic(const char* fmt, ...) {

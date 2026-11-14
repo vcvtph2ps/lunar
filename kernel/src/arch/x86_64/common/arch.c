@@ -4,6 +4,7 @@
 #include <common/cpu_local.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
+#include <lib/helpers.h>
 
 [[gnu::always_inline]] void arch_spin_hint() {
     __asm__ volatile("pause" ::: "memory");
@@ -22,9 +23,10 @@
     __asm__ volatile("hlt" ::: "memory");
 }
 
-[[noreturn]] void arch_halt_cpu() {
+[[noreturn]] void arch_shutdown_cpu() {
     (void) arch_interrupt_disable();
     arch_lapic_mask_all_interrupts();
+    ATOMIC_STORE(&CPU_LOCAL_GET_SELF()->online, false, ATOMIC_RELEASE);
 
     while(1) {
         __asm__ volatile("hlt" ::: "memory");

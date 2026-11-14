@@ -32,3 +32,8 @@ void arch_interrupt_restore(arch_interrupt_state_t state) {
     (void) core_id;
     assert(false && "Not implemented");
 }
+
+[[noreturn]] void arch_send_panic_ipi(uint32_t core_id) {
+    (void) core_id;
+    assert(false && "Not implemented");
+}
