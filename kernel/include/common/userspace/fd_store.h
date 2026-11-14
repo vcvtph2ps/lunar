@@ -5,19 +5,22 @@
 #include <stdint.h>
 
 typedef struct {
+    bool read  : 1;
+    bool write : 1;
+} fd_store_access_t;
+
+typedef struct {
+    bool close_on_execute : 1;
+    bool non_blocking     : 1;
+    bool append           : 1;
+} fd_store_flags_t;
+
+typedef struct {
     vfs_node_t* node;
     size_t offset;
 
-    struct {
-        bool read  : 1;
-        bool write : 1;
-    } access;
-
-    struct {
-        bool close_on_execute : 1;
-        bool non_blocking     : 1;
-        bool append           : 1;
-    } flags;
+    fd_store_access_t access;
+    fd_store_flags_t flags;
 } fd_store_entry_t;
 
 typedef struct {
@@ -34,10 +37,13 @@ void fd_store_free(fd_store_t* store);
 fd_store_t* fd_store_clone(fd_store_t* parent_store);
 void fd_store_handle_execute(fd_store_t* store);
 
-uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_t** out_entry);
-uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_entry_t** out_entry);
+uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags);
+uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_access_t access, fd_store_flags_t flags);
+
 fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd);
 bool fd_store_free_fd(fd_store_t* store, uint32_t fd);
+
+vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access);
 
 vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd);
 vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute);

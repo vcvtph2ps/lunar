@@ -59,16 +59,25 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
     vfs_node_t* out_result_node = nullptr;
     vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_O_NOFOLLOW) == 0, &out_result_node);
 
-    bool writable = (flags & UAPI_O_WRONLY) != 0;
+    bool create = (flags & UAPI_O_CREATE) != 0;
+    bool exclusive = (flags & UAPI_O_EXCL) != 0;
+    bool truncate = (flags & UAPI_O_TRUNC) != 0;
 
-    if(result == VFS_RESULT_OK && (flags & UAPI_O_CREATE) != 0 && (flags & UAPI_O_EXCL) != 0) {
+    fd_store_access_t fd_access = (fd_store_access_t) { .read = (flags & UAPI_O_RDONLY) != 0, .write = (flags & UAPI_O_WRONLY) != 0 };
+    fd_store_flags_t fd_flags = (fd_store_flags_t) {
+        .non_blocking = (flags & UAPI_O_NONBLOCK) != 0,
+        .close_on_execute = (flags & UAPI_O_CLOEXEC) != 0,
+        .append = (flags & UAPI_O_APPEND) != 0,
+    };
+
+    if(result == VFS_RESULT_OK && create && exclusive) {
         /// The entry already exists and O_EXCL was passed
         vfs_node_put(out_result_node);
         out_result_node = nullptr;
         result = VFS_RESULT_ERR_EXISTS;
-    } else if(result == VFS_RESULT_ERR_NOT_FOUND && (flags & UAPI_O_CREATE) != 0) {
+    } else if(result == VFS_RESULT_ERR_NOT_FOUND && create) {
         result = vfs_create(&vfs_path, VFS_NODE_TYPE_FILE, permissions_from_posix_mode(mode), &out_result_node);
-    } else if(result == VFS_RESULT_OK && (flags & UAPI_O_TRUNC) != 0 && writable) {
+    } else if(result == VFS_RESULT_OK && truncate && fd_access.write) {
         /// O_TRUNC is ignored unless the file is opened for writing
         result = vfs_truncate_node(out_result_node, 0);
         if(result != VFS_RESULT_OK) {
@@ -85,16 +94,10 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
         return syscall_from_vfs_result(result);
     }
 
-    fd_store_entry_t* entry;
-    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, &entry);
+    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, fd_access, fd_flags);
     // @note: since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
     vfs_node_put(out_result_node);
 
-    entry->access.read = (flags & UAPI_O_RDONLY) != 0;
-    entry->access.write = writable;
-    entry->flags.non_blocking = (flags & UAPI_O_NONBLOCK) != 0;
-    entry->flags.close_on_execute = (flags & UAPI_O_CLOEXEC) != 0;
-    entry->flags.append = (flags & UAPI_O_APPEND) != 0;
     return SYSCALL_RET_VALUE(fd);
 }
 
@@ -127,7 +130,8 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    if(!entry->access.read) {
+    fd_store_access_t access;
+    if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.read) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.read=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
@@ -168,7 +172,8 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    if(!entry->access.write) {
+    fd_store_access_t access;
+    if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.write) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.write=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
@@ -760,7 +765,8 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    if(!entry->access.write) {
+    fd_store_access_t access;
+    if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.write) {
         LOG_UTRC("fd=%d, size=%ld, access.write=false | result=EBADF\n", fd, size);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }

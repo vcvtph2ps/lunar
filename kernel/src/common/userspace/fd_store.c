@@ -55,7 +55,7 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store) {
 }
 
 
-uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_t** out_entry) {
+uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags) {
     spinlock_lock(&store->lock);
 
     size_t fd = bitmap_find_free(store->bitmap);
@@ -66,20 +66,16 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_entry_
 
     store->fds[fd].node = vfs_node_get(node);
     store->fds[fd].offset = 0;
-    store->fds[fd].access.read = false;
-    store->fds[fd].access.write = false;
-    store->fds[fd].flags.non_blocking = false;
-    store->fds[fd].flags.close_on_execute = false;
-    store->fds[fd].flags.append = false;
+    store->fds[fd].access = access;
+    store->fds[fd].flags = flags;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
 
-    *out_entry = &store->fds[fd];
     return fd;
 }
 
-uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_entry_t** out_entry) {
+uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_access_t access, fd_store_flags_t flags) {
     spinlock_lock(&store->lock);
 
     user_assert(fd < store->fds_elements_count && "fd out of range");
@@ -87,16 +83,12 @@ uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd,
 
     store->fds[fd].node = vfs_node_get(node);
     store->fds[fd].offset = 0;
-    store->fds[fd].access.read = false;
-    store->fds[fd].access.write = false;
-    store->fds[fd].flags.non_blocking = false;
-    store->fds[fd].flags.close_on_execute = false;
-    store->fds[fd].flags.append = false;
+    store->fds[fd].access = access;
+    store->fds[fd].flags = flags;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
 
-    *out_entry = &store->fds[fd];
     return fd;
 }
 
@@ -111,6 +103,19 @@ fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd) {
 
     spinlock_unlock(&store->lock);
     return &store->fds[fd];
+}
+
+vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access) {
+    spinlock_lock(&store->lock);
+
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return VFS_RESULT_ERR_NOT_FOUND;
+    }
+
+    *out_access = store->fds[fd].access;
+    spinlock_unlock(&store->lock);
+    return VFS_RESULT_OK;
 }
 
 static vfs_result_t fd_store_free_fd_lockless(fd_store_t* store, uint32_t fd) {

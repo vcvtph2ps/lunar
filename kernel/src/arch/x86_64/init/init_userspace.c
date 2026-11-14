@@ -70,7 +70,9 @@ void init_stage_userspace(uint32_t core_id) {
         if(result != VFS_RESULT_OK)
             continue;
 
-        if(!try_load(i, node, &process, &thread)) {
+        bool loaded = try_load(i, node, &process, &thread);
+        vfs_node_put(node);
+        if(loaded)
             break;
         }
     }
@@ -99,15 +101,12 @@ void init_stage_userspace(uint32_t core_id) {
     }
 
     // Assign stdin=0, stdout=1, stderr=2 pointing at /dev/tty
-    fd_store_entry_t* stdin;
-    fd_store_entry_t* stdout;
-    fd_store_entry_t* stderr;
-    fd_store_create_fd_at(process->fd_store, tty_node, 0, &stdin);
-    fd_store_create_fd_at(process->fd_store, tty_node, 1, &stdout);
-    fd_store_create_fd_at(process->fd_store, tty_node, 2, &stderr);
-    stdin->access.read = true;
-    stdout->access.write = true;
-    stderr->access.write = true;
+    for(uint32_t fd = 0; fd < 3; fd++) {
+        fd_store_create_fd_at(process->fd_store, tty_node, fd, (fd_store_access_t) { .read = true, .write = true }, (fd_store_flags_t) {});
+    }
+
+    // vfs_lookup above has a refrence to the node, and each fd adds a refrence, so we must drop lookup'
+    vfs_node_put(tty_node);
 
     sched_thread_schedule(thread);
 }
