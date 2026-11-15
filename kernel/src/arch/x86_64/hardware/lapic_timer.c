@@ -16,7 +16,7 @@
 
 #define LAPIC_CALIBRATION_US 50000
 
-static uint64_t g_lapic_ticks_per_us = 0;
+static uint64_t g_lapic_ticks_per_microsecond = 0;
 
 void arch_lapic_timer_calibrate(time_timer_t* calibration_timer) {
     LOG_INFO("calibrating lapic timer on using %s\n", calibration_timer->name);
@@ -27,9 +27,9 @@ void arch_lapic_timer_calibrate(time_timer_t* calibration_timer) {
     arch_lapic_timer_stop();
 
     uint32_t ticks_per_us = (uint32_t) (((uint64_t) elapsed + (LAPIC_CALIBRATION_US / 2)) / LAPIC_CALIBRATION_US);
-    g_lapic_ticks_per_us = ticks_per_us;
+    g_lapic_ticks_per_microsecond = ticks_per_us;
 
-    LOG_OKAY("apic timer calibrated: %ld ticks/us\n", g_lapic_ticks_per_us);
+    LOG_OKAY("apic timer calibrated: %ld ticks/us (MHz)\n", g_lapic_ticks_per_microsecond);
 }
 
 void arch_lapic_timer_init(uint32_t core_id) {
@@ -39,7 +39,7 @@ void arch_lapic_timer_init(uint32_t core_id) {
 }
 
 void arch_lapic_timer_oneshot_us(uint32_t microseconds) {
-    uint32_t ticks = (uint32_t) (microseconds * g_lapic_ticks_per_us);
+    uint32_t ticks = (uint32_t) (microseconds * g_lapic_ticks_per_microsecond);
     arch_lapic_write(LAPIC_TIMER_INIT_COUNT, ticks);
 }
 

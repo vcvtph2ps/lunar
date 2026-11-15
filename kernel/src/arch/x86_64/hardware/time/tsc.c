@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 static time_timer_t* g_tsc_timer;
-static uint64_t g_tsc_ticks_per_us = 0;
+static uint64_t g_tsc_ticks_per_microsecond = 0;
 
 time_timer_t* arch_tsc_timer_get() {
     return g_tsc_timer;
@@ -16,7 +16,7 @@ time_timer_t* arch_tsc_timer_get() {
 static void arch_tsc_sleep(time_timer_t* self, uint64_t microseconds) {
     (void) self;
     uint64_t tsc_start = arch_tsc_read();
-    uint64_t tsc_end = tsc_start + (g_tsc_ticks_per_us * microseconds);
+    uint64_t tsc_end = tsc_start + (g_tsc_ticks_per_microsecond * microseconds);
     while(arch_tsc_read() < tsc_end) {
         arch_spin_hint();
     }
@@ -30,17 +30,17 @@ static uint64_t arch_tsc_read_raw(time_timer_t* self) {
 static uint64_t arch_tsc_read_us(time_timer_t* self) {
     (void) self;
     uint64_t tsc_value = arch_tsc_read();
-    assert(g_tsc_ticks_per_us > 0 && "TSC ticks per microsecond is zero, TSC not calibrated");
-    return tsc_value / g_tsc_ticks_per_us;
+    assert(g_tsc_ticks_per_microsecond > 0 && "TSC ticks per microsecond is zero, TSC not calibrated");
+    return tsc_value / g_tsc_ticks_per_microsecond;
 }
 
 time_timer_t* arch_tsc_init_timer(time_timer_t* calibration_timer) {
     LOG_INFO("calibrating tsc using %s\n", calibration_timer->name);
     uint64_t tsc_start = arch_tsc_read();
     calibration_timer->sleep(calibration_timer, 10000);
-    uint32_t tsc_ticks_per_us = (arch_tsc_read() - tsc_start) / 10000ull;
-    LOG_OKAY("tsc calibrated: %d ticks/us\n", tsc_ticks_per_us);
-    g_tsc_ticks_per_us = tsc_ticks_per_us;
+    uint32_t tsc_ticks_per_microsecond = (arch_tsc_read() - tsc_start) / 10000ull;
+    g_tsc_ticks_per_microsecond = tsc_ticks_per_microsecond;
+    LOG_OKAY("tsc calibrated: %ld ticks/us (MHz)\n", g_tsc_ticks_per_microsecond);
 
     if(g_tsc_timer == nullptr) {
         g_tsc_timer = (time_timer_t*) heap_alloc(sizeof(time_timer_t));
