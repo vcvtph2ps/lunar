@@ -1,4 +1,3 @@
-#include <arch/x86_64/hardware/16550uart.h>
 #include <common/arch.h>
 #include <common/assert.h>
 #include <common/fs/devfs.h>
