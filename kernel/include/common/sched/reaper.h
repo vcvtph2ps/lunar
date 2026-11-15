@@ -11,8 +11,3 @@ void reaper_init();
  * @note The reaper is woken up, so this may be called from any thread context
  */
 void reaper_queue_thread(thread_t* thread);
-
-/**
- * @brief The number of terminated threads that are waiting to be processed by the reaper
- */
-size_t reaper_pending_count();

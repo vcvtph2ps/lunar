@@ -9,6 +9,8 @@
 #include <memory/vm.h>
 #include <uapi/signal.h>
 
+#include "lib/atomic_stack.h"
+
 typedef enum thread_state thread_state_t;
 typedef struct thread thread_t;
 
@@ -63,7 +65,7 @@ struct thread {
     wait_obj_t thread_termination_object;
 
     ATOMIC bool in_reap_queue;
-    list_node_t list_node_reap_queue;
+    atomic_stack_node_t list_node_reap_queue;
 
     bool in_interrupt_handler;
 

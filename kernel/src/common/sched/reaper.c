@@ -6,13 +6,14 @@
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
 #include <common/sync/wait_obj.h>
+#include <lib/atomic_stack.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
+#include <lib/stack.h>
 #include <stddef.h>
 #include <stdint.h>
 
-static spinlock_no_dpc_t g_reap_lock = SPINLOCK_NO_DPC_INIT;
-static list_t g_reap_queue = LIST_INIT;
+static atomic_stack_t g_reap_queue = {};
 static wait_obj_t g_reap_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
 
 /// @brief Processes a single thread that the scheduler is done with
@@ -50,18 +51,21 @@ static void reaper_process_thread(thread_t* thread) {
     thread_deref(thread);
 }
 
+
+static void reaper_process() {
+    stack_t stack = atomic_stack_take_all(&g_reap_queue);
+    while(true) {
+        stack_node_t* node = stack_pop(&stack);
+        if(node == nullptr)
+            break;
+        reaper_process_thread(CONTAINER_OF((atomic_stack_node_t*) node, thread_t, list_node_reap_queue));
+    }
+}
+
 [[noreturn]] static void reaper_entry() {
     while(true) {
-        spinlock_no_dpc_lock(&g_reap_lock);
-        list_node_t* node = list_pop(&g_reap_queue);
-        spinlock_no_dpc_unlock(&g_reap_lock);
-
-        if(node == nullptr) {
-            sched_wait_single(&g_reap_event, UINT64_MAX);
-            continue;
-        }
-
-        reaper_process_thread(CONTAINER_OF(node, thread_t, list_node_reap_queue));
+        sched_wait_single(&g_reap_event, UINT64_MAX);
+        reaper_process();
     }
 }
 
@@ -81,17 +85,8 @@ void reaper_queue_thread(thread_t* thread) {
         return;
     }
 
-    spinlock_no_dpc_lock(&g_reap_lock);
-    list_push_back(&g_reap_queue, &thread->list_node_reap_queue);
-    spinlock_no_dpc_unlock(&g_reap_lock);
+    atomic_stack_push(&g_reap_queue, &thread->list_node_reap_queue);
 
     wait_obj_signal(&thread->thread_termination_object, 1);
     wait_obj_signal(&g_reap_event, 1);
-}
-
-size_t reaper_pending_count() {
-    spinlock_no_dpc_lock(&g_reap_lock);
-    size_t count = g_reap_queue.count;
-    spinlock_no_dpc_unlock(&g_reap_lock);
-    return count;
 }
