@@ -152,8 +152,11 @@ void ipi_handle() {
     if(ignore_tlb_flushes)
         ptm_flush_tlb_all();
 
-    stack_node_t* node;
-    while((node = stack_pop(&stack)) != nullptr) {
+    while(true) {
+        stack_node_t* node = stack_pop(&stack);
+        if(node == nullptr)
+            break;
+
         ipi_request_t* request = CONTAINER_OF((atomic_stack_node_t*) node, ipi_request_t, node);
 
         // We've already flushed the whole tlb, we can ignore all tlb flush requests
