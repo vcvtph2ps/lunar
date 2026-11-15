@@ -182,6 +182,9 @@ int arch_16550uart_data_ready(arch_16550uart_t* uart) {
 }
 
 void arch_16550uart_send(arch_16550uart_t* uart, char c) {
+    if(c == '\n')
+        arch_16550uart_send(uart, '\r');
+
     for(int i = 0; i < 100000; i++) {
         if(arch_16550uart_transmit_empty(uart))
             break;
