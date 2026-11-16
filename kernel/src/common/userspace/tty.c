@@ -446,7 +446,7 @@ static vfs_result_t tty_ioctl(tty_t* tty, io_request_t* request) {
     if(request->ioctl.request == UAPI_IOCTLS_TIOCGWINSZ) {
         uapi_ioctls_winsize_t winsize;
         winsize.ws_col = 80;
-        winsize.ws_col = 20;
+        winsize.ws_row = 20;
         winsize.ws_xpixel = 0;
         winsize.ws_ypixel = 0;
         size_t sz = vm_copy_to(request->ioctl.buffer.address_space, (uintptr_t) request->ioctl.buffer.buffer, &winsize, sizeof(winsize));
