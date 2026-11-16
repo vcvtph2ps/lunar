@@ -1,16 +1,16 @@
-#include <arch/x86_64/hardware/16550uart.h>
 #include <common/arch.h>
 #include <common/framebuffer.h>
 #include <common/fs/devfs.h>
 #include <common/fs/vfs.h>
+#include <common/hardware/uart16550.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <common/userspace/tty.h>
 
 static void tty_uart_write(void* ctx, uint8_t c) {
     (void) ctx;
-    if(g_arch_16550uart_default_uart) {
-        arch_16550uart_send(g_arch_16550uart_default_uart, (char) c);
+    if(g_uart16550_default) {
+        uart16550_send(g_uart16550_default, (char) c);
     }
     framebuffer_put_char(c);
 }
@@ -28,9 +28,9 @@ void init_stage_tty(uint32_t core_id) {
     tty_t* tty = tty_create();
     tty_set_default(tty);
 
-    if(g_arch_16550uart_default_uart) {
-        g_arch_16550uart_default_uart->recv_ctx = tty;
-        g_arch_16550uart_default_uart->on_recv = tty_recv_generic;
+    if(g_uart16550_default) {
+        g_uart16550_default->recv_ctx = tty;
+        g_uart16550_default->on_recv = tty_recv_generic;
     }
 
     tty->write_ctx = nullptr;

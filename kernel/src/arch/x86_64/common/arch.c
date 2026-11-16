@@ -1,7 +1,8 @@
-#include <arch/x86_64/hardware/16550uart.h>
 #include <arch/x86_64/hardware/lapic.h>
+#include <arch/x86_64/io.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
+#include <common/hardware/uart16550.h>
 #include <common/interrupts/interrupt.h>
 #include <common/log.h>
 #include <lib/helpers.h>
@@ -40,14 +41,14 @@ uint64_t arch_get_core_id() {
 
 static void sink_debug(int c, void* ctx) {
     (void) ctx;
-    if(!g_arch_16550uart_works) {
+    if(!g_uart16550_works) {
         arch_io_port_write_u8(0xe9, (uint8_t) c);
     }
 }
 
 static void sink_debug_str(const char* s, size_t len, void* ctx) {
     (void) ctx;
-    if(g_arch_16550uart_works) {
+    if(g_uart16550_works) {
         return;
     }
     for(size_t i = 0; i < len; i++) {
@@ -70,5 +71,5 @@ void arch_log_init() {
         }
     }
 
-    arch_16550uart_early_setup();
+    arch_uart16550_early_setup();
 }

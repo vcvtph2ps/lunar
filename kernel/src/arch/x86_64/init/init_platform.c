@@ -1,4 +1,3 @@
-#include <arch/x86_64/hardware/16550uart.h>
 #include <arch/x86_64/hardware/ec.h>
 #include <arch/x86_64/hardware/fpu.h>
 #include <arch/x86_64/hardware/i8042.h>
@@ -13,6 +12,7 @@
 #include <common/assert.h>
 #include <common/cpu_local.h>
 #include <common/hardware/pci.h>
+#include <common/hardware/uart16550.h>
 #include <common/init.h>
 #include <common/interrupts/dpc.h>
 #include <common/interrupts/interrupt.h>
@@ -125,7 +125,7 @@ void init_stage_platform(uint32_t core_id) {
             arch_panic("ACPI: initialization failed uacpi_enable_fixed_event, %s\n", uacpi_status_to_string(status));
         }
 
-        arch_16550uart_setup();
+        arch_uart16550_setup();
         arch_i8042_init();
     }
 }

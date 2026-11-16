@@ -1,5 +1,4 @@
 #include <arch/x86_64/cpu_local.h>
-#include <arch/x86_64/hardware/16550uart.h>
 #include <arch/x86_64/hardware/lapic.h>
 #include <arch/x86_64/hardware/time/tsc.h>
 #include <arch/x86_64/internal/cpuid.h>
