@@ -57,12 +57,12 @@ extern list_t g_uart16550_list;
  * @brief Performs early boot UART discovery
  * @note this runs before ACPI is available so that early logging works.
  */
-void arch_uart16550_early_setup();
+void uart16550_early_setup();
 
 /**
  * @brief Completes UART setup, setting up RX if available
  */
-void arch_uart16550_setup();
+void uart16550_setup();
 
 /**
  * @brief Initializes a UART

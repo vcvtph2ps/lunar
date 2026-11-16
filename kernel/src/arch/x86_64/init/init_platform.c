@@ -31,6 +31,8 @@
 #include <uacpi/types.h>
 #include <uacpi/utilities.h>
 
+#include "common/hardware/uart16550.h"
+
 void init_stage_acpi_early(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         uacpi_status status = uacpi_initialize(UACPI_FLAG_BAD_CSUM_FATAL);
@@ -125,7 +127,7 @@ void init_stage_platform(uint32_t core_id) {
             arch_panic("ACPI: initialization failed uacpi_enable_fixed_event, %s\n", uacpi_status_to_string(status));
         }
 
-        arch_uart16550_setup();
+        uart16550_setup();
         arch_i8042_init();
     }
 }

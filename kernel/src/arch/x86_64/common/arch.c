@@ -71,5 +71,5 @@ void arch_log_init() {
         }
     }
 
-    arch_uart16550_early_setup();
+    uart16550_early_setup();
 }

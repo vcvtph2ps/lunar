@@ -1,6 +1,6 @@
 #include <arch/riscv64/hardware/plic.h>
-#include <arch/riscv64/hardware/uart16550.h>
 #include <common/arch.h>
+#include <common/hardware/uart16550.h>
 #include <common/init.h>
 #include <common/log.h>
 #include <uacpi/status.h>
@@ -23,6 +23,6 @@ void init_stage_platform_early(uint32_t core_id) {
 
 void init_stage_platform(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
-        arch_uart16550_setup();
+        uart16550_setup();
     }
 }

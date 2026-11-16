@@ -63,7 +63,7 @@ static bool uart_console_from_bootinfo(bool mmio) {
     return true;
 }
 
-void arch_uart16550_early_setup() {
+void uart16550_early_setup() {
     switch(g_init_boot_info->serial.type) {
         case BOOTINFO_SERIAL_TYPE_PIO:
             if(!uart_console_from_bootinfo(false)) {
@@ -211,7 +211,7 @@ static void uart_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     uart16550_handle_interrupt((uart16550_t*) ctx);
 }
 
-void arch_uart16550_setup() {
+void uart16550_setup() {
     if(g_uart16550_default == nullptr) {
         if(g_init_boot_info->serial.type != BOOTINFO_SERIAL_TYPE_MMIO || !uart_console_from_bootinfo(true)) {
             LOG_WARN("uart16550: no console UART to wire an interrupt for\n");
