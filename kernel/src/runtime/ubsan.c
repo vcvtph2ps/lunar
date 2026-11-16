@@ -140,6 +140,7 @@ static void print_type(const char* label, const struct tu_type_descriptor* type)
     if(!ptr) {
         report("use of NULL pointer", data->location, data->type);
     } else if(ptr & (((uintptr_t) 1 << data->log_alignment) - 1)) {
+        LOG_FAIL("misaligned pointer ptr=0x%lx log2_align=%u\n", ptr, (unsigned) data->log_alignment);
         report("use of misaligned pointer", data->location, data->type);
     } else {
         report("insufficient space for object", data->location, data->type);
