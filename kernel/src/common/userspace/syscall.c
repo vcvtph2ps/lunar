@@ -27,7 +27,9 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_PROC_SIG_WAIT:        return "SYSCALL_PROC_SIG_WAIT";
         case SYSCALL_PROC_SIG_PENDING:     return "SYSCALL_PROC_SIG_PENDING";
 
-        case SYSCALL_SYS_TCB_SET:   return "SYSCALL_SYS_TCB_SET";
+#if defined(__x86_64__)
+        case SYSCALL_SYS_TCB_SET: return "SYSCALL_SYS_TCB_SET";
+#endif
         case SYSCALL_SYS_DEBUG_LOG: return "SYSCALL_SYS_DEBUG_LOG";
 
         case SYSCALL_VM_MAP:     return "SYSCALL_VM_MAP";

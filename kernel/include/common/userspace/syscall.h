@@ -29,7 +29,9 @@ typedef enum : uint64_t {
     SYSCALL_PROC_SIG_PENDING = 18,
 
     SYSCALL_SYS_DEBUG_LOG = 20,
+#if defined(__x86_64__)
     SYSCALL_SYS_TCB_SET = 21,
+#endif
     SYSCALL_SYS_UNAME = 22,
 
     SYSCALL_VM_MAP = 30,

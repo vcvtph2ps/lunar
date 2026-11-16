@@ -81,13 +81,4 @@ static syscall_ret_t syscall_sys_tcb_set(syscall_args_t* argument_data, void* fs
     return SYSCALL_RET_VALUE(0);
 }
 
-#else
-
-SYSCALL_DEFINE(syscall_sys_tcb_set, SYSCALL_SYS_TCB_SET, void, void*, fs_base);
-static syscall_ret_t syscall_sys_tcb_set(syscall_args_t* argument_data, void* fs_base) {
-    (void) argument_data;
-    (void) fs_base;
-    assert(false && "unimplemented");
-}
-
 #endif
