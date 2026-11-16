@@ -5,7 +5,10 @@
 
 typedef struct {
     virt_addr_t stack_pointer;
+    virt_addr_t syscall_storage;
     virt_addr_t kernel_stack_top;
+
+    void* fpu_area;
 
     thread_t common;
 } riscv64_thread_t; // NOLINT

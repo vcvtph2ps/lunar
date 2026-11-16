@@ -32,4 +32,8 @@ void* arch_fpu_alloc_area();
  */
 void arch_fpu_free_area(void* area);
 
+/**
+ * @brief Gets the size of an FPU save area
+ * @returns FPU save area size in bytes
+ */
 size_t arch_fpu_area_size();

@@ -167,6 +167,8 @@ thread_t* sched_arch_fork_thread_user(process_t* process, thread_t* parent, virt
     x86_64_thread_t* n_parent_thread = CONTAINER_OF(parent, x86_64_thread_t, common);
     thread->fsbase = n_parent_thread->fsbase;
     thread->gsbase = n_parent_thread->gsbase;
+
+    arch_fpu_save(n_parent_thread->fpu_area);
     memory_copy(thread->fpu_area, n_parent_thread->fpu_area, arch_fpu_area_size());
 
     return &thread->common;
