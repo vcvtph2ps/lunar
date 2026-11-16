@@ -26,7 +26,11 @@ typedef struct {
 } uapi_signal_info_t;
 
 typedef struct {
+#if defined(__x86_64__)
     uint64_t gregs[16];
+#elif defined(__riscv) && __riscv_xlen == 64
+    uint64_t gregs[32];
+#endif
     uint64_t pc;
     uint64_t flags;
 } uapi_signal_mcontext_t;
