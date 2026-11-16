@@ -80,7 +80,7 @@ void arch_start_aps() {
 
     phys_addr_t trampoline_phys = pmm_alloc_page_low(PMM_FLAG_ZERO);
     if(trampoline_phys == 0) {
-        LOG_WARN("no usable page below 1M\n");
+        arch_panic("ap: no usable page below 1M\n");
     }
 
     virt_addr_t trampoline_virt = (virt_addr_t) PTM_TO_HHDM(trampoline_phys);
