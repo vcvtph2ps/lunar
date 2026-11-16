@@ -5,6 +5,7 @@
 #include <common/init.h>
 #include <common/interrupts/ipi.h>
 #include <common/log.h>
+#include <common/sched/sched.h>
 #include <lib/helpers.h>
 #include <lib/string.h>
 #include <memory/pagedb.h>
@@ -245,6 +246,7 @@ void ptm_load_address_space(vm_address_space_t* address_space) {
 
     ARCH_CSR_WRITE(satp, ARCH_CSR_SATP_MAKE(mode, address_space->ptm.top_level_page_table));
     asm volatile("sfence.vma zero, zero" ::: "memory");
+    asm volatile("fence.i" ::: "memory");
 }
 
 static void map_kernel(arch_pte_entry_t* boot_top) {
@@ -303,19 +305,102 @@ static bool detect_svpbmt(void) {
     return false;
 }
 
-[[noreturn]] bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protection_t prot, vm_cache_t cache, bool global) {
-    (void) address_space;
-    (void) vaddr;
-    (void) prot;
-    (void) cache;
-    (void) global;
-    assert(false && "Unimplemented");
+static bool ptm_make_cow_page_table(arch_pte_entry_t* new_page_table_base, arch_pte_entry_t* old_page_table_base, uint32_t level) {
+    int entry_count = level == pte_top_level() ? 256 : 512;
+    uint32_t present_count = 0;
+    for(int i = 0; i < entry_count; i++) {
+        if(!pte_is_present(old_page_table_base[i])) {
+            continue;
+        }
+        present_count++;
+
+        if(pte_is_leaf(old_page_table_base[i], level)) {
+            uint64_t num_4k = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
+            uint64_t pfn_base = pte_get_leaf_phys(old_page_table_base[i], level) / ARCH_PAGE_SIZE_4K;
+
+            new_page_table_base[i] = old_page_table_base[i] & ~ARCH_PTE_W;
+            old_page_table_base[i] &= ~ARCH_PTE_W;
+
+            for(uint64_t j = 0; j < num_4k; j++) {
+                pagedb_page_map(pfn_base + j);
+            }
+            continue;
+        }
+
+        uintptr_t new_pt_level = pmm_alloc_page(PMM_FLAG_ZERO);
+        if(new_pt_level == 0)
+            return false;
+        new_page_table_base[i] = pte_clone_table(new_pt_level, old_page_table_base[i]);
+        bool success = ptm_make_cow_page_table((arch_pte_entry_t*) PTM_TO_HHDM(new_pt_level), (arch_pte_entry_t*) PTM_TO_HHDM(pte_get_table_phys(old_page_table_base[i])), level - 1);
+        if(!success) {
+            return false;
+        }
+    }
+
+    ATOMIC_STORE(&pagedb_get_page(pt_radix_table_pfn(new_page_table_base))->allocated.page_level_mapping_count, present_count, ATOMIC_RELAXED);
+    return true;
 }
 
-[[noreturn]] bool ptm_fork_user(vm_address_space_t* address_space, vm_address_space_t* parent_address_space) {
-    (void) address_space;
-    (void) parent_address_space;
-    assert(false && "Unimplemented");
+bool ptm_cow_fault(vm_address_space_t* address_space, uintptr_t vaddr, vm_protection_t prot, vm_cache_t cache, bool global) {
+    virt_addr_t page_addr = ALIGN_DOWN(vaddr, ARCH_PAGE_SIZE_4K);
+
+    uintptr_t phys;
+    if(!ptm_physical(address_space, page_addr, &phys))
+        return false;
+
+    uint64_t pfn = phys >> 12;
+    pagedb_page_t* page = pagedb_get_page(pfn);
+    if(page == nullptr)
+        return false;
+
+    uint32_t map_count = ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED);
+    vm_privilege_t priv = global ? VM_PRIVILEGE_KERNEL : VM_PRIVILEGE_USER;
+
+    LOG_UTRC("cow fault vaddr=0x%lx, map_count=%u\n", vaddr, map_count);
+    if(map_count == 1) {
+        return ptm_rewrite(address_space, page_addr, ARCH_PAGE_SIZE_4K, prot, cache, priv, global);
+    }
+
+    uintptr_t new_phys = pmm_alloc_page(PMM_FLAG_NONE);
+    if(new_phys == 0)
+        return false;
+
+    memory_copy((void*) PTM_TO_HHDM(new_phys), (void*) PTM_TO_HHDM(phys), ARCH_PAGE_SIZE_4K);
+
+    ptm_unmap(address_space, page_addr, ARCH_PAGE_SIZE_4K, false);
+
+    if(!ptm_map(address_space, page_addr, new_phys, ARCH_PAGE_SIZE_4K, prot, cache, priv, global, false)) {
+        pmm_free_page(new_phys);
+        return false;
+    }
+
+    return true;
+}
+
+bool ptm_fork_user(vm_address_space_t* new_as, vm_address_space_t* parent_as) {
+    new_as->ptm.top_level_page_table = pmm_alloc_page(PMM_FLAG_ZERO);
+    if(new_as->ptm.top_level_page_table == 0)
+        return false;
+
+    new_as->ptm.ptm_lock = SPINLOCK_NO_DPC_INIT;
+
+    spinlock_no_dpc_lock(&parent_as->ptm.ptm_lock);
+    bool success = ptm_make_cow_page_table((arch_pte_entry_t*) PTM_TO_HHDM(new_as->ptm.top_level_page_table), (arch_pte_entry_t*) PTM_TO_HHDM(parent_as->ptm.top_level_page_table), pte_top_level());
+    if(!success) {
+        arch_panic("ptm: failed to fork page tables\n");
+    }
+    spinlock_no_dpc_unlock(&parent_as->ptm.ptm_lock);
+
+    arch_pte_entry_t* user_root = (arch_pte_entry_t*) PTM_TO_HHDM(new_as->ptm.top_level_page_table);
+    arch_pte_entry_t* kernel_root = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
+    for(int i = 256; i < 512; i++) user_root[i] = kernel_root[i];
+
+    ptm_flush_tlb_all();
+    ipi_broadcast((ipi_message_t) {
+        .type = IPI_TLB_FLUSH_ALL,
+    });
+
+    return true;
 }
 
 void ptm_init_kernel(uint32_t core_id) {
