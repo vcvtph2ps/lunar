@@ -102,8 +102,8 @@ if opt_arch == "x86_64" then
 elseif opt_arch == "riscv64" then
     table.extend(c_flags, {
         "--target=riscv64-none-elf",
-        "-march=rv64gc_zihintpause",
-        "-mabi=lp64d",
+        "-march=rv64imac_zicsr_zifencei_zihintpause",
+        "-mabi=lp64",
         "-mcmodel=medany"
     })
 end

@@ -1,7 +1,7 @@
 [prekernel-protocol]
 type = "git"
 url = "https://github.com/vcvtph2ps/theia"
-revision = "cf6ae2e0939e3928341ae58f1d25497d8145b2b4"
+revision = "8892c3a86e6758c8827ddc44a376c6c53a727c40"
 
 [flanterm]
 type = "git"
