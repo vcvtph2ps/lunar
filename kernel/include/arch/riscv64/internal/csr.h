@@ -35,6 +35,16 @@
     })
 
 #define ARCH_CSR_SSTATUS_SIE ((uint64_t) (1ULL << 1))
+#define ARCH_CSR_SSTATUS_SPIE ((uint64_t) (1ULL << 5))
+#define ARCH_CSR_SSTATUS_SPP ((uint64_t) (1ULL << 8))
+
+#define ARCH_CSR_SIE_SSIE ((uint64_t) (1ULL << 1))
+#define ARCH_CSR_SIE_STIE ((uint64_t) (1ULL << 5))
+#define ARCH_CSR_SIE_SEIE ((uint64_t) (1ULL << 9))
+
+#define ARCH_CSR_SIP_SSIP ((uint64_t) (1ULL << 1))
+#define ARCH_CSR_SIP_STIP ((uint64_t) (1ULL << 5))
+#define ARCH_CSR_SIP_SEIP ((uint64_t) (1ULL << 9))
 
 #define ARCH_CSR_SSTATUS_FS_MASK ((uint64_t) (3ULL << 13))
 #define ARCH_CSR_SSTATUS_FS_INITIAL ((uint64_t) (1ULL << 13))
@@ -52,3 +62,4 @@
 #define ARCH_CSR_SATP_MAKE(mode, root_pa) ((mode) | (((root_pa) >> 12) & ARCH_CSR_SATP_PPN_MASK))
 
 #define ARCH_CSR_STVEC_MODE_DIRECT ((uint64_t) 0)
+#define ARCH_CSR_STVEC_MODE_VECTORED ((uint64_t) 1)

@@ -1,13 +1,19 @@
 #pragma once
 #include <stdint.h>
 
-typedef struct {
-    // @todo:
-} arch_interrupt_regs_t;
+#define ARCH_INTERRUPT_CAUSE_SSI 1
+#define ARCH_INTERRUPT_CAUSE_STI 5
+#define ARCH_INTERRUPT_CAUSE_SEI 9
 
 typedef struct {
-    // @todo:
-} arch_interrupt_frame_t;
+    uint64_t registers[32];
+    uint64_t sepc;
+    uint64_t sstatus;
+    uint64_t scause;
+    uint64_t stval;
+} arch_interrupt_regs_t;
+
+typedef arch_interrupt_regs_t arch_interrupt_frame_t;
 
 typedef struct {
     bool enabled;
@@ -19,8 +25,7 @@ typedef struct {
  * @return The userspace instruction pointer
  */
 [[nodiscard]] static inline uint64_t arch_interrupt_regs_syscall_get_user_ip(arch_interrupt_regs_t* regs) {
-    (void) regs;
-    return 0;
+    return regs->sepc;
 }
 
 /**

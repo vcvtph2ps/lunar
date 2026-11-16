@@ -15,6 +15,10 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
     arch_cpu_local_t* self;
     riscv64_thread_t* current_thread;
 
+    uint64_t trap_scratch;
+    uint64_t trap_scratch2;
+    uint64_t trap_scratch3;
+
     bool online;
     uint32_t core_id;
     uint32_t hart_id;
@@ -23,6 +27,7 @@ struct [[gnu::aligned(64)]] arch_cpu_local {
 
     bool in_hardirq;
     bool in_softirq;
+    bool panic_ipi_pending;
 
     pmm_t pmm;
 
