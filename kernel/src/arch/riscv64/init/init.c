@@ -1,16 +1,26 @@
 #include <common/arch.h>
-#include <common/assert.h>
+#include <common/cpu_local.h>
 #include <common/init.h>
+#include <common/interrupts/dpc.h>
 #include <common/log.h>
+#include <common/sched/sched.h>
 #include <lib/helpers.h>
+#include <memory/ptm.h>
+#include <stddef.h>
 
 #define INIT_STAGE(STAGE, HANDLER) { .stage = (STAGE), .handler = (HANDLER) }
 
-init_stage_handler_t g_init_stage_handlers[] = {
-    INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
-    INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
-    INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
-};
+init_stage_handler_t g_init_stage_handlers[] = { INIT_STAGE(INIT_STAGE_BASE_MEM, init_stage_base_mem),
+                                                 INIT_STAGE(INIT_STAGE_ARCH_CPU, init_stage_arch_cpu),
+                                                 INIT_STAGE(INIT_STAGE_TIME, init_stage_time),
+                                                 INIT_STAGE(INIT_STAGE_SCHED, sched_init),
+                                                 INIT_STAGE(INIT_STAGE_ACPI_EARLY, init_stage_acpi_early),
+                                                 INIT_STAGE(INIT_STAGE_PLATFORM_EARLY, init_stage_platform_early),
+                                                 // INIT_STAGE(INIT_STAGE_ACPI, init_stage_acpi),
+                                                 INIT_STAGE(INIT_STAGE_PLATFORM, init_stage_platform),
+                                                 INIT_STAGE(INIT_STAGE_VFS, init_stage_vfs),
+                                                 INIT_STAGE(INIT_STAGE_TTY, init_stage_tty),
+                                                 INIT_STAGE(INIT_STAGE_USERSPACE, init_stage_userspace) };
 
 #undef INIT_STAGE
 
@@ -19,7 +29,11 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
     for(size_t i = 0; i < sizeof(g_init_stage_handlers) / sizeof(init_stage_handler_t); i++) {
         if(g_init_stage_handlers[i].stage == stage) {
             g_init_stage_handlers[i].handler(core_id);
-            LOG_OKAY("finished stage %s (%i) on %s\n", init_stage_to_str(stage), stage, INIT_CORE_IS_BSP(core_id) ? "bsp" : "ap");
+            if(core_id == 0) {
+                LOG_OKAY("finished stage %s (%i) on bsp\n", init_stage_to_str(stage), stage);
+            } else {
+                LOG_KTRC("finished stage %s (%i) on core %d (ap)\n", init_stage_to_str(stage), stage, core_id);
+            }
             found = true;
             break;
         }
@@ -32,43 +46,55 @@ static void run_stage(init_stage_t stage, uint32_t core_id) {
 
 ATOMIC uint32_t g_init_finished_core_count = 0;
 
-void arch_init_bsp() {
-    run_stage(INIT_STAGE_BASE_MEM, 0);
-    run_stage(INIT_STAGE_ARCH_CPU, 0);
-    run_stage(INIT_STAGE_TIME, 0);
-    run_stage(INIT_STAGE_SCHED, 0);
-    arch_panic("mroaww\n");
+static void arch_init_thread() {
+    uint32_t core_id = CPU_LOCAL_READ(core_id);
+    run_stage(INIT_STAGE_ACPI_EARLY, core_id);
+    run_stage(INIT_STAGE_PLATFORM_EARLY, core_id);
+    run_stage(INIT_STAGE_ACPI, core_id);
+    run_stage(INIT_STAGE_PLATFORM, core_id);
+    run_stage(INIT_STAGE_VFS, core_id);
+    run_stage(INIT_STAGE_TTY, core_id);
 
+    // let APs know they can start init, and wait for them
     ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) {
         arch_spin_hint();
     }
 
-    while(1) {
-        arch_spin_hint();
-    }
+    run_stage(INIT_STAGE_USERSPACE, core_id);
 }
 
-[[noreturn]] void arch_start_aps() {
-    ASSERT_TODO();
+void arch_init_bsp() {
+    LOG_OKAY("Starting early bsp init\n");
+    run_stage(INIT_STAGE_BASE_MEM, 0);
+    run_stage(INIT_STAGE_ARCH_CPU, 0);
+    run_stage(INIT_STAGE_TIME, 0);
+    run_stage(INIT_STAGE_SCHED, 0);
+
+    arch_start_aps();
+
+    thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
+    ATOMIC_STORE(&thread->sched.migratable, false, ATOMIC_SEQ_CST);
+
+    sched_thread_schedule(thread);
+    sched_arch_handoff();
 }
 
 void arch_init_ap(uint32_t core_id) {
+    // Wait for BSP to finish init
     while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) == 0) {
         arch_spin_hint();
     }
+    ptm_init_kernel(core_id);
 
     run_stage(INIT_STAGE_BASE_MEM, core_id);
     run_stage(INIT_STAGE_ARCH_CPU, core_id);
     run_stage(INIT_STAGE_TIME, core_id);
     run_stage(INIT_STAGE_SCHED, core_id);
 
-    ATOMIC_LOAD_ADD(&g_init_finished_core_count, 1, ATOMIC_RELEASE);
-    while(ATOMIC_LOAD(&g_init_finished_core_count, ATOMIC_ACQUIRE) != g_init_boot_info->core_count) {
-        arch_spin_hint();
-    }
+    thread_t* thread = sched_arch_create_kernel_thread((virt_addr_t) arch_init_thread);
+    ATOMIC_STORE(&thread->sched.migratable, false, ATOMIC_SEQ_CST);
 
-    while(1) {
-        arch_spin_hint();
-    }
+    sched_thread_schedule(thread);
+    sched_arch_handoff();
 }
