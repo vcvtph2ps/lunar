@@ -2,7 +2,7 @@
 
 .extern riscv64_dispatch_trap
 
-.align 4
+.balign 16
 .globl riscv64_trap_handler
 riscv64_trap_handler:
     # sscratch = cpulocal
