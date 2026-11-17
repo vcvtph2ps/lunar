@@ -1,12 +1,17 @@
-global x86_64_handle_syscall
-extern x86_64_dispatch_syscall
+#include <arch/x86_64/internal/asm_offsets.h>
+
+.intel_syntax noprefix
+.section .text
+.globl x86_64_handle_syscall
+
+.extern x86_64_dispatch_syscall
 
 x86_64_handle_syscall:
     swapgs
 
-    mov r15, qword [gs:8]
-    mov qword [r15 + 8], rsp
-    mov rsp, qword [r15 + 16]
+    mov r15, qword ptr gs:[CPU_LOCAL_OFF_CURRENT_THREAD]
+    mov qword ptr [r15 + X86_64_THREAD_OFF_SYSCALL_STORAGE], rsp
+    mov rsp, qword ptr [r15 + X86_64_THREAD_OFF_KERNEL_STACK_TOP]
 
     push rax
     push rbx
@@ -23,7 +28,7 @@ x86_64_handle_syscall:
     push r13
     push r14
     push r15
-    push qword [r15 + 8]
+    push qword ptr [r15 + X86_64_THREAD_OFF_SYSCALL_STORAGE]
 
     mov rdi, rsp
 
@@ -52,9 +57,9 @@ x86_64_handle_syscall:
     pop rbx
     add rsp, 8
 
-    mov r15, qword [gs:8]
-    mov rsp, qword [r15 + 8]
+    mov r15, qword ptr gs:[CPU_LOCAL_OFF_CURRENT_THREAD]
+    mov rsp, qword ptr [r15 + X86_64_THREAD_OFF_SYSCALL_STORAGE]
     xor r15, r15
 
     swapgs
-    o64 sysret
+    sysretq

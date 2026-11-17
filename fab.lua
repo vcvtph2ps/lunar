@@ -10,9 +10,6 @@ local project_dir = fab.project_dir
 local clang = c.get_clang()
 assert(clang ~= nil, "No clang compiler found")
 
-local nasm = asm.get_nasm()
-assert(nasm ~= nil, "No nasm found")
-
 local ld = linker.get_linker("ld.lld")
 assert(ld ~= nil, "No ld.lld found")
 
@@ -23,13 +20,8 @@ local uacpi = fab.dependency("uacpi")
 local function get_kernel_objs(kernel_flags)
     local kernel_sources = sources(project_dir:glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
     table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/" .. opt_arch .. "/**/*.c")))
+    table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/" .. opt_arch .. "/**/*.S")))
     table.extend(kernel_sources, sources(uacpi:glob("source/*.c")))
-
-    if opt_arch == "x86_64" then
-        table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/x86_64/**/*.asm")))
-    elseif opt_arch == "riscv64" then
-        table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/riscv64/**/*.S")))
-    end
 
     local include_dirs = {
         c.include_dir(project_dir / "kernel/include"),
@@ -51,12 +43,7 @@ local function get_kernel_objs(kernel_flags)
         c = function(sources) return clang:generate(sources, kernel_flags, include_dirs) end
     }
 
-    if opt_arch == "x86_64" then
-        local nasm_flags = { "-f", "elf64", "-Werror" }
-        generators.asm = function(sources) return nasm:generate(sources, nasm_flags) end
-    elseif opt_arch == "riscv64" then
-        generators.S = function(sources) return clang:generate(sources, kernel_flags, include_dirs) end
-    end
+    generators.S = function(sources) return clang:generate(sources, kernel_flags, include_dirs) end
 
     return generate(kernel_sources, generators)
 end

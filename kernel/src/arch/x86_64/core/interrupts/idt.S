@@ -1,38 +1,38 @@
-section .text
+.intel_syntax noprefix
+.section .text
 
-global x86_64_load_idt
-extern x86_64_idt_handler
+.globl x86_64_load_idt
 
-; @brief loads an idtr
-; @param idt (rdi): idtr* - pointer to the idt structure
-; @return void
+// @brief loads an idtr
+// @param idt (rdi): idtr* - pointer to the idt structure
+// @return void
 x86_64_load_idt:
     lidt [rdi]
     ret
 
-%macro isr_no_error 1
-global isr%1
-align 16
-isr%1:
+.macro isr_no_error num
+.globl isr\num
+.balign 16
+isr\num:
     push 0
-    push %1
+    push \num
     jmp handler_common
-%endmacro
+.endm
 
-%macro isr_error 1
-global isr%1
-align 16
-isr%1:
-    push %1
+.macro isr_error num
+.globl isr\num
+.balign 16
+isr\num:
+    push \num
     jmp handler_common
-%endmacro
+.endm
 
-%macro SWAPGS_IF_FROM_RING3 0
-        test qword [rsp + 24], 3
-        jz %%noswap
-        swapgs
-    %%noswap:
-%endmacro
+.macro SWAPGS_IF_FROM_RING3
+    test qword ptr [rsp + 24], 3
+    jz 1f
+    swapgs
+1:
+.endm
 
 handler_common:
     cld
@@ -99,20 +99,27 @@ isr_no_error 19
 isr_no_error 20
 isr_error    21
 
-%assign i 21
-%rep 255 - 21
-    %assign i i + 1
-    isr_no_error i
-%endrep
+.set i, 21
+.rept 255 - 21
+    .set i, i + 1
+    .altmacro
+    isr_no_error %i
+    .noaltmacro
+.endr
 
-section .rodata
-global x86_64_isr_stub_table
+.section .rodata
+.globl x86_64_isr_stub_table
 
-align 8
+.macro isr_table_entry num
+    .quad isr\num
+.endm
+
+.balign 8
 x86_64_isr_stub_table:
-%assign i 0
-%rep 256
-    extern isr%+i
-    dq isr%+i
-    %assign i i+1
-%endrep
+.set i, 0
+.rept 256
+    .altmacro
+    isr_table_entry %i
+    .noaltmacro
+    .set i, i + 1
+.endr
