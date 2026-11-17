@@ -2,29 +2,35 @@
 .section .text
 
 .globl x86_64_load_idt
+.type x86_64_load_idt, @function
 
-// @brief loads an idtr
-// @param idt (rdi): idtr* - pointer to the idt structure
-// @return void
+/// @brief Loads an IDTR
+/// @param rdi Pointer to the IDTR structure
+/// @return void
 x86_64_load_idt:
     lidt [rdi]
     ret
+.size x86_64_load_idt, . - x86_64_load_idt
 
 .macro isr_no_error num
 .globl isr\num
 .balign 16
+.type isr\num, @function
 isr\num:
     push 0
     push \num
     jmp handler_common
+.size isr\num, . - isr\num
 .endm
 
 .macro isr_error num
 .globl isr\num
 .balign 16
+.type isr\num, @function
 isr\num:
     push \num
     jmp handler_common
+.size isr\num, . - isr\num
 .endm
 
 .macro SWAPGS_IF_FROM_RING3
@@ -34,6 +40,8 @@ isr\num:
 1:
 .endm
 
+.globl handler_common
+.type handler_common, @function
 handler_common:
     cld
     SWAPGS_IF_FROM_RING3
@@ -75,7 +83,9 @@ handler_common:
     SWAPGS_IF_FROM_RING3
     add rsp, 16
     iretq
+.size handler_common, . - handler_common
 
+// @safety: see src/arch/x86_64/userspace/syscall.S
 isr_no_error 0
 isr_no_error 1
 isr_no_error 2

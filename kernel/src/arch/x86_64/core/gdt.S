@@ -1,16 +1,18 @@
 .intel_syntax noprefix
 .section .text
-.globl x86_64_load_gdt
 
-// @brief: loads a gdtr, code segment, data segments into ds, es, ss, and task segment
-// @param: gdt (rdi): gdtr* - pointer to the gdtr structure
-// @param: cs (si): uint16_t - code segment selector
-// @param: ds (dx): uint16_t - data segment selector
-// @param: tr (cx): uint16_t - task segment selector
-// @returns: void
+.globl x86_64_load_gdt
+.type x86_64_load_gdt, @function
+
+/// @brief Loads a GDTR and reloads the code, data, and task segment registers
+/// @param rdi Pointer to the GDTR structure
+/// @param rsi Code segment selector
+/// @param rdx Data segment selector
+/// @param rcx Task segment selector
 x86_64_load_gdt:
     lgdt [rdi]
 
+    // far return to reload cs
     movzx rax, si
     push rax
     lea rax, .reload_cs
@@ -22,3 +24,4 @@ x86_64_load_gdt:
     mov ss, dx
     ltr cx
     ret
+.size x86_64_load_gdt, . - x86_64_load_gdt

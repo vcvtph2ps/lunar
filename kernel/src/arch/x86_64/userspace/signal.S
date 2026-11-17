@@ -2,11 +2,13 @@
 
 .intel_syntax noprefix
 .section .text
-.globl x86_64_signal_iret_to_user
 
-// @brief Restores a full userspace register state and returns to it.
-// @param rdi (arch_interrupt_idt_frame_t*): frame holding the state to restore
-// @note sysret is unable to restore r15, rcx, and r15. so iretq is used.
+.globl x86_64_signal_iret_to_user
+.type x86_64_signal_iret_to_user, @function
+
+/// @brief Restores a full userspace register state and returns to it.
+/// @param rdi Pointer to an `arch_interrupt_idt_frame_t` holding the state to restore
+/// @note sysret cannot restore every general purpose register, so iretq is used instead
 x86_64_signal_iret_to_user:
     // user data segments
     mov ax, GDT_SEGMENT_USER_DATA | 3
@@ -38,3 +40,4 @@ x86_64_signal_iret_to_user:
     // restore the userspace GS base
     swapgs
     iretq
+.size x86_64_signal_iret_to_user, . - x86_64_signal_iret_to_user

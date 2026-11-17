@@ -2,6 +2,7 @@
 
 .globl g_apinit_start
 .globl g_apinit_end
+.type g_apinit_start, @function
 
 // cpp helpers (replace NASM's %define off/off_cs)
 #define OFF(name) [ebx + OFF_##name]
@@ -117,19 +118,20 @@ g_apinit_start:
     lock inc byte ptr OFF(boot_info_booted_flag)
 
     jmp rax
+.size g_apinit_start, . - g_apinit_start
 
 .balign 16
 g_apinit_end:
-boot_info_cr3:            .quad 0
-boot_info_stack:          .quad 0
-boot_info_entry:          .quad 0
-boot_info_core_boot_info: .quad 0
-boot_info_booted_flag:    .byte 0
-boot_info_set_nx:         .byte 0
-boot_info_set_la57:       .byte 0
-boot_info_gdtr:
-    .word 0
-    .long 0
+    boot_info_cr3:            .quad 0
+    boot_info_stack:          .quad 0
+    boot_info_entry:          .quad 0
+    boot_info_core_boot_info: .quad 0
+    boot_info_booted_flag:    .byte 0
+    boot_info_set_nx:         .byte 0
+    boot_info_set_la57:       .byte 0
+    boot_info_gdtr:
+        .word 0
+        .long 0
 
 .equ OFF_protected_entry, .Lprotected_entry - .Lapinit_base
 .equ OFF_long_entry, .Llong_entry - .Lapinit_base

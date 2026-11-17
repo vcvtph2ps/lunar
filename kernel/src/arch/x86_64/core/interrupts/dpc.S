@@ -1,12 +1,14 @@
 .intel_syntax noprefix
 .section .text
-.globl dpc_execute_on_stack
 
-// @brief executes a DPC on the target stack
-// @param fn (rdi): void* - dpc function pointer
-// @param data (rsi): void* - dpc data
-// @param stack (rdx): void* - target stack pointer
-// @return void
+.globl dpc_execute_on_stack
+.type dpc_execute_on_stack, @function
+
+/// @brief Executes a DPC on the target stack
+/// @param rdi DPC function pointer
+/// @param rsi DPC data
+/// @param rdx Target stack pointer
+/// @return void
 dpc_execute_on_stack:
     push rbp
     mov rbp, rsp
@@ -25,3 +27,4 @@ dpc_execute_on_stack:
     mov rsp, rbp
     pop rbp
     ret
+.size dpc_execute_on_stack, . - dpc_execute_on_stack
