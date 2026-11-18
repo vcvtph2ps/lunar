@@ -422,10 +422,12 @@ bool ptm_init_user(vm_address_space_t* address_space) {
 
 static bool ptm_make_cow_page_table(arch_pte_entry_t* new_page_table_base, arch_pte_entry_t* old_page_table_base, uint32_t level) {
     int entry_count = level == pte_top_level() ? 256 : 512;
+    uint32_t present_count = 0;
     for(int i = 0; i < entry_count; i++) {
         if(!pte_is_present(old_page_table_base[i])) {
             continue;
         }
+        present_count++;
 
         if(pte_is_leaf(old_page_table_base[i], level)) {
             uint64_t num_4k = pte_level_page_size(level) / ARCH_PAGE_SIZE_4K;
@@ -451,6 +453,7 @@ static bool ptm_make_cow_page_table(arch_pte_entry_t* new_page_table_base, arch_
         }
     }
 
+    ATOMIC_STORE(&pagedb_get_page(pt_radix_table_pfn(new_page_table_base))->allocated.page_level_mapping_count, present_count, ATOMIC_RELAXED);
     return true;
 }
 
