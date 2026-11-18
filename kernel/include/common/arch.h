@@ -26,9 +26,8 @@ void arch_memory_fence(arch_memory_fence_type_t type);
 void arch_wait_for_interrupt();
 
 /**
- * @brief Hard shuts down the current core, never returning.
- * @note This masks all maskable interrupts, so a normal IPI cannot wake the
- *       core. Recovering it requires the INIT-SIPI-SIPI startup sequence.
+ * @brief Hard shuts down the current core, never returning
+ * @note This masks all maskable interrupts, so a normal IPI cannot wake the core
  */
 [[noreturn]] void arch_shutdown_cpu();
 
@@ -60,7 +59,6 @@ void arch_panic_int(arch_interrupt_frame_t* frame);
 
 /**
  * @brief Initializes an application processor and starts it
- * @param core_id The ID of the core to initialize
  * @note This function does not return and will transfer control to the kernel main function
  */
 [[noreturn]] void arch_init_ap(uint32_t core_id);
@@ -77,12 +75,10 @@ void arch_log_init();
 
 /**
  * @brief Sends a control inter-processor interrupt (IPI) to a specific core
- * @param core_id The ID of the core to send the IPI to
  */
 void arch_send_ipi(uint32_t core_id);
 
 /**
  * @brief Sends the dedicated panic IPI to a specific core
- * @param core_id The ID of the core to send the IPI to
  */
 void arch_send_panic_ipi(uint32_t core_id);

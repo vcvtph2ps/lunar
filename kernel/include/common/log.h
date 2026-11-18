@@ -15,7 +15,7 @@ typedef enum {
 typedef void (*log_sink_func_t)(int c, void* ctx);
 
 /**
- * @brief Optional bulk write callback.
+ * @brief Optional bulk write callback
  *
  * When provided, formatted output is handed to the sink in whole chunks instead of one character at a time. If it is null the core falls back to @c write.
  */
@@ -31,13 +31,13 @@ typedef struct log_sink {
 } log_sink_t;
 
 /**
- * @brief Registers a new log sink dynamically.
+ * @brief Registers a new log sink dynamically
  * @return true if the sink was added successfully, false otherwise
  */
 [[nodiscard]] bool log_add_sink(const log_sink_t* sink);
 
 /**
- * @brief Initializes the logging system.
+ * @brief Initializes the logging system
  */
 void log_init();
 
@@ -48,13 +48,13 @@ void log_vprint(log_level_t log, const char* fmt, va_list val);
 [[gnu::format(printf, 2, 3)]] void log_print(log_level_t log, const char* fmt, ...);
 
 /**
- * @brief Acquire/release the global log lock manually.
+ * @brief Acquire/release the global log lock manually
  * @return The previous interrupt state before acquiring the lock
  */
 arch_interrupt_state_t log_lock_acquire(void);
 
 /**
- * @brief Release the global log lock and restore the previous interrupt state.
+ * @brief Release the global log lock and restore the previous interrupt state
  * @param state The previous interrupt state to restore
  */
 void log_lock_release(arch_interrupt_state_t state);

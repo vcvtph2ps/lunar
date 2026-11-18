@@ -33,7 +33,7 @@ void arch_syscall_init() {
     arch_msr_write(ARCH_MSR_LSTAR, (uint64_t) x86_64_handle_syscall);
 }
 
-// @note: user rip is in rcx, user rflags is in r11
+// @note: User rip is in rcx, user rflags is in r11
 typedef struct {
     uint64_t user_rsp;
     arch_interrupt_regs_t regs;

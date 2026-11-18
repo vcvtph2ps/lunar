@@ -10,7 +10,7 @@
 #define VFS_DCACHE_BUCKET_COUNT 64
 #define VFS_DCACHE_MAX_ENTRIES 256
 
-/// @brief The key a dentry is filed under.
+/// @brief The key a dentry is filed under
 typedef struct {
     const vfs_dentry_t* parent;
     const char* name;

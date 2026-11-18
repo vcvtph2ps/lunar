@@ -38,7 +38,7 @@ static void sched_wait_resume() {
         thread_state_t state = ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE);
         if(state == THREAD_STATE_RUNNING || state == THREAD_STATE_DYING) {
             /// A thread that was killed while it was backing out of the wait stays dying,
-            /// @note whoever killed it must be the one that terminates it
+            /// @note Whoever killed it must be the one that terminates it
             return;
         }
 

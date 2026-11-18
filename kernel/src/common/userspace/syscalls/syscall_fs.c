@@ -19,7 +19,7 @@
 
 #include "common/fs/io.h"
 
-/// @brief Turns the POSIX mode bits passed to open() into VFS permission bits.
+/// @brief Turns the POSIX mode bits passed to open() into VFS permission bits
 static vfs_node_permissions_t permissions_from_posix_mode(uint32_t mode) {
     return (vfs_node_permissions_t) {
         .user = (vfs_permissions_t) ((mode >> 6) & 0x7),
@@ -95,7 +95,7 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
     }
 
     uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, fd_access, fd_flags);
-    // @note: since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
+    // @note: Since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
     vfs_node_put(out_result_node);
 
     return SYSCALL_RET_VALUE(fd);
@@ -510,7 +510,7 @@ static syscall_ret_t syscall_fs_stat_at(syscall_args_t* argument_data, uint32_t 
 SYSCALL_DEFINE(syscall_fs_dup, SYSCALL_FS_DUP, int32_t, uint32_t, fd);
 static syscall_ret_t syscall_fs_dup(syscall_args_t* argument_data, uint32_t fd) {
     (void) argument_data;
-    // @note: unused, always passed as 0 from mlibc
+    // @note: Unused, always passed as 0 from mlibc
     // uint32_t flags = args->arg2;
     //
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;

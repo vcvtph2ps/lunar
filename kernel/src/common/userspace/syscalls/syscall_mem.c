@@ -59,7 +59,7 @@ static void syscall_vm_map_trace(syscall_args_t* argument_data, void* hint, size
 static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, size_t size, size_t prot, size_t flags, size_t fd, size_t offset) {
     (void) argument_data;
 
-    // @note: non readable mappings aren't supported
+    // @note: Non readable mappings aren't supported
     vm_protection_t vm_prot = VM_PROT_RO;
     if(prot & UAPI_PROT_READ) {
         vm_prot.read = true;
@@ -130,7 +130,7 @@ static void syscall_vm_protect_trace(syscall_args_t* argument_data, void* addr, 
 
 syscall_ret_t syscall_vm_protect(syscall_args_t* argument_data, void* addr, size_t size, size_t prot) {
     (void) argument_data;
-    // @note: non readable mappings aren't supported
+    // @note: Non readable mappings aren't supported
     vm_protection_t vm_prot = VM_PROT_RO;
     if(prot & UAPI_PROT_READ) {
         vm_prot.read = true;

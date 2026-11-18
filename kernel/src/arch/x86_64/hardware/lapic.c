@@ -235,7 +235,7 @@ static void lapic_send_icr(uint32_t apic_id, uint64_t icr) {
         /*
          * > An execution of WRMSR to any non-serializing MSR is not serializing. Non-serializing MSRs include the following: [...], or any of the x2APIC MSRs
          * > Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3 (3A, 3B, 3C, & 3D): System Programming Guide
-         * @note: on amd64 platforms, WRMSR is ordered and this fence is not needed
+         * @note: On amd64 platforms, WRMSR is ordered and this fence is not needed
          */
         if(g_icr_needs_fence)
             asm volatile("mfence; lfence" ::: "memory");

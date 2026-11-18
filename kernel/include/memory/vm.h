@@ -21,7 +21,7 @@ typedef enum {
     VM_FAULT_WRITE_TO_RO
 } vm_fault_reason_t;
 
-/// @brief The outcome of trying to resolve a page fault.
+/// @brief The outcome of trying to resolve a page fault
 typedef enum {
     /// The fault was resolved, the faulting access can be retried.
     VM_FAULT_RESOLVED,
@@ -31,6 +31,8 @@ typedef enum {
     VM_FAULT_FILE
 } vm_fault_result_t;
 
+
+/// @brief Convert a vm fault reason into a string
 static inline const char* vm_fault_reason_to_string(vm_fault_reason_t reason) {
     switch(reason) {
         case VM_FAULT_UKKNOWN:     return "VM_FAULT_UKKNOWN";
@@ -126,62 +128,62 @@ extern vm_address_space_t* g_vm_global_address_space;
 
 /**
  * @brief Maps a new region of memory into the given address space, returning the base virtual address of the new mapping. If hint is not VM_NO_HINT, the kernel will attempt to place the mapping at the given virtual address, but may choose a
- * different address if that one is unavailable or if VM_FLAG_FIXED is not set.
+ * different address if that one is unavailable or if VM_FLAG_FIXED is not set
  * @param address_space The address space to map into
  * @param hint The desired page aligned virtual address to place the mapping at, or VM_NO_HINT to allow the kernel to choose the virtual address freely
- * @param length The length of the mapping, in bytes. Must be greater than 0 and page-aligned.
+ * @param length The length of the mapping, in bytes. Must be greater than 0 and page-aligned
  * @param prot The desired protection flags for the mapping
  * @param cache The desired caching behavior for the mapping
- * @param flags Additional flags for the mapping. See VM_FLAG_* constants for possible values.
+ * @param flags Additional flags for the mapping. See VM_FLAG_* constants for possible values
  * @return The base virtual address of the new mapping, or NULL if the mapping failed (e.g. due to invalid parameters or lack of available virtual address space). Note that the kernel may choose a different virtual address than the one specified by
  */
 void* vm_map_anon(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags);
 
 /**
  * @brief Same as vm_map_anon, but allows specifying an alignment for the mapping. The kernel will attempt to place the mapping at a virtual address that is a multiple of align, but may choose a different aligned address if that one is unavailable or
- * if VM_FLAG_FIXED is not set.
+ * if VM_FLAG_FIXED is not set
  * @param address_space The address space to map into
  * @param hint The desired page aligned virtual address to place the mapping at, or VM_NO_HINT to allow the kernel to choose the virtual address freely
- * @param length The length of the mapping, in bytes. Must be greater than 0 and page-aligned.
- * @param align The desired alignment for the mapping, in bytes. Must be a power of two and at least the page size.
+ * @param length The length of the mapping, in bytes. Must be greater than 0 and page-aligned
+ * @param align The desired alignment for the mapping, in bytes. Must be a power of two and at least the page size
  * @param prot The desired protection flags for the mapping
  * @param cache The desired caching behavior for the mapping
- * @param flags Additional flags for the mapping. See VM_FLAG_* constants for possible values.
+ * @param flags Additional flags for the mapping. See VM_FLAG_* constants for possible values
  * @return The base virtual address of the new mapping, or NULL if the mapping failed (e.g. due to invalid parameters or lack of available virtual address space). Note that the kernel may choose a different virtual address than the one specified by
  */
 void* vm_map_anon_aligned(vm_address_space_t* address_space, void* hint, size_t length, size_t align, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags);
 
 /**
  * @brief Maps a physical address directly to a virtual allocation. The kernel will attempt to place the mapping at a virtual address that is a multiple of align, but may choose a different aligned address if that one is unavailable or
- * if VM_FLAG_FIXED is not set.
+ * if VM_FLAG_FIXED is not set
  * @param address_space The address space to map into
  * @param hint The desired page aligned virtual address to place the mapping at, or VM_NO_HINT to allow the kernel to choose the virtual address freely
  * @param length The length of the mapping, in bytes. Must be greater than 0
  * @param prot The desired protection flags for the mapping
  * @param cache The desired caching behavior for the mapping
- * @param physical_address The physical address to map. Must be page-aligned.
- * @param flags Additional flags for the mapping. See VM_FLAG_* constants for possible values.
+ * @param physical_address The physical address to map. Must be page-aligned
+ * @param flags Additional flags for the mapping. See VM_FLAG_* constants for possible values
  * @return The base virtual address of the new mapping, or NULL if the mapping failed (e.g. due to invalid parameters or lack of available virtual address space). Note that the kernel may choose a different virtual address than the one specified by
- * hint, if the requested address is unavailable.
+ * hint, if the requested address is unavailable
  */
 void* vm_map_direct(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, uintptr_t physical_address, vm_flags_t flags);
 
 /**
- * @brief Maps a file's contents into an address space, backed on demand by the page cache.
+ * @brief Maps a file's contents into an address space, backed on demand by the page cache
  * @param address_space The address space to map into
  * @param hint The desired page aligned virtual address to place the mapping at, or VM_NO_HINT to allow the kernel to choose the virtual address freely
- * @param length The length of the mapping, in bytes. Must be page-aligned.
- * @param prot The desired protection flags. File mappings are currently read-only.
+ * @param length The length of the mapping, in bytes. Must be page-aligned
+ * @param prot The desired protection flags. File mappings are currently read-only
  * @param cache The desired caching behavior for the mapping
- * @param flags Additional flags. VM_FLAG_DYNAMICALLY_BACKED is implied.
+ * @param flags Additional flags. VM_FLAG_DYNAMICALLY_BACKED is implied
  * @param object The page cache object backing the file
- * @param offset The byte offset into the object that the mapping starts at. Must be page-aligned.
+ * @param offset The byte offset into the object that the mapping starts at. Must be page-aligned
  * @return The base virtual address of the new mapping, or nullptr on failure
  */
 void* vm_map_file(vm_address_space_t* address_space, void* hint, size_t length, vm_protection_t prot, vm_cache_t cache, vm_flags_t flags, vfs_page_cache_object_t* object, size_t offset);
 
 /**
- * @brief Resolves a page fault at the given address by populating the backing page.
+ * @brief Resolves a page fault at the given address by populating the backing page
  * @param address_space The address space the fault occurred in
  * @param reason Why the fault occurred
  * @param vaddr The faulting virtual address
@@ -190,42 +192,42 @@ void* vm_map_file(vm_address_space_t* address_space, void* hint, size_t length, 
 vm_fault_result_t vm_fault_address(vm_address_space_t* address_space, vm_fault_reason_t reason, uintptr_t vaddr);
 
 /**
- * @brief Unmaps a region of memory previously mapped into the given address space. The region to unmap is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space.
+ * @brief Unmaps a region of memory previously mapped into the given address space. The region to unmap is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space
  * @param address_space The address space to unmap from
  * @param address The starting virtual address of the region to unmap. Must be page-aligned and within the address space
- * @param length The length of the region to unmap, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space.
+ * @param length The length of the region to unmap, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space
  */
 void vm_unmap(vm_address_space_t* address_space, void* address, size_t length);
 
 /**
- * @brief Unmaps every file-backed page of the given page cache object that lies at or past `offset`, in every user address space.
- * @param object The page cache object backing the file.
- * @param offset The page-aligned file offset from which mappings should be dropped.
+ * @brief Unmaps every file-backed page of the given page cache object that lies at or past `offset`, in every user address space
+ * @param object The page cache object backing the file
+ * @param offset The page-aligned file offset from which mappings should be dropped
  * @note Used on truncate: pages wholly past the new end of the file are unmapped so their frames stop pinning
- * the cache. A subsequent access faults and, because the page is now out of range, the fault fails.
+ * the cache. A subsequent access faults and, because the page is now out of range, the fault fails
  */
 void vm_unmap_file_range(vfs_page_cache_object_t* object, size_t offset);
 
 /**
- * @brief Changes the protection flags of an existing mapping in the given address space. The region to change is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space.
+ * @brief Changes the protection flags of an existing mapping in the given address space. The region to change is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space
  * @param address_space The address space to change the mapping in
  * @param address The starting virtual address of the region to change. Must be page-aligned
- * @param length The length of the region to change, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space.
+ * @param length The length of the region to change, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space
  * @param prot The new protection flags for the mapping
  */
 void vm_rewrite_prot(vm_address_space_t* address_space, void* address, size_t length, vm_protection_t prot);
 
 /**
- * @brief Changes the cache flags of an existing mapping in the given address space. The region to change is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space.
+ * @brief Changes the cache flags of an existing mapping in the given address space. The region to change is specified by the starting virtual address and length, and must be fully contained within an existing mapping in the address space
  * @param address_space The address space to change the mapping in
  * @param address The starting virtual address of the region to change. Must be page-aligned
- * @param length The length of the region to change, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space.
+ * @param length The length of the region to change, in bytes. Must be greater than 0, page-aligned, and the region specified by address and length must be fully contained within an existing mapping in the address space
  * @param cache The new cache flags for the mapping
  */
 void vm_rewrite_cache(vm_address_space_t* address_space, void* address, size_t length, vm_cache_t cache);
 
 /**
- * @brief Handles a page fault that occurred in the given address space at the specified virtual address, with the given fault reason.
+ * @brief Handles a page fault that occurred in the given address space at the specified virtual address, with the given fault reason
  */
 bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault);
 
@@ -235,22 +237,22 @@ bool vm_handle_page_fault(uintptr_t address, vm_fault_reason_t fault);
 void vm_fault_process_pending();
 
 /**
- * @brief Copies data from the global address space into the specified address space, handling any necessary page faults that may occur during the copy.
+ * @brief Copies data from the global address space into the specified address space, handling any necessary page faults that may occur during the copy
  * @param dest_as The address space to copy into
- * @param dest_addr The virtual address in dest_as to copy into. Must be page-aligned and within the address space.
+ * @param dest_addr The virtual address in dest_as to copy into. Must be page-aligned and within the address space
  * @param src The source buffer in the global address space to copy from
- * @param count The number of bytes to copy. Must be greater than 0 and page-aligned, and the region specified by dest_addr and count must be fully contained within an existing mapping in dest_as.
- * @return The number of bytes successfully copied. This may be less than count if a page fault occurred during the copy and was not handled successfully by vm_fault.
+ * @param count The number of bytes to copy. Must be greater than 0 and page-aligned, and the region specified by dest_addr and count must be fully contained within an existing mapping in dest_as
+ * @return The number of bytes successfully copied. This may be less than count if a page fault occurred during the copy and was not handled successfully by vm_fault
  */
 size_t vm_copy_to(vm_address_space_t* dest_as, uintptr_t dest_addr, const void* src, size_t count);
 
 /**
- * @brief Copies data to the global address space from the specified address space, handling any necessary page faults that may occur during the copy.
+ * @brief Copies data to the global address space from the specified address space, handling any necessary page faults that may occur during the copy
  * @param dest The destination buffer in the global address space to copy into
  * @param src_as The address space to copy from
- * @param src_addr The virtual address in src_as to copy from. Must be page-aligned and within the address space.
- * @param count The number of bytes to copy. Must be greater than 0 and page-aligned, and the region specified by src_addr and count must be fully contained within an existing mapping in src_as.
- * @return The number of bytes successfully copied. This may be less than count if a page fault occurred during the copy and was not handled successfully by vm_fault.
+ * @param src_addr The virtual address in src_as to copy from. Must be page-aligned and within the address space
+ * @param count The number of bytes to copy. Must be greater than 0 and page-aligned, and the region specified by src_addr and count must be fully contained within an existing mapping in src_as
+ * @return The number of bytes successfully copied. This may be less than count if a page fault occurred during the copy and was not handled successfully by vm_fault
  */
 size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, size_t count);
 
@@ -263,8 +265,8 @@ size_t vm_copy_from(void* dest, vm_address_space_t* src_as, uintptr_t src_addr, 
 bool vm_validate_buffer(vm_address_space_t* target_as, virt_addr_t buf, size_t count);
 
 /**
- * @brief Creates and initializes a new rb tree to be used for managing vm_region_t structures in an address space.
- * @return A new rb_tree_t instance that is ready to be used for managing vm_region_t structures in an address space.
+ * @brief Creates and initializes a new rb tree to be used for managing vm_region_t structures in an address space
+ * @return A new rb_tree_t instance that is ready to be used for managing vm_region_t structures in an address space
  */
 rb_tree_t vm_create_regions();
 
@@ -274,12 +276,12 @@ rb_tree_t vm_create_regions();
 void vm_init_kernel();
 
 /**
- *
+ * @brief Create a clone of a target address space
  */
 vm_address_space_t* vm_fork(vm_address_space_t* parent_address_space);
 
 /**
- * @brief Tears down an address space, unmapping every region, freeing the underlying physical memory and page tables, and finally the address space object itself.
- * @param address_space The address space to destroy. It must not be the global kernel address space and must not be in use by any thread.
+ * @brief Tears down an address space, unmapping every region, freeing the underlying physical memory and page tables, and finally the address space object itself
+ * @param address_space The address space to destroy. It must not be the global kernel address space and must not be in use by any thread
  */
 void vm_address_space_destroy(vm_address_space_t* address_space);

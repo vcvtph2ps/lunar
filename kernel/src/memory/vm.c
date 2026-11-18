@@ -68,10 +68,10 @@ static vm_region_t* find_region(vm_address_space_t* address_space, uintptr_t add
 
 
 /**
- * @brief Find a hole (free space) in an address space satisfying the given alignment.
+ * @brief Find a hole (free space) in an address space satisfying the given alignment
  * @param align Required alignment (must be a power of two and a multiple of PAGE_SIZE_DEFAULT)
- * @warning Assumes address space lock is acquired.
- * @returns true = hole found, false = not found
+ * @return true = hole found, false = not found
+ * @warning Assumes address space lock is acquired
  */
 static bool find_hole_aligned(vm_address_space_t* address_space, uintptr_t address, size_t length, size_t align, uintptr_t* hole) {
     uintptr_t aligned = ALIGN_UP(address, align);
@@ -97,11 +97,11 @@ static bool find_hole_aligned(vm_address_space_t* address_space, uintptr_t addre
 }
 
 /**
- * @brief Find a hole (free space) in an address space satisfying the given alignment.
- * @note Prefers a hole aligned to 2MB or 1GB so the ptm and use large mappings
+ * @brief Find a hole (free space) in an address space satisfying the given alignment
  * @param align Required alignment (must be a power of two and a multiple of PAGE_SIZE_DEFAULT)
- * @warning Assumes address space lock is acquired.
- * @returns true = hole found, false = not found
+ * @return true = hole found, false = not found
+ * @note Prefers a hole aligned to 2MB or 1GB so the ptm and use large mappings
+ * @warning Assumes address space lock is acquired
  */
 static bool find_hole(vm_address_space_t* address_space, uintptr_t address, size_t length, size_t align, uintptr_t* hole) {
     size_t candidates[3];
@@ -419,7 +419,7 @@ static vm_region_t* addr_to_region(vm_address_space_t* address_space, uintptr_t 
     return region;
 }
 
-/// @brief Resolves the file byte offset a virtual address maps to, reporting a bus error when it is past the end of the file.
+/// @brief Resolves the file byte offset a virtual address maps to, reporting a bus error when it is past the end of the file
 static bool file_offset_of(vm_region_t* region, uintptr_t vaddr, uint64_t* out_index, vm_fault_result_t* out_result) {
     uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
     size_t offset = region->type_data.file.offset + (page_address - region->base);
@@ -433,7 +433,7 @@ static bool file_offset_of(vm_region_t* region, uintptr_t vaddr, uint64_t* out_i
     return true;
 }
 
-/// @brief Maps the page cache page backing a file region at `vaddr`.
+/// @brief Maps the page cache page backing a file region at `vaddr`
 static vm_fault_result_t file_map_cache_page(vm_region_t* region, uintptr_t vaddr, vm_protection_t prot, bool mark_dirty) {
     uintptr_t page_address = MATH_FLOOR(vaddr, PAGE_SIZE_DEFAULT);
 
@@ -792,7 +792,7 @@ void vm_unmap(vm_address_space_t* address_space, void* address, size_t length) {
     rewrite_common(address_space, address, length, REWRITE_TYPE_DELETE, (vm_protection_t) {}, VM_CACHE_NORMAL);
 }
 
-/// @brief Unmaps the tail of every file region of `object` in one address space, starting at the page aligned file offset `offset`.
+/// @brief Unmaps the tail of every file region of `object` in one address space, starting at the page aligned file offset `offset`
 static void unmap_object_in_address_space(vm_address_space_t* address_space, vfs_page_cache_object_t* object, size_t offset) {
     if(address_space == nullptr)
         return;
@@ -1059,7 +1059,7 @@ void vm_address_space_destroy(vm_address_space_t* address_space) {
 
     spinlock_no_dpc_unlock(&address_space->lock);
 
-    /// @note: we **shouldn't** leak any memory from the page tables here since it *should* all be freed when we free the regions
+    /// @note: We **shouldn't** leak any memory from the page tables here since it *should* all be freed when we free the regions
     // I fucking hope
     pmm_free_page(address_space->ptm.top_level_page_table);
     heap_free(address_space, sizeof(vm_address_space_t));

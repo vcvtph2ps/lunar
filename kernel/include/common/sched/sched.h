@@ -24,7 +24,7 @@ void sched_preempt_disable();
 
 /**
  * @brief Decrements the preemption counter
- * @note If the counter reaches zero and a yield is pending, the current thread will yield to the scheduler before returning.
+ * @note If the counter reaches zero and a yield is pending, the current thread will yield to the scheduler before returning
  */
 void sched_preempt_enable();
 
@@ -52,13 +52,11 @@ thread_t* sched_arch_fork_thread_user(process_t* process, thread_t* parent, virt
 
 /**
  * @brief Adds a thread to the scheduler's run queue
- * @param thread The thread to schedule
  */
 void sched_thread_schedule(thread_t* thread);
 
 /**
  * @brief Kills a thread, the thread will never run again once this returns
- * @param thread The thread to kill
  * @note This never returns if the thread being killed is the current thread
  */
 void sched_thread_kill(thread_t* thread);
@@ -81,14 +79,12 @@ void sched_sleep(uint64_t msec);
 
 /**
  * @brief Blocks the current thread on an uninterruptible wait
- * @param obj The object to wait on
  * @param timeout_ms The timeout in milliseconds, or UINT64_MAX for no timeout
  */
 void sched_wait_single(wait_obj_t* obj, uint64_t timeout_ms);
 
 /**
  * @brief Blocks the current thread on an uninterruptible wait
- * @param objects The object list to wait on
  * @param type The type of wait to issue, ALL or ANY
  * @param timeout_ms The timeout in milliseconds, or UINT64_MAX for no timeout
  */
@@ -96,7 +92,6 @@ void sched_wait_multiple(wait_obj_t** objects, size_t count, wait_obj_wait_type_
 
 /**
  * @brief Blocks the current thread on an interruptible wait, i.e. one a signal may abort
- * @param obj The object to wait on
  * @param timeout_ms The timeout in milliseconds, or UINT64_MAX for no timeout
  * @note Callers must check sched_thread_interrupted() afterwards to detect an aborted wait
  */
@@ -104,7 +99,6 @@ void sched_wait_single_interruptible(wait_obj_t* obj, uint64_t timeout_ms);
 
 /**
  * @brief Wakes a thread that is blocked in an interruptible wait so it can notice a pending signal
- * @param thread The thread to interrupt
  */
 void sched_thread_interrupt(thread_t* thread);
 
@@ -118,7 +112,6 @@ bool sched_thread_interrupted();
 
 /**
  * @brief Initializes the scheduler for the current core
- * @param core_id The ID of the current core
  */
 void sched_init(uint32_t core_id);
 
@@ -130,8 +123,6 @@ thread_t* sched_arch_thread_current();
 
 /**
  * @brief Switches execution context from the current thread to the next thread
- * @param t_current The currently running thread
- * @param t_next The thread to switch to
  * @param yield_state The state to set for the previous thread after switching
  */
 void sched_arch_context_switch(thread_t* t_current, thread_t* t_next, thread_state_t yield_state);
@@ -147,23 +138,23 @@ void sched_arch_reset_preempt_timer();
 [[noreturn]] void sched_arch_handoff();
 
 /**
- * @brief Drops a thread after it has been switched away from.
+ * @brief Drops a thread after it has been switched away from
  */
 void sched_thread_drop(thread_t* thread);
 
 /**
- * @brief Frees the arch specific resources of a thread and the thread object itself.
- * @param thread The thread to destroy. It must not be running nor referenced by the scheduler.
+ * @brief Frees the arch specific resources of a thread and the thread object itself
+ * @param thread The thread to destroy. It must not be running nor referenced by the scheduler
  * @note This is called once the last reference to the thread is dropped. @see thread_put
  */
 void sched_arch_thread_destroy(thread_t* thread);
 
 /**
- * @brief Common thread init routine called after first context switch.
+ * @brief Common thread init routine called after first context switch
  */
 void sched_thread_init_common(thread_t* prev);
 
 /**
- * @brief Thread exit routine called when a kernel thread returns.
+ * @brief Thread exit routine called when a kernel thread returns
  */
 [[noreturn]] void sched_thread_exit_kernel();

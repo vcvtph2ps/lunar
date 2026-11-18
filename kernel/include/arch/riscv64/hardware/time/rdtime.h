@@ -3,7 +3,7 @@
 
 /**
  * @brief Creates the riscv rdtime timer
- * @return The timer instance, or nullptr if the timebase frequency is unknown.
+ * @return The timer instance, or nullptr if the timebase frequency is unknown
  */
 time_timer_t* arch_rdtime_timer_init(void);
 

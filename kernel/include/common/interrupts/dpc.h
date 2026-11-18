@@ -24,25 +24,22 @@ typedef struct dpc {
 
     ATOMIC dpc_queue_t* queue;
 
-    /// @brief the target core to enqueue the dpc on, or UINT64_MAX to queue on the cpu that calls dpc_queue
+    /// @brief The target core to enqueue the dpc on, or UINT64_MAX to queue on the cpu that calls dpc_queue
     uint64_t target_core_id;
 } dpc_t;
 
 /**
- * @brief Initialize the DPC system. Must be called before using any other DPC functions.
+ * @brief Initialize the DPC system. Must be called before using any other DPC functions
  */
 void dpc_init(uint32_t core_id);
 
 /**
- * @brief Create a DPC.
- * @param fn The function to execute when the DPC is executed.
- * @param data The data to pass to the function when it is executed.
+ * @brief Create a DPC
  */
 dpc_t* dpc_create(dpc_function_t fn, void* data);
 
 /**
- * @brief Queue a DPC.
- * @param dpc The dpc to queue.
+ * @brief Queue a DPC
  * @return true if the dpc was enqueued, otherwise false
  */
 bool dpc_queue(dpc_t* dpc);
@@ -56,12 +53,12 @@ void dpc_set_target_core(dpc_t* dpc, uint32_t target_core);
 void dpc_process();
 
 /**
- * @brief Disable DPC. (increments the status counter).
+ * @brief Disable DPC. (increments the status counter)
  */
 void dpc_disable();
 
 /**
- * @brief Enable DPC. (decrements the status counter).
+ * @brief Enable DPC. (decrements the status counter)
  * @note DPC will only be processed when the status reaches zero
  */
 void dpc_enable();

@@ -64,7 +64,7 @@ uint32_t pagedb_page_unmap(uint64_t pfn) {
     return ATOMIC_LOAD_SUB(&page->allocated.map_count, 1, ATOMIC_RELEASE) - 1;
 }
 
-void pagedb_set_page_state(uint64_t pfn, uint8_t entry_type) {
+void pagedb_set_page_type(uint64_t pfn, pagedb_entry_type_t entry_type) {
     pagedb_page_t* page = pagedb_get_page(pfn);
     if(page == nullptr) {
         arch_panic("called pagedb_set_page_state on invalid page\n");

@@ -47,7 +47,7 @@ ATOMIC uint32_t g_panicking_core = 0xffffffff;
         arch_shutdown_cpu();
     }
 
-    // @note: we set these to false, we need to be able to grab any kind of lock. and it doesn't matter anyway the kernel panicked
+    // @note: We set these to false, we need to be able to grab any kind of lock. and it doesn't matter anyway the kernel panicked
     CPU_LOCAL_WRITE(in_hardirq, false);
     CPU_LOCAL_WRITE(in_softirq, false);
 

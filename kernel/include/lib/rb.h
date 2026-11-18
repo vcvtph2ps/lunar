@@ -33,37 +33,28 @@ typedef enum {
 } rb_search_type_t;
 
 /**
- * @brief Initializes a red-black tree with the specified value and length functions.
- * @param tree The red-black tree to initialize.
- * @param node The node to insert into the tree.
+ * @brief Initializes a red-black tree with the specified value and length functions
  */
 void rb_insert(rb_tree_t* tree, rb_node_t* node);
 
 /**
- * @brief Removes a node from the red-black tree and rebalances the tree to maintain its properties.
- * @param tree The red-black tree to modify.
- * @param node The node to remove from the tree.
+ * @brief Removes a node from the red-black tree and rebalances the tree to maintain its properties
  */
 void rb_remove(rb_tree_t* tree, rb_node_t* node);
 
 /**
- * @brief Finds the first node in the red-black tree (the node with the smallest value).
- * @param tree The red-black tree to search.
- * @return A pointer to the first node in the tree, or NULL if the tree is empty.
+ * @brief Finds the first node in the red-black tree (the node with the smallest value)
+ * @return A pointer to the first node in the tree, or NULL if the tree is empty
  */
 rb_node_t* rb_find_first(rb_tree_t* tree);
 
 /**
- * @brief Finds the first node in the red-black tree (the node with the smallest value).
- * @param tree The red-black tree to search.
- * @return A pointer to the first node in the tree, or NULL if the tree is empty.
+ * @brief Finds the first node in the red-black tree (the node with the smallest value)
+ * @return A pointer to the first node in the tree, or NULL if the tree is empty
  */
 rb_node_t* rb_find_next(rb_tree_t* tree, rb_node_t* current);
 
 /**
- * @brief Finds the target node in the red-black tree based on the specified search type.
- * @param tree The red-black tree to search.
- * @param needle The value to search for in the tree.
- * @param search_type The type of search to perform
+ * @brief Finds the target node in the red-black tree based on the specified search type
  */
 rb_node_t* rb_find(rb_tree_t* tree, size_t needle, rb_search_type_t search_type);

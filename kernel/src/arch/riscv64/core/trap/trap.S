@@ -7,7 +7,7 @@
 .balign 16
 .globl riscv64_trap_handler
 
-/// @brief Saves the interrupted context, dispatches the trap, then restores it.
+/// @brief Saves the interrupted context, dispatches the trap, then restores it
 riscv64_trap_handler:
     // sscratch = cpulocal
 

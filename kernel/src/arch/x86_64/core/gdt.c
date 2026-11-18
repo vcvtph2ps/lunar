@@ -8,7 +8,7 @@
 #define DEFINE_SEGMENT(ACCESS, FLAGS) { .limit_low = 0, .base_low = 0, .base_mid = 0, .access = (ACCESS), .limit_high_flags = ((FLAGS) << 4), .base_high = 0 }
 
 /// The layout is constrained by IA32_STAR
-/// @see: src/arch/x86_64/userspace/syscall.c
+/// @see src/arch/x86_64/userspace/syscall.c
 const arch_gdt_t g_arch_gdt_static_data = {
     {}, // null @ 0x00
     DEFINE_SEGMENT(0x9b, 0xA), // 64 bit kernel code @ 0x08

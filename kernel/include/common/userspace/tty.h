@@ -27,11 +27,11 @@ typedef struct tty {
     ATOMIC uint32_t foreground_pgid;
 
     struct {
-        /// @brief canonical/cooked mode, input is line buffered with line editing
+        /// @brief Canonical/cooked mode, input is line buffered with line editing
         bool canonical;
-        /// @brief echo input back to the output
+        /// @brief Echo input back to the output
         bool echo;
-        /// @brief echo control characters as ^X
+        /// @brief Echo control characters as ^X
         bool echo_ctrl;
 
         struct {
@@ -45,10 +45,10 @@ typedef struct tty {
     } mode;
 
     /// @brief How many committed lines are still in the tty buffer
-    /// @note only updated in canonical mode
+    /// @note Only updated in canonical mode
     ATOMIC uint16_t line_count;
 
-    /// @brief Set when a EOF is entered on an empty line, until new input arrives.
+    /// @brief Set when a EOF is entered on an empty line, until new input arrives
     bool eof;
 
     /// @brief Called when a byte is written to the tty output (e.g. to forward to UART)
@@ -60,7 +60,7 @@ typedef struct tty {
     void* flush_ctx;
 } tty_t;
 
-/// @brief devfs ops for a tty device; pass the tty_t* as the ctx when calling devfs_bind
+/// @brief Devfs ops for a tty device; pass the tty_t* as the ctx when calling devfs_bind
 extern const devfs_device_ops_t g_tty_devfs_ops;
 
 tty_t* tty_create();
@@ -74,8 +74,6 @@ tty_t* tty_get_default();
 
 /**
  * @brief Callback suitable for use as a on_recv handler
- * @param ctx pointer to a tty_t instance
- * @param c char to forward to the tty's input buffer
  */
 void tty_recv_generic(void* ctx, char c);
 
@@ -84,13 +82,13 @@ vfs_result_t tty_perform_io(void* ctx, io_request_t* request);
 
 /**
  * @brief Write byte to tty output
- * @note calls on_write if set
+ * @note Calls on_write if set
  */
 bool tty_write(tty_t* tty, uint8_t c);
 
 /**
  * @brief Flush any buffered tty output
- * @note calls on_flush if set
+ * @note Calls on_flush if set
  */
 void tty_flush(tty_t* tty);
 

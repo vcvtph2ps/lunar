@@ -65,7 +65,7 @@ thread_t* process_find_thread_by_id(process_t* process, uint32_t tid) {
     return found;
 }
 
-/// @brief Links a process into the global process list used for pid lookups.
+/// @brief Links a process into the global process list used for pid lookups
 static void process_global_list_insert(process_t* process) {
     spinlock_lock(&g_process_list_lock);
     process->in_global_list = true;
@@ -73,7 +73,7 @@ static void process_global_list_insert(process_t* process) {
     spinlock_unlock(&g_process_list_lock);
 }
 
-/// @brief Unlinks a process from the global process list. Safe to call if it was never linked.
+/// @brief Unlinks a process from the global process list. Safe to call if it was never linked
 static void process_global_list_remove(process_t* process) {
     spinlock_lock(&g_process_list_lock);
     if(process->in_global_list) {
@@ -83,7 +83,7 @@ static void process_global_list_remove(process_t* process) {
     spinlock_unlock(&g_process_list_lock);
 }
 
-/// @brief Frees every resource owned by a process. Only called once its reference count reaches zero.
+/// @brief Frees every resource owned by a process. Only called once its reference count reaches zero
 static void process_destroy(process_t* process) {
     process_global_list_remove(process);
 
@@ -209,7 +209,7 @@ process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_inf
     process->parent = nullptr;
     process->address_space = process_address_space;
 
-    // @note: nullptr is '/'
+    // @note: Nullptr is '/'
     if(current_working_dir != nullptr) {
         process->current_working_dir = vfs_node_get(current_working_dir);
     } else {

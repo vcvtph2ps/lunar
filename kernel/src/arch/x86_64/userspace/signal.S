@@ -6,9 +6,9 @@
 .globl x86_64_signal_iret_to_user
 .type x86_64_signal_iret_to_user, @function
 
-/// @brief Restores a full userspace register state and returns to it.
+/// @brief Restores a full userspace register state and returns to it
 /// @param rdi Pointer to an `arch_interrupt_idt_frame_t` holding the state to restore
-/// @note sysret cannot restore every general purpose register, so iretq is used instead
+/// @note Sysret cannot restore every general purpose register, so iretq is used instead
 x86_64_signal_iret_to_user:
     // user data segments
     mov ax, GDT_SEGMENT_USER_DATA | 3

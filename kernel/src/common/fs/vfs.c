@@ -222,9 +222,9 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node) {
 }
 
 /**
- * @brief Performs IO on a node while its lock is held.
- * @note vnodes backed by an inode is served entirely through the page cache, so its fs never has to tell read/write from mmap
- * @note vnodes without an inode (devices, directories, ...) fall through to the fs's own perform_io.
+ * @brief Performs IO on a node while its lock is held
+ * @note Vnodes backed by an inode is served entirely through the page cache, so its fs never has to tell read/write from mmap
+ * @note Vnodes without an inode (devices, directories, ...) fall through to the fs's own perform_io
  */
 static vfs_result_t node_perform_io_locked(vfs_node_t* node, io_request_t* request) {
     if(node->inode != nullptr) {
@@ -244,7 +244,7 @@ static vfs_result_t node_perform_io_locked(vfs_node_t* node, io_request_t* reque
             request->write.bytes_written = written;
             return VFS_RESULT_OK;
         } else {
-            // @note: inodes can only process read/write
+            // @note: Inodes can only process read/write
             return VFS_RESULT_ERR_UNSUPPORTED;
         }
     }
@@ -378,7 +378,7 @@ static vfs_result_t read_link_target(vfs_node_t* node, char** out_buf, size_t* o
     return VFS_RESULT_OK;
 }
 
-/// @brief Crosses any mounts stacked on `*inout`, leaving it at the inner-most root.
+/// @brief Crosses any mounts stacked on `*inout`, leaving it at the inner-most root
 static vfs_result_t traverse_mounts(vfs_dentry_t** inout) {
     while((*inout)->mounted_vfs != nullptr) {
         vfs_dentry_t* current = *inout;
@@ -408,7 +408,7 @@ static vfs_result_t traverse_mounts(vfs_dentry_t** inout) {
     return VFS_RESULT_OK;
 }
 
-/// @brief Walks `path` from `current` (owned by this function), following symlinks in intermediate components and, when `follow_final` is set, in the final one too.
+/// @brief Walks `path` from `current` (owned by this function), following symlinks in intermediate components and, when `follow_final` is set, in the final one too
 static vfs_result_t resolve_path(vfs_dentry_t* current, const char* path, bool follow_final, unsigned depth, vfs_dentry_t** out) {
     if(depth > UAPI_LIMITS_MAX_SYMLINKS) {
         vfs_dentry_put(current);

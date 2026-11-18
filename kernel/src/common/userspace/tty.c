@@ -118,7 +118,7 @@ void tty_recv_generic(void* ctx, char c) {
     }
 }
 
-/// @brief echo a single byte to the output if enabled
+/// @brief Echo a single byte to the output if enabled
 static void tty_echo(tty_t* tty, uint8_t c) {
     if(tty->on_write == nullptr || !tty->mode.echo) {
         return;
@@ -129,7 +129,7 @@ static void tty_echo(tty_t* tty, uint8_t c) {
     tty->on_write(tty->write_ctx, c);
 }
 
-/// @brief echo a control character as ^X if enabled
+/// @brief Echo a control character as ^X if enabled
 static void tty_echo_ctrl(tty_t* tty, uint8_t c) {
     if(tty->on_write == nullptr || !tty->mode.echo || !tty->mode.echo_ctrl) {
         return;
@@ -139,7 +139,7 @@ static void tty_echo_ctrl(tty_t* tty, uint8_t c) {
     tty->on_write(tty->write_ctx, plain);
 }
 
-/// @brief echo a line ending, moving the cursor back to column 0 on the next line
+/// @brief Echo a line ending, moving the cursor back to column 0 on the next line
 static void tty_echo_newline(tty_t* tty) {
     if(tty->on_write == nullptr || !tty->mode.echo) {
         return;
@@ -148,7 +148,7 @@ static void tty_echo_newline(tty_t* tty) {
     tty->on_write(tty->write_ctx, '\n');
 }
 
-/// @brief echo an input byte the way it should appear on screen
+/// @brief Echo an input byte the way it should appear on screen
 static void tty_echo_char(tty_t* tty, uint8_t c) {
     if(!tty->mode.echo) {
         return;
@@ -162,7 +162,7 @@ static void tty_echo_char(tty_t* tty, uint8_t c) {
     }
 }
 
-/// @brief number of screen columns the echo of a byte occupies
+/// @brief Number of screen columns the echo of a byte occupies
 static int tty_echo_cols(uint8_t c) {
     if((c < 0x20 && c != '\t') || c == CHAR_DEL) {
         return 2;
@@ -170,7 +170,7 @@ static int tty_echo_cols(uint8_t c) {
     return 1;
 }
 
-/// @note must hold the tty lock
+/// @note Must hold the tty lock
 static bool tty_put_raw(tty_t* tty, uint8_t c) {
     if(tty_full(tty)) {
         return false;
@@ -180,7 +180,7 @@ static bool tty_put_raw(tty_t* tty, uint8_t c) {
     return true;
 }
 
-/// @note must hold the tty lock. erases the last pending byte, undoing its echo
+/// @note Must hold the tty lock. erases the last pending byte, undoing its echo
 static void tty_erase_one(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         return;
@@ -198,7 +198,7 @@ static void tty_erase_one(tty_t* tty) {
     }
 }
 
-/// @note must hold the tty lock
+/// @note Must hold the tty lock
 static void tty_erase_char(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         tty_echo(tty, '\a');
@@ -207,14 +207,14 @@ static void tty_erase_char(tty_t* tty) {
     tty_erase_one(tty);
 }
 
-/// @note must hold the tty lock
+/// @note Must hold the tty lock
 static void tty_kill_line(tty_t* tty) {
     while(!tty_pending_empty(tty)) {
         tty_erase_one(tty);
     }
 }
 
-/// @note must hold the tty lock
+/// @note Must hold the tty lock
 static void tty_erase_word(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         tty_echo(tty, '\a');
@@ -236,7 +236,7 @@ static void tty_erase_word(tty_t* tty) {
     }
 }
 
-/// @note must hold the tty lock
+/// @note Must hold the tty lock
 static void tty_handle_eof(tty_t* tty) {
     if(tty_pending_empty(tty)) {
         tty->eof = true;
@@ -247,7 +247,7 @@ static void tty_handle_eof(tty_t* tty) {
     ATOMIC_LOAD_ADD(&tty->line_count, 1, ATOMIC_RELEASE);
 }
 
-/// @note must hold the tty lock
+/// @note Must hold the tty lock
 static void tty_handle_intr(tty_t* tty) {
     tty_kill_line(tty);
     tty_echo_ctrl(tty, CHAR_INTR);
@@ -325,7 +325,7 @@ bool tty_put(tty_t* tty, uint8_t c) {
     return ok;
 }
 
-/// @note must hold the tty lock, only consumes bytes up to commit.
+/// @note Must hold the tty lock, only consumes bytes up to commit
 static bool tty_read_lockless(tty_t* tty, uint8_t* c) {
     if(!tty_readable(tty)) {
         return false;

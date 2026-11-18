@@ -68,7 +68,7 @@ typedef struct {
 
 static vfs_node_ops_t g_node_ops;
 
-/// @brief inode read_page op, copies one page out of the initramfs archive
+/// @brief Inode read_page op, copies one page out of the initramfs archive
 static bool rdsk_read_page(vfs_inode_t* inode, uint64_t index, void* dest) {
     rdsk_inode_data_t* data = inode->private_data;
     rdsk_file_t* file = data->file;

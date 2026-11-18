@@ -11,7 +11,7 @@
 #include <uapi/signal.h>
 
 /// @brief Restores a userspace register state and returns to it via iretq
-/// @note unlike sysret, iretq is able to restore every gpr.
+/// @note Unlike sysret, iretq is able to restore every gpr
 [[noreturn]] void x86_64_signal_iret_to_user(arch_interrupt_idt_frame_t* frame);
 
 #define SIGNAL_FRAME_RED_ZONE 128

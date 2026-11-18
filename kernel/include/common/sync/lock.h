@@ -21,15 +21,13 @@ typedef struct {
 } lock_t;
 
 /**
- * @brief Acquire lock.
- * @param lock Pointer to the lock to acquire.
- * @note This function will block the calling thread until the lock is acquired.
+ * @brief Acquire lock
+ * @note This function will block the calling thread until the lock is acquired
  */
 void lock_acquire(lock_t* lock);
 
 /**
- * @brief Release lock.
- * @param lock Pointer to the lock to release.
- * @note This function will wake up one of the threads waiting on the lock, if any.
+ * @brief Release lock
+ * @note This function will wake up one of the threads waiting on the lock, if any
  */
 void lock_release(lock_t* lock);

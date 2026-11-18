@@ -108,8 +108,8 @@ static inline long arch_sbi_console_putchar(int c) {
 
 /**
  * @brief Raises a supervisor software interrupt on a set of harts
- * @param hart_mask bitmask of harts to target relative to hart_mask_base
- * @param hart_mask_base first hart id the mask applies to
+ * @param hart_mask Bitmask of harts to target relative to hart_mask_base
+ * @param hart_mask_base First hart id the mask applies to
  */
 static inline arch_sbi_ret_t arch_sbi_send_ipi(long hart_mask, long hart_mask_base) {
     return arch_sbi_ecall2(ARCH_SBI_EXT_IPI, ARCH_SBI_IPI_SEND, hart_mask, hart_mask_base);
@@ -119,8 +119,8 @@ static inline arch_sbi_ret_t arch_sbi_send_ipi(long hart_mask, long hart_mask_ba
 #define ARCH_SBI_TIME_SET_TIMER 0
 
 /**
- * @brief programs the supervisor timer to fire at the given absolute time
- * @param deadline absolute time value, uses the time csr
+ * @brief Programs the supervisor timer to fire at the given absolute time
+ * @param deadline Absolute time value, uses the time csr
  */
 static inline arch_sbi_ret_t arch_sbi_set_timer(uint64_t deadline) {
     return arch_sbi_ecall1(ARCH_SBI_EXT_TIME, ARCH_SBI_TIME_SET_TIMER, (long) deadline);
@@ -131,9 +131,8 @@ static inline arch_sbi_ret_t arch_sbi_set_timer(uint64_t deadline) {
 
 /**
  * @brief Starts a given hart
- * @param hart_id the target hart to start
- * @param start_address physical address to start execution at
- * @param param loaded into a1 on start
+ * @param start_address Physical address to start execution at
+ * @param param Loaded into a1 on start
  */
 static inline arch_sbi_ret_t sbi_start_hart(uint64_t hart_id, uint64_t start_address, uint64_t param) {
     return arch_sbi_ecall3(ARCH_SBI_EXT_HSM, ARCH_SBI_HSM_START_HART, hart_id, start_address, param);

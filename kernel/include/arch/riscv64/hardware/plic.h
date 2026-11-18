@@ -13,7 +13,7 @@ void arch_plic_init(void);
 [[nodiscard]] bool arch_plic_is_initialized(void);
 
 /**
- * @brief translate a ACPI GSI into a PLIC interrupt source id
+ * @brief Translate a ACPI GSI into a PLIC interrupt source id
  * @param gsi The global system interrupt number
  * @return The PLIC interrupt source id, or 0 if it is out of range
  */

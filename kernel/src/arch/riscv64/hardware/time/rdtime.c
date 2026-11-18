@@ -14,7 +14,7 @@ static time_timer_t g_rdtime_timer;
     return ARCH_CSR_READ(time);
 }
 
-/// @brief scales value by the timebase frequency without overflowing a 64 bit integer
+/// @brief Scales value by the timebase frequency without overflowing a 64 bit integer
 [[nodiscard]] static uint64_t rdtime_microseconds_to_ticks(uint64_t microseconds, uint64_t frequency) {
     return (microseconds / MICROSECONDS_PER_SECOND) * frequency + ((microseconds % MICROSECONDS_PER_SECOND) * frequency) / MICROSECONDS_PER_SECOND;
 }

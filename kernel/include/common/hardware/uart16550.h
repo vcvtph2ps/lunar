@@ -22,17 +22,17 @@
 #define UART16550_DIVISOR_600 192
 #define UART16550_DIVISOR_300 384
 
-/// @ref uart16550::irq.
+/// @ref uart16550::irq
 #define UART16550_IRQ_NONE 0xFFFFFFFFu
 
 typedef struct uart16550 {
-    /// @brief Callback invoked for every byte drained from the receive buffer, may be nullptr.
+    /// @brief Callback invoked for every byte drained from the receive buffer, may be nullptr
     void (*on_recv)(void* ctx, char c);
     void* recv_ctx;
 
     io_region_t io;
 
-    /// @brief Arch specific interrupt number or @ref UART16550_IRQ_NONE.
+    /// @brief Arch specific interrupt number or @ref UART16550_IRQ_NONE
     uint32_t irq;
     bool irq_low_polarity;
     bool irq_edge_triggered;
@@ -55,7 +55,7 @@ extern list_t g_uart16550_list;
 
 /**
  * @brief Performs early boot UART discovery
- * @note this runs before ACPI is available so that early logging works.
+ * @note This runs before ACPI is available so that early logging works
  */
 void uart16550_early_setup();
 
@@ -66,7 +66,7 @@ void uart16550_setup();
 
 /**
  * @brief Initializes a UART
- * @param uart The UART to initialize.
+ * @param uart The UART to initialize
  * @param divisor The baud rate divisor to program, see the UART16550_DIVISOR_* constants
  * @return true if the UART was found and configured, false otherwise
  */
@@ -79,7 +79,7 @@ void uart16550_setup();
  * @param irq_low_polarity Whether the interrupt is active low
  * @param irq_edge_triggered Whether the interrupt is edge triggered
  * @return The newly created UART, or nullptr if allocation failed
- * @note the returned UART must still be initialized with @ref uart16550_init
+ * @note The returned UART must still be initialized with @ref uart16550_init
  */
 uart16550_t* uart16550_create(const io_region_t* io, uint32_t irq, bool irq_low_polarity, bool irq_edge_triggered);
 
@@ -111,7 +111,7 @@ void uart16550_send(uart16550_t* uart, char c);
 
 /**
  * @brief Drains the receive FIFO into the software ring buffer and wakes the receive worker
- * @note should be called from the serial hardirq
+ * @note Should be called from the serial hardirq
  */
 void uart16550_handle_interrupt(uart16550_t* uart);
 

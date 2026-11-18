@@ -117,7 +117,7 @@ struct pci_device {
 };
 
 /**
- * @brief Find a PCI device by its segment, bus, device, and function numbers.
+ * @brief Find a PCI device by its segment, bus, device, and function numbers
  * @note This function requires ACPI to be initialized, and will only find devices that are enumerated by ACPI
  */
 bool pci_device_find(uint16_t segment, uint8_t bus, uint8_t device, uint8_t function, pci_device_t** out_device);
@@ -137,8 +137,8 @@ void pci_early_init();
 
 /**
  * @brief Find the ECAM region for a given pci segment and bus number
- * @param segment the pci segment number
- * @param bus the pci bus number
+ * @param segment The pci segment number
+ * @param bus The pci bus number
  * @return A pointer a pci_ecam_region_t, or nullptr if not found
  */
 pci_ecam_region_t* pci_find_ecam_region(uint16_t segment, uint8_t bus);
@@ -149,12 +149,12 @@ pci_ecam_region_t* pci_find_ecam_region(uint16_t segment, uint8_t bus);
 bool pci_init();
 
 /**
- * @brief Create a PCI device structure for a given bus, device, and function on a specific host bridge.
- * @param pci_host_bridge The PCI host bridge to create the device on.
- * @param bus The bus number of the device.
- * @param device The device number of the device.
- * @param function The function number of the device.
- * @param out_device Pointer to a pci_device_t structure that will be filled with the device information.
- * @return true if the device was successfully created, false otherwise.
+ * @brief Create a PCI device structure for a given bus, device, and function on a specific host bridge
+ * @param pci_host_bridge The PCI host bridge to create the device on
+ * @param bus The bus number of the device
+ * @param device The device number of the device
+ * @param function The function number of the device
+ * @param out_device Pointer to a pci_device_t structure that will be filled with the device information
+ * @return true if the device was successfully created, false otherwise
  */
 bool pci_create_device(pci_host_bridge_t* pci_host_bridge, pci_device_t* parent_bridge, uint8_t bus, uint8_t device, uint8_t function, pci_device_t** out_device);

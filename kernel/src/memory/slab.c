@@ -45,7 +45,7 @@ static void slab_cache_destroy_slab(slab_cache_t* cache, slab_t* slab) {
     vm_unmap(g_vm_global_address_space, (void*) slab->buffer, cache->slab_size);
 }
 
-// @safety: assumes cache->slab_lock is held, **will** try to unlock it if required
+/// @safety: Assumes cache->slab_lock is held, **will** try to unlock it if required
 static void* slab_cache_alloc_from_slab_lockless(slab_cache_t* cache) {
     if(cache->slab_partial_list.count == 0) {
         if(cache->slab_empty) {
@@ -97,7 +97,7 @@ static size_t slab_cache_alloc_many_from_slab(slab_cache_t* cache, void** object
     return object_count;
 }
 
-// @safety: assumes cache->slab_lock is held
+/// @safety: Assumes cache->slab_lock is held
 static void slab_cache_free_to_slab_lockless(slab_cache_t* cache, void* object) {
     slab_t* slab = (slab_t*) (ALIGN_DOWN((uintptr_t) object, cache->slab_align) + cache->slab_size - sizeof(slab_t));
 
@@ -137,7 +137,7 @@ static void slab_cache_free_many_to_slab(slab_cache_t* cache, void** objects, si
     spinlock_no_dpc_unlock(&cache->slab_lock);
 }
 
-// @safety: we call this function with dpcs and preemption already disabled
+/// @safety: We call this function with dpcs and preemption already disabled
 static inline void* slab_cpu_alloc(slab_cpu_cache_t* cc) {
     if(cc->primary->rounds == 0 && cc->secondary->rounds == SLAB_MAGAZINE_SIZE) {
         slab_magazine_t* temp = cc->secondary;
@@ -152,7 +152,7 @@ static inline void* slab_cpu_alloc(slab_cpu_cache_t* cc) {
     return cc->primary->objects[--cc->primary->rounds];
 }
 
-// @safety: we call this function with dpcs and preemption already disabled
+/// @safety: We call this function with dpcs and preemption already disabled
 static inline bool slab_cpu_free(slab_cpu_cache_t* cc, void* ptr) {
     if(cc->primary->rounds < SLAB_MAGAZINE_SIZE) {
         cc->primary->objects[cc->primary->rounds++] = ptr;

@@ -14,7 +14,7 @@ typedef struct thread thread_t; // NOLINT
 typedef struct process_group process_group_t; // NOLINT
 
 /// @brief The global list of every live process
-/// @note a process is only unlinked (and later destroyed) while holding this lock, so holding it keeps every listed process and its address space alive
+/// @note A process is only unlinked (and later destroyed) while holding this lock, so holding it keeps every listed process and its address space alive
 extern spinlock_t g_process_list_lock;
 extern list_t g_process_list;
 
@@ -87,24 +87,23 @@ struct process {
 };
 
 /**
- * @brief Allocates a new process ID.
- * @return A unique process ID.
+ * @brief Allocates a new process ID
+ * @return A unique process ID
  */
 uint32_t process_allocate_id();
 
 /**
- * @brief Frees a previously allocated process ID.
- * @param id The process ID to free.
+ * @brief Frees a previously allocated process ID
  */
 void process_free_id(uint32_t id);
 
 /**
- * @note: bumps process refcount
+ * @note: Bumps process refcount
  */
 process_t* process_find_by_id(uint32_t id);
 
 /**
- * @brief Looks up a thread of a process by its tid.
+ * @brief Looks up a thread of a process by its tid
  * @return A referenced thread, or nullptr
  * @note The caller owns the returned reference and must release it with thread_deref()
  */
@@ -115,9 +114,6 @@ thread_t* process_find_thread_by_id(process_t* process, uint32_t tid);
  */
 process_t* process_create_from_file(vfs_node_t* node, const ldr_process_load_info_t* load_info, vfs_node_t* current_working_dir, thread_t** out_thread);
 
-/**
- *
- */
 bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_process_load_info_t* load_info, thread_t** out_thread);
 
 /**
@@ -127,27 +123,23 @@ process_t* process_fork(process_t* parent);
 
 /**
  * @brief Kills the target process
- * @param target The process to kill
  * @note This function never returns if it is called from a thread of the target process
  */
 void process_kill(process_t* target, process_status_state_t state, int32_t exit_code);
 
 /**
- * @brief Acquires a new reference to a process.
- * @param process The process to reference
+ * @brief Acquires a new reference to a process
  * @return The same process
  */
 process_t* process_ref(process_t* process);
 
 /**
- * @brief Acquires a new reference to a process only if it is still alive.
- * @param process The process to reference
+ * @brief Acquires a new reference to a process only if it is still alive
  * @return The same process, or nullptr if it is already being destroyed
  */
 process_t* process_try_ref(process_t* process);
 
 /**
- * @brief Releases a reference to a process, destroying it once the last reference is dropped.
- * @param process The process to dereference
+ * @brief Releases a reference to a process, destroying it once the last reference is dropped
  */
 void process_deref(process_t* process);

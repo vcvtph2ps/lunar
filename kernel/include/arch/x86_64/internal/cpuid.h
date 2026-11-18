@@ -80,53 +80,48 @@ CPUID_FEATURE_DEFINE(KVM_PVCLOCK, 0x40000001, 0, ARCH_CPUID_EAX, 3);
 // NOLINTEND
 
 /**
- * @brief Checks if a specific CPU feature is supported by the processor.
- * @param feature The CPU feature to check for support.
- * @return true if the feature is supported, false otherwise.
+ * @brief Checks if a specific CPU feature is supported by the processor
+ * @return true if the feature is supported, false otherwise
  */
 [[nodiscard]] bool arch_cpuid_is_feature_supported(arch_cpuid_feature_t feature);
 
 /**
- * @brief Gets the value of a specific CPU feature.
- * @param feature The CPU feature to get the value of.
- * @return The value of the CPU feature. Only includes the bits specified by the feature's mask.
+ * @brief Gets the value of a specific CPU feature
+ * @return The value of the CPU feature. Only includes the bits specified by the feature's mask
  */
 [[nodiscard]] uint32_t arch_cpuid_get_feature_value(arch_cpuid_feature_t feature);
 
 /**
- * @brief Executes the CPUID instruction with the specified leaf and subleaf, and returns the value of the specified register.
- * @param leaf The CPUID leaf to query.
- * @param subleaf The CPUID subleaf to query.
- * @param reg The CPUID register to return the value of.
+ * @brief Executes the CPUID instruction with the specified leaf and subleaf, and returns the value of the specified register
  */
 [[nodiscard]] uint32_t arch_cpuid(arch_cpuid_leaf_t leaf, uint32_t subleaf, arch_cpuid_reg_t reg);
 
 /**
  * @brief Gets the CPU vendor string, which is a 12-character ASCII string that identifies the CPU manufacturer
- * @return A pointer to a null-terminated string containing the CPU vendor.
+ * @return A pointer to a null-terminated string containing the CPU vendor
  */
 [[nodiscard]] const char* arch_cpuid_get_vendor_string();
 
 /**
  * @brief Gets the hypervisor string, which is a 12-character ASCII string that identifies the hypervisor manufacturer
- * @return A pointer to a null-terminated string containing the Hypervisor or nullptr if no hypervisor is detected.
+ * @return A pointer to a null-terminated string containing the Hypervisor or nullptr if no hypervisor is detected
  */
 [[nodiscard]] const char* arch_cpuid_get_hypervisor_string();
 
 /**
- * @brief Gets the CPU name string, which is a 48-character ASCII string that identifies the specific CPU model.
- * @return A pointer to a null-terminated string containing the CPU name.
+ * @brief Gets the CPU name string, which is a 48-character ASCII string that identifies the specific CPU model
+ * @return A pointer to a null-terminated string containing the CPU name
  */
 [[nodiscard]] const char* arch_cpuid_get_name_string();
 
 /**
- * @brief Gets the CPU vendor as an enum value.
- * @return The CPU vendor as an enum value.
+ * @brief Gets the CPU vendor as an enum value
+ * @return The CPU vendor as an enum value
  */
 [[nodiscard]] arch_cpuid_hypervisor_t arch_cpuid_get_hypervisor();
 
 /**
- * @brief Gets the CPU vendor as an enum value.
- * @return The CPU vendor as an enum value.
+ * @brief Gets the CPU vendor as an enum value
+ * @return The CPU vendor as an enum value
  */
 [[nodiscard]] arch_cpuid_vendor_t arch_cpuid_get_vendor();

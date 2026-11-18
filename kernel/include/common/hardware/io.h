@@ -4,16 +4,16 @@
 #include <stdint.h>
 
 typedef enum {
-    /// @brief x86 port mapped I/O, the region base is a port number.
+    /// @brief X86 port mapped I/O, the region base is a port number
     IO_TYPE_PORT,
-    /// @brief Memory mapped I/O. the region base is a virtual address.
+    /// @brief Memory mapped I/O. the region base is a virtual address
     IO_TYPE_MMIO,
 } io_type_t;
 
 /// @brief A region of I/O space that can be accessed either through port I/O or
 typedef struct {
     io_type_t type;
-    /// @brief Port number (IO_TYPE_PORT) or virtual base address (IO_TYPE_MMIO).
+    /// @brief Port number (IO_TYPE_PORT) or virtual base address (IO_TYPE_MMIO)
     uintptr_t base;
 } io_region_t;
 
@@ -22,7 +22,7 @@ typedef struct {
 
 /**
  * @brief Inserts a small delay for slow I/O devices
- * @note this is a no-op for memory mapped regions
+ * @note This is a no-op for memory mapped regions
  */
 void io_wait(const io_region_t* region);
 

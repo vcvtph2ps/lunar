@@ -52,14 +52,14 @@ typedef struct vfs_dentry {
     list_node_t lru_node;
 } vfs_dentry_t; // NOLINT
 
-/// @brief Retains a reference on the given dentry, keeping it alive.
+/// @brief Retains a reference on the given dentry, keeping it alive
 vfs_dentry_t* vfs_dentry_get(vfs_dentry_t* dentry); // NOLINT
 
-/// @brief Releases a reference on the given dentry, freeing it once all references are dropped.
+/// @brief Releases a reference on the given dentry, freeing it once all references are dropped
 void vfs_dentry_put(vfs_dentry_t* dentry); // NOLINT
 
 /**
- * @brief Creates a new dentry, linking it into its parent's child list and its node's alias list.
+ * @brief Creates a new dentry, linking it into its parent's child list and its node's alias list
  * @param parent The parent directory dentry (nullptr for the root dentry)
  * @param name The name of the entry; a copy is taken
  * @param node The node the dentry resolves to (nullptr for a negative dentry)
@@ -69,22 +69,19 @@ void vfs_dentry_put(vfs_dentry_t* dentry); // NOLINT
 vfs_result_t vfs_dentry_create(vfs_dentry_t* parent, const char* name, vfs_node_t* node, bool negative, vfs_dentry_t** out_dentry); // NOLINT
 
 /**
- * @brief Looks up a dentry in the dentry cache.
+ * @brief Looks up a dentry in the dentry cache
  * @param parent The parent directory dentry
- * @param name The name of the entry to find
  * @return The cached dentry with a reference held by the caller, or nullptr on a cache miss
  */
 vfs_dentry_t* vfs_dcache_lookup(vfs_dentry_t* parent, const char* name); // NOLINT
 
 /**
- * @brief Inserts a dentry into the cache.
- * @param dentry The dentry to insert
+ * @brief Inserts a dentry into the cache
  */
 void vfs_dcache_insert(vfs_dentry_t* dentry); // NOLINT
 
 /**
- * @brief Removes the cached dentry for a name from the dentry cache and drops the cache's reference on it.
+ * @brief Removes the cached dentry for a name from the dentry cache and drops the cache's reference on it
  * @param parent The parent directory dentry
- * @param name The name of the entry to evict
  */
 void vfs_dcache_invalidate(vfs_dentry_t* parent, const char* name); // NOLINT

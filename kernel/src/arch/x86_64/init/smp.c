@@ -26,7 +26,7 @@
 extern uint8_t g_apinit_start[]; // NOLINT
 extern uint8_t g_apinit_end[]; // NOLINT
 
-// @note: has to match `boot_info` in apinit.asm
+// @note: Has to match `boot_info` in apinit.asm
 typedef struct [[gnu::packed]] {
     uintptr_t cr3;
     uintptr_t stack;

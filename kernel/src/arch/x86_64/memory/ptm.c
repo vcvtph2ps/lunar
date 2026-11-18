@@ -26,7 +26,7 @@ bool g_arch_pte_la57_enabled = false;
 static bool g_pat_supported = false;
 static bool g_huge_pages_support = false;
 
-/// @brief: we need to keep the page tables below 4 gigabytes for ap init, or else we cannot load them in protected mode, leading to a triple fault
+/// @brief: We need to keep the page tables below 4 gigabytes for ap init, or else we cannot load them in protected mode, leading to a triple fault
 uintptr_t g_ptm_4g_reserved_page = 0;
 
 extern vm_address_space_t* g_vm_global_address_space;
@@ -263,7 +263,7 @@ void ptm_load_address_space(vm_address_space_t* address_space) {
 }
 
 static void map_kernel() {
-    // @note: slightly cursed, we pass no_pagedb=true to all of these to bypass the pagedb
+    // @note: Slightly cursed, we pass no_pagedb=true to all of these to bypass the pagedb
     for(size_t i = 0; i < g_init_boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* seg = &g_init_boot_info->kernel_segments[i];
 
@@ -508,7 +508,7 @@ bool ptm_fork_user(vm_address_space_t* new_as, vm_address_space_t* parent_as) {
     arch_pte_entry_t* kernel_pml4 = (arch_pte_entry_t*) PTM_TO_HHDM(g_vm_global_address_space->ptm.top_level_page_table);
     for(int i = 256; i < 512; i++) user_pml4[i] = kernel_pml4[i];
 
-    // @note: ugh this sucks
+    // @note: Ugh this sucks
     ptm_flush_tlb_all();
     ipi_broadcast((ipi_message_t) {
         .type = IPI_TLB_FLUSH_ALL,

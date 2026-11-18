@@ -125,10 +125,12 @@ typedef enum {
 
 #define UAPI_SIGNAL_POLL UAPI_SIGNAL_IO
 
+/// @brief Returns true if the signal isn't uncatchable by a process
 static inline bool uapi_sig_uncatchable(int signal_number) {
     return signal_number == UAPI_SIGNAL_KILL || signal_number == UAPI_SIGNAL_STOP;
 }
 
+/// @brief Returns the default action for a signal
 static inline uapi_signal_default_action_t uapi_sig_default_action(int signal_number) {
     switch(signal_number) {
         case UAPI_SIGNAL_CHLD:  [[fallthrough]];

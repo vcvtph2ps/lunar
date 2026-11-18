@@ -30,7 +30,7 @@ typedef struct {
 /**
  * @brief Gets the userspace instruction pointer from an interrupt register frame
  * @return The userspace instruction pointer
- * @note only valid on syscall frames
+ * @note Only valid on syscall frames
  */
 [[nodiscard]] static inline uint64_t arch_interrupt_regs_syscall_get_user_ip(arch_interrupt_regs_t* regs) {
     return regs->rcx;
@@ -38,24 +38,23 @@ typedef struct {
 
 /**
  * @brief Gets the current interrupt state
- * @return The current interrupt state.
+ * @return The current interrupt state
  */
 [[nodiscard]] arch_interrupt_state_t arch_interrupt_get_state();
 
 /**
- * @brief Disables interrupts and returns the previous interrupt state.
- * @return The previous interrupt state before disabling.
+ * @brief Disables interrupts and returns the previous interrupt state
+ * @return The previous interrupt state before disabling
  */
 [[nodiscard]] arch_interrupt_state_t arch_interrupt_disable();
 
 /**
- * @brief Enables interrupts and returns the previous interrupt state.
- * @return The previous interrupt state before enabling.
+ * @brief Enables interrupts and returns the previous interrupt state
+ * @return The previous interrupt state before enabling
  */
 [[nodiscard]] arch_interrupt_state_t arch_interrupt_enable();
 
 /**
- * @brief Restores the interrupt state to the given state.
- * @param state The interrupt state to restore to.
+ * @brief Restores the interrupt state to the given state
  */
 void arch_interrupt_restore(arch_interrupt_state_t state);

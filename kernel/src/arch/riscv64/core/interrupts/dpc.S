@@ -1,7 +1,7 @@
 .section .text
 .globl dpc_execute_on_stack
 
-/// @brief executes a DPC on the target stack
+/// @brief Executes a DPC on the target stack
 /// @param a0 DPC function pointer
 /// @param a1 DPC data
 /// @param a2 Target stack pointer

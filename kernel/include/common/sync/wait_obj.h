@@ -69,5 +69,5 @@ bool wait_obj_signal(wait_obj_t* obj, size_t count);
 bool wait_obj_is_signaled(wait_obj_t* obj);
 void wait_obj_reset(wait_obj_t* obj);
 
-/// @note: it is assumed the caller will be holding object lock
+/// @note: It is assumed the caller will be holding object lock
 bool wait_obj_try_consume(wait_obj_t* obj);

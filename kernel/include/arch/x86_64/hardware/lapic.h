@@ -3,7 +3,6 @@
 
 /**
  * @brief Initializes the LAPIC for the current core
- * @param core_id The ID of the current core
  */
 void arch_lapic_init(uint32_t core_id);
 
@@ -15,7 +14,7 @@ uint32_t arch_lapic_get_id();
 
 /**
  * @brief Checks if the current processor is the bootstrap processor
- * @returns True if the current process is the bootstrap processor
+ * @return True if the current process is the bootstrap processor
  */
 bool arch_lapic_is_bsp();
 
@@ -25,48 +24,40 @@ bool arch_lapic_is_bsp();
 void arch_lapic_eoi();
 
 /**
- * @brief Masks all maskable interrupts on the local APIC by raising the task priority register.
- * @note Prevents the APIC from waking a halted core for a pending but undeliverable interrupt.
+ * @brief Masks all maskable interrupts on the local APIC by raising the task priority register
+ * @note Prevents the APIC from waking a halted core for a pending but undeliverable interrupt
  */
 void arch_lapic_mask_all_interrupts();
 
 /**
- * @brief Sends an interprocessor interrupt with the specified vector to the processor with the specified APIC ID.
- * @param apic_id The APIC ID of the target processor to send the IPI
- * @param vector The interrupt vector to send in the IPI.
+ * @brief Sends an interprocessor interrupt with the specified vector to the processor with the specified APIC ID
  */
 void arch_lapic_send_ipi(uint32_t apic_id, uint8_t vector);
 
 /**
- * @brief Broadcasts an interprocessor interrupt with the specified vector to all other processors in the system.
- * @param vector The interrupt vector to send in the IPI.
+ * @brief Broadcasts an interprocessor interrupt with the specified vector to all other processors in the system
  */
 void arch_lapic_broadcast_ipi(uint8_t vector);
 
 /**
  * @brief Sends an INIT IPI to the processor with the specified APIC ID
- * @param apic_id The APIC ID of the target processor.
  */
 void arch_lapic_send_init(uint32_t apic_id);
 
 /**
- * @brief Sends a startup IPI to the processor with the specified APIC ID.
- * @param apic_id The APIC ID of the target processor.
- * @param startup_page The physical address of the page the processor should start executing from. Must be below 1 MiB and page aligned.
+ * @brief Sends a startup IPI to the processor with the specified APIC ID
+ * @param startup_page The physical address of the page the processor should start executing from. Must be below 1 MiB and page aligned
  */
 void arch_lapic_send_startup(uint32_t apic_id, uintptr_t startup_page);
 
 /**
- * @brief Reads a value from the specified LAPIC register.
- * @param reg The LAPIC register to read from.
- * @return The value read from the specified LAPIC register.
+ * @brief Reads a value from the specified LAPIC register
+ * @return The value read from the specified LAPIC register
  */
 uint32_t arch_lapic_read(uint32_t reg);
 
 /**
- * @brief Writes a value to the specified LAPIC register.
- * @param reg The LAPIC register to write to.
- * @param value The value to write to the specified LAPIC register.
+ * @brief Writes a value to the specified LAPIC register
  */
 void arch_lapic_write(uint32_t reg, uint32_t value);
 

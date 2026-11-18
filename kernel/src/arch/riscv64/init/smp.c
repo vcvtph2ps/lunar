@@ -23,7 +23,7 @@
 extern uint8_t g_apinit_start[]; // NOLINT
 extern uint8_t g_apinit_end[]; // NOLINT
 
-// @note: has to match `boot_info` in apinit.S
+// @note: Has to match `boot_info` in apinit.S
 typedef struct {
     uint64_t core_id;
     uint64_t stack;

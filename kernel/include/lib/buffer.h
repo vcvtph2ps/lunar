@@ -33,7 +33,7 @@ void buffer_append(buffer_t* buffer, const void* data, size_t size);
  * @param buffer A pointer to the buffer to slice
  * @param offset The offset in bytes from the start of the buffer to begin the slice
  * @param size The size of the slice in bytes
- * @note This function does not free the memory of the sliced-out portion, but simply adjusts the buffer's data pointer and size.
+ * @note This function does not free the memory of the sliced-out portion, but simply adjusts the buffer's data pointer and size
  */
 void buffer_slice(buffer_t* buffer, size_t offset, size_t size);
 

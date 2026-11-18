@@ -23,6 +23,7 @@ typedef struct {
     uint32_t step_count;
 } pt_radix_walk_path_t;
 
+/// @brief Convert a virtual hhdm address into a physical pfn
 static inline uint64_t pt_radix_table_pfn(const arch_pte_entry_t* table) {
     return (uintptr_t) PTM_FROM_HHDM(table) / ARCH_PAGE_SIZE_4K;
 }
@@ -30,24 +31,24 @@ static inline uint64_t pt_radix_table_pfn(const arch_pte_entry_t* table) {
 /**
  * @brief Walk the radix tree
  *
- * @param top_level_table hhdm pointer to the top level page table.
- * @param vaddr virtual address to walk for.
- * @param target_level level at which to stop (if the walk reaches a leaf at a higher level and split_large is false, the walk stops early).
- * @param allocate if true, missing intermediate tables are allocated.
- * @param split_large if true, large page entries encountered above target_level are split into smaller pages. if false, the walk stops early and returns
- * @param prot protection hints for intermediate entry flag widening.
- * @param privilege privilege hints for intermediate entry flag widening.
- * @param[out] path filled with one step per level visited.
+ * @param top_level_table Hhdm pointer to the top level page table
+ * @param vaddr Virtual address to walk for
+ * @param target_level Level at which to stop (if the walk reaches a leaf at a higher level and split_large is false, the walk stops early)
+ * @param allocate If true, missing intermediate tables are allocated
+ * @param split_large If true, large page entries encountered above target_level are split into smaller pages. if false, the walk stops early and returns
+ * @param prot Protection hints for intermediate entry flag widening
+ * @param privilege Privilege hints for intermediate entry flag widening
+ * @param[out] path Filled with one step per level visited
  */
 pt_radix_walk_result_t pt_radix_walk(arch_pte_entry_t* top_level_table, virt_addr_t vaddr, uint32_t target_level, bool allocate, bool split_large, vm_protection_t prot, vm_privilege_t privilege, pt_radix_walk_path_t* path);
 
 /**
  * @brief Break a large page entry into smaller child entries
  *
- * @param table hhdm pointer to the page-table page containing the entry.
- * @param index index of the large-page entry within table.
- * @param level level of table (must be > 1).
+ * @param table Hhdm pointer to the page-table page containing the entry
+ * @param index Index of the large-page entry within table
+ * @param level Level of table (must be > 1)
  *
- * @return the new parent entry (pointing to the child table), or 0 if failed.
+ * @return the new parent entry (pointing to the child table), or 0 if failed
  */
 arch_pte_entry_t pt_radix_break_large(arch_pte_entry_t* table, uint32_t index, uint32_t level);

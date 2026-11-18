@@ -9,7 +9,7 @@
 
 /// @brief Entry point of the `syscall` instruction
 x86_64_handle_syscall:
-    /// @safety: when designing syscall, AMD decided that atomic stack switching and swapgs were not needed
+    /// @safety: When designing syscall, AMD decided that atomic stack switching and swapgs were not needed
     /// this leaves us with the problem that if we take an nmi *right* before swapgs, we'll have taken that nmi "in" kernel mode while having a userspace gs base loaded
     /// this will cause many issues, and we can only deal with it by checking in the nmi handler
     // swap to the kernel gs base so the cpu local block can be reached

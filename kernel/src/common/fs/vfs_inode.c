@@ -37,7 +37,7 @@ vfs_inode_t* vfs_inode_create(const vfs_inode_ops_t* ops, void* private_data, si
     ATOMIC_STORE(&inode->refcount, 1, ATOMIC_RELAXED);
 
     /// The page cache lives with the inode for its whole lifetime;
-    /// @note read only inodes simply get no writeback callback
+    /// @note Read only inodes simply get no writeback callback
     inode->cache = page_cache_object_create(inode, inode_cache_fill, ops->write_page != nullptr ? inode_cache_writeback : nullptr, size);
     return inode;
 }

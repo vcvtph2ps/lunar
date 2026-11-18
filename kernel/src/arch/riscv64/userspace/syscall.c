@@ -20,7 +20,7 @@ syscall_ret_t riscv64_dispatch_syscall(arch_interrupt_regs_t* regs);
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 void arch_syscall_init() {
-    /// @note nothing to do... riscv <3
+    /// @note Nothing to do... riscv <3
 }
 
 syscall_ret_t riscv64_dispatch_syscall(arch_interrupt_regs_t* regs) {

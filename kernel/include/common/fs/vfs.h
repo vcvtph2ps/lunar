@@ -108,24 +108,24 @@ struct vfs_node_ops {
     vfs_result_t (*read_dir)(vfs_node_t* node, size_t* offset, vfs_node_t** out_node, const char** out_name);
 
     /**
-     * @brief Creates a new child node named name inside the given directory node.
-     * @param node The directory node to create the child in.
-     * @param name The name of the child to create.
-     * @param type The type of node to create.
-     * @param permissions The permission bits to create the node with.
-     * @param out_node Receives the newly created node, with a reference owned by the caller.
-     * @return VFS_RESULT_ERR_EXISTS if a node with that name already exists.
-     * @note May be nullptr for read only filesystems.
+     * @brief Creates a new child node named name inside the given directory node
+     * @param node The directory node to create the child in
+     * @param name The name of the child to create
+     * @param type The type of node to create
+     * @param permissions The permission bits to create the node with
+     * @param out_node Receives the newly created node, with a reference owned by the caller
+     * @return VFS_RESULT_ERR_EXISTS if a node with that name already exists
+     * @note May be nullptr for read only filesystems
      */
     vfs_result_t (*create)(vfs_node_t* node, const char* name, vfs_node_type_t type, vfs_node_permissions_t permissions, vfs_node_t** out_node);
 
     /// @brief Performs IO on the given node
     vfs_result_t (*perform_io)(vfs_node_t* node, io_request_t* request);
 
-    // @brief Gets the attributes of the given node
+    /// @brief Gets the attributes of the given node
     vfs_result_t (*get_attributes)(vfs_node_t* node, vfs_node_attr_t* out_attr);
 
-    // @brief Called when the node's reference count drops to zero
+    /// @brief Called when the node's reference count drops to zero
     void (*release)(vfs_node_t* node);
 };
 
@@ -144,7 +144,7 @@ struct vfs_node {
     vfs_node_ops_t* ops;
 
     /// The inode backing this node's contents, or nullptr if the node is not backed by a cacheable file
-    /// @note the vnode holds a reference on it
+    /// @note The vnode holds a reference on it
     vfs_inode_t* inode;
 
     /// dentries aliased to this node, one per hardlink
@@ -196,15 +196,14 @@ vfs_result_t vfs_root_node(vfs_node_t** out_root_node);
 
 /**
  * @brief Looks up the dentry at the specified path and returns a pointer to it in out_result_dentry
- * @param path The path to look up the dentry at.
- * @param follow_final Whether to follow a symlink in the final path component. Symlinks in intermediate components are always followed.
+ * @param path The path to look up the dentry at
+ * @param follow_final Whether to follow a symlink in the final path component. Symlinks in intermediate components are always followed
  * @param out_result_dentry A pointer to a vfs_dentry_t* that will be set to the dentry at the specified path if it exists
  */
 vfs_result_t vfs_lookup_dentry(const vfs_path_t* path, bool follow_final, vfs_dentry_t** out_result_dentry);
 
 /**
  * @brief Looks up the node at the specified path and returns a pointer to it in out_result_node
- * @param path The path to look up the node at.
  * @param follow_symlinks Whether to follow symlinks or not
  * @param out_result_node A pointer to a vfs_node_t* that will be set to the node at the specified path if it exists
  */
@@ -213,14 +212,11 @@ vfs_result_t vfs_lookup(const vfs_path_t* path, bool follow_symlinks, vfs_node_t
 /**
  * @brief Performs IO on the specified node
  * @param path The path to find the node to perform the IO on
- * @param request The IO request to perform
  */
 vfs_result_t vfs_perform_io(const vfs_path_t* path, io_request_t* request);
 
 /**
  * @brief Performs IO on the specified node
- * @param node The node to perform the IO on
- * @param request The IO request to perform
  */
 vfs_result_t vfs_perform_io_node(vfs_node_t* node, io_request_t* request);
 
@@ -233,14 +229,12 @@ vfs_result_t vfs_get_attributes(const vfs_path_t* path, vfs_node_attr_t* out_att
 
 /**
  * @brief Gets the attributes of the given node
- * @param node The node to perform the IO on
  * @param out_attr A pointer to a vfs_node_attr_t variable to receive the node attributes
  */
 vfs_result_t vfs_get_attributes_node(vfs_node_t* node, vfs_node_attr_t* out_attr);
 
 /**
  * @brief Changes the size of the file backing the given node
- * @param node The node to truncate
  * @param size The new size of the file in bytes
  * @return VFS_RESULT_ERR_IS_DIR if the node is a directory, VFS_RESULT_ERR_UNSUPPORTED if the node is not a resizable file, or VFS_RESULT_ERR_NO_SPACE if the backing store could not be resized
  * @note Extending reads back as zeroes, shrinking discards the cached pages past the new end
@@ -250,27 +244,25 @@ vfs_result_t vfs_truncate_node(vfs_node_t* node, size_t size);
 /**
  * @brief Constructs a path representing the absolute path to the given node
  * @param node The vfs_node_t to construct the absolute path for
- * @param out_buf A pointer to a char* variable to receive the path. The caller is responsible for freeing this buffer using heap_free().
+ * @param out_buf A pointer to a char* variable to receive the path. The caller is responsible for freeing this buffer using heap_free()
  * @param out_size A pointer to a size_t variable to receive the size of the path string in bytes, including the null terminator
  */
 vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size);
 
 /**
  * @brief Reads the next entry in the directory at the given path, starting at the given offset
- * @param path The path to the directory to read
- * @param offset A pointer to a size_t variable that will be updated to the next offset to read from.
- * @param out_dentry A pointer to a vfs_dentry_t* variable that will be set to the next entry in the directory.
+ * @param offset A pointer to a size_t variable that will be updated to the next offset to read from
+ * @param out_dentry A pointer to a vfs_dentry_t* variable that will be set to the next entry in the directory
  * @note The caller is responsible for releasing the reference to this dentry using vfs_dentry_put()
  */
 vfs_result_t vfs_read_dir(vfs_path_t* path, size_t* offset, vfs_dentry_t** out_dentry);
 
 /**
  * @brief Creates a new node at the given path
- * @param path The path of the node to create
  * @param type The type of node to create
  * @param permissions The permission bits to create the node with
- * @param out_node Optional. Receives the newly created node with a reference owned by the caller.
- * @return VFS_RESULT_ERR_EXISTS if the final path component already exists, or VFS_RESULT_ERR_NOT_FOUND if the parent does not exist.
+ * @param out_node Optional. Receives the newly created node with a reference owned by the caller
+ * @return VFS_RESULT_ERR_EXISTS if the final path component already exists, or VFS_RESULT_ERR_NOT_FOUND if the parent does not exist
  * @note The final path component must not already exist and the parent must be a directory
  */
 vfs_result_t vfs_create(const vfs_path_t* path, vfs_node_type_t type, vfs_node_permissions_t permissions, vfs_node_t** out_node);
@@ -290,14 +282,12 @@ extern const vfs_ops_t g_vfs_tmpfs_ops;
 
 /**
  * @brief Increment the reference count of a VFS node
- * @param node The node to reference
  * @return The same node
  */
 vfs_node_t* vfs_node_get(vfs_node_t* node);
 
 /**
  * @brief Decrement the reference count of a VFS node, freeing it if it reaches zero
- * @param node The node to dereference
  */
 void vfs_node_put(vfs_node_t* node);
 

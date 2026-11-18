@@ -17,7 +17,7 @@
 #define PMM_LOW_MEMORY_END 0x100000
 
 #if defined(__x86_64__)
-/// @see: g_ptm_4g_reserved_page in ptm.c
+/// @see g_ptm_4g_reserved_page in ptm.c
 #define PMM_MEMORY_4G 0xffffffff
 extern uintptr_t g_ptm_4g_reserved_page;
 static bool g_4g_page_reserved = false;
@@ -98,7 +98,7 @@ static uintptr_t alloc_page_from(pmm_t* pmm, pmm_flag_t flags) {
     spinlock_no_dpc_unlock(&pmm->pmm_lock);
 
     uintptr_t addr = (uintptr_t) pfn << 12;
-    pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_ALLOCATED);
+    pagedb_set_page_type(pfn, PAGEDB_ENTRY_TYPE_ALLOCATED);
     pagedb_page_ref(pfn);
 
 #if defined(__RELEASE__)
@@ -126,7 +126,7 @@ static void free_page_to(pmm_t* pmm, uintptr_t addr) {
 
     pagedb_page_t* page = pagedb_get_page(pfn);
     assert(page != nullptr);
-    pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_FREE);
+    pagedb_set_page_type(pfn, PAGEDB_ENTRY_TYPE_FREE);
 
     spinlock_no_dpc_lock(&pmm->pmm_lock);
     ATOMIC_STORE(&page->free.next_pfn, pmm->free_list_pfn, ATOMIC_RELEASE);
@@ -150,7 +150,7 @@ void pmm_init(uint32_t core_id) {
     if(INIT_CORE_IS_BSP(core_id)) {
         populate_global();
 #if defined(__x86_64__)
-        /// @see: g_ptm_4g_reserved_page in ptm.c
+        /// @see g_ptm_4g_reserved_page in ptm.c
         if(!g_4g_page_reserved) {
             LOG_WARN("no usable page between 1M and 4G for page tables\n");
             g_ptm_4g_reserved_page = pmm_alloc_page_low(PMM_FLAG_NONE);
@@ -198,7 +198,7 @@ void pmm_reclaim(uintptr_t addr, size_t page_count) {
 
         pagedb_page_t* page = pagedb_get_page(pfn);
         assert(page != nullptr);
-        pagedb_set_page_state(pfn, PAGEDB_ENTRY_TYPE_FREE);
+        pagedb_set_page_type(pfn, PAGEDB_ENTRY_TYPE_FREE);
 
         spinlock_no_dpc_lock(&g_pmm.pmm_lock);
         ATOMIC_STORE(&page->free.next_pfn, g_pmm.free_list_pfn, ATOMIC_RELEASE);

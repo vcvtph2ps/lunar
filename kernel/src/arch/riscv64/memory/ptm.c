@@ -250,7 +250,7 @@ void ptm_load_address_space(vm_address_space_t* address_space) {
 }
 
 static void map_kernel(arch_pte_entry_t* boot_top) {
-    // @note: slightly cursed, we pass no_pagedb=true to all of these to bypass the pagedb
+    // @note: Slightly cursed, we pass no_pagedb=true to all of these to bypass the pagedb
 
     for(size_t i = 0; i < g_init_boot_info->kernel_segment_count; i++) {
         bootinfo_segment_t* seg = &g_init_boot_info->kernel_segments[i];

@@ -132,7 +132,7 @@ static void tmpfs_free_file(tmpfs_file_t* file) {
     heap_free(file, sizeof(tmpfs_file_t));
 }
 
-/// @brief Allocates a new file, copies `size` bytes of `data` into it and links it into the directory.
+/// @brief Allocates a new file, copies `size` bytes of `data` into it and links it into the directory
 static tmpfs_file_t* tmpfs_file_create(tmpfs_info_t* info, const char* name, const void* data, size_t size, vfs_node_permissions_t permissions) {
     tmpfs_file_t* file = heap_alloc(sizeof(tmpfs_file_t));
     memory_zero(file, sizeof(tmpfs_file_t));

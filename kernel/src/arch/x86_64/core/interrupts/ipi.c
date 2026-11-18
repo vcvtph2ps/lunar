@@ -33,7 +33,7 @@ static void ipi_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     (void) ctx;
     (void) frame;
 
-    // @note the interrupt hnadler cannot EOI for us
+    // @note: The interrupt handler cannot EOI for us
     arch_lapic_eoi();
     ipi_handle_panic();
 }

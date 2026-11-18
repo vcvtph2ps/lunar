@@ -58,7 +58,7 @@ hashmap_node_t* hashmap_find(const hashmap_t* map, const void* key);
 
 /**
  * @brief Links a node into the map
- * @param node The node to insert. It must not already be linked.
+ * @param node The node to insert. It must not already be linked
  * @note Inserting a node with a key that is already present results in two
  * nodes sharing a key; use hashmap_find() first if uniqueness is required
  */

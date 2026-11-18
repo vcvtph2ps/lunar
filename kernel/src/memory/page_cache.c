@@ -17,7 +17,7 @@ static hashmap_t g_page_cache;
 static list_t g_page_cache_lru = LIST_INIT;
 ATOMIC static size_t g_page_cache_page_count = 0;
 
-/// @brief The key a cached page is filed under.
+/// @brief The key a cached page is filed under
 typedef struct {
     vfs_page_cache_object_t* object;
     uint64_t index;
@@ -46,7 +46,7 @@ static bool page_cache_equal(const hashmap_node_t* node, const void* key) {
     return page->object == page_key->object && page->index == page_key->index;
 }
 
-/// @safety Assumes the page cache lock is held.
+/// @safety: Assumes the page cache lock is held
 static page_cache_page_t* page_cache_find_locked(vfs_page_cache_object_t* object, uint64_t index) {
     page_cache_key_t key = { .object = object, .index = index };
 
@@ -57,7 +57,7 @@ static page_cache_page_t* page_cache_find_locked(vfs_page_cache_object_t* object
     return CONTAINER_OF(node, page_cache_page_t, hash_node);
 }
 
-/// @brief Number of page table mappings currently referencing a physical page.
+/// @brief Number of page table mappings currently referencing a physical page
 static uint32_t page_cache_map_count(uintptr_t physical) {
     if(physical == 0)
         return 0;
@@ -69,7 +69,7 @@ static uint32_t page_cache_map_count(uintptr_t physical) {
     return ATOMIC_LOAD(&page->allocated.map_count, ATOMIC_RELAXED);
 }
 
-/// @safety Assumes the page cache lock is held.
+/// @safety: Assumes the page cache lock is held
 static void page_cache_lru_remove_locked(page_cache_page_t* page) {
     if(!page->in_lru)
         return;
@@ -78,7 +78,7 @@ static void page_cache_lru_remove_locked(page_cache_page_t* page) {
     page->in_lru = false;
 }
 
-/// @safety Assumes the page cache lock is held.
+/// @safety: Assumes the page cache lock is held
 static void page_cache_lru_push_locked(page_cache_page_t* page) {
     if(page->in_lru)
         return;
@@ -97,7 +97,7 @@ vfs_page_cache_object_t* page_cache_object_create(void* context, page_cache_fill
     return object;
 }
 
-/// @safety Assumes the page cache lock is held.
+/// @safety: Assumes the page cache lock is held
 static void page_cache_writeback_page_locked(page_cache_page_t* page) {
     if(!ATOMIC_LOAD(&page->dirty, ATOMIC_ACQUIRE))
         return;

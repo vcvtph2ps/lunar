@@ -12,9 +12,9 @@ ldmxcsr_dword: .long (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1
 .globl x86_64_context_switch
 .type x86_64_context_switch, @function
 
-/// @brief Switches the context from the current thread to the next thread.
-/// @param rdi Pointer to the current thread's context structure.
-/// @param rsi Pointer to the next thread's context structure.
+/// @brief Switches the context from the current thread to the next thread
+/// @param rdi Pointer to the current thread's context structure
+/// @param rsi Pointer to the next thread's context structure
 /// @return The pointer to the (now) old thread's context structure
 x86_64_context_switch:
     // save the callee-saved registers of the outgoing thread
@@ -63,7 +63,7 @@ internal_userspace_exit_common:
     pop rax // userspace stack pointer
     push r10 // put the return address back so ret can use it
 
-    // @note rbx, rbp and r12-r15 are left alone as the context switch clears them,
+    // @note Rbx, rbp and r12-r15 are left alone as the context switch clears them,
     // and rax is left alone as the stack pointer
     xor rdx, rdx
     xor rsi, rsi
@@ -79,7 +79,7 @@ internal_userspace_exit_common:
 .globl x86_64_userspace_init_sysexit
 .type x86_64_userspace_init_sysexit, @function
 
-/// @brief entry into userspace for a freshly created thread
+/// @brief Entry into userspace for a freshly created thread
 /// @return Does not return
 x86_64_userspace_init_sysexit:
     cli
@@ -95,12 +95,12 @@ x86_64_userspace_init_sysexit:
 .globl x86_64_userspace_fork_sysexit
 .type x86_64_userspace_fork_sysexit, @function
 
-/// @brief entry into userspace for a forked thread
-/// @return Does not return.
+/// @brief Entry into userspace for a forked thread
+/// @return Does not return
 x86_64_userspace_fork_sysexit:
     cli
 
-    // @note rbx, rbp and r12-r15 are left alone as the context switch restores them
+    // @note Rbx, rbp and r12-r15 are left alone as the context switch restores them
     xor rax, rax
     xor rdx, rdx
     pop rsi

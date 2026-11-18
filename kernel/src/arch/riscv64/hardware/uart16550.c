@@ -21,7 +21,7 @@ static void uart_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
     uart16550_handle_interrupt((uart16550_t*) ctx);
 }
 
-/// @brief Finds the interrupt of the serial node whose reg base matches base in the device tree.
+/// @brief Finds the interrupt of the serial node whose reg base matches base in the device tree
 [[nodiscard]] static uint32_t uart16550_find_irq(void) {
     const void* fdt = arch_dt_blob();
     if(fdt == nullptr) {

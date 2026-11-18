@@ -39,8 +39,8 @@ typedef bool (*page_cache_fill_fn)(void* context, uint64_t index, void* dest);
 typedef bool (*page_cache_writeback_fn)(void* context, uint64_t index, const void* src);
 
 /**
- * @brief an object that can have its contents cached a page at a time
- * @note the object references the backing store and knows how to populate and writeback pages via `context`, but does not own any storage
+ * @brief An object that can have its contents cached a page at a time
+ * @note The object references the backing store and knows how to populate and writeback pages via `context`, but does not own any storage
  */
 struct vfs_page_cache_object {
     void* context;
@@ -97,7 +97,6 @@ vfs_page_cache_object_t* page_cache_object_create(void* context, page_cache_fill
 
 /**
  * @brief Destroys a page cache object, writing back dirty pages and evicting every evictable page it owns
- * @param object The object to destroy
  * @note Pages that are still pinned or mapped cannot be evicted and are leaked, callers must ensure the object is no longer reachable before calling this
  */
 void page_cache_object_destroy(vfs_page_cache_object_t* object);
@@ -140,7 +139,6 @@ bool page_cache_write(vfs_page_cache_object_t* object, uint64_t index, const voi
 
 /**
  * @brief Writes back every dirty page belonging to an object
- * @param object The object to flush
  * @return The number of pages written back
  */
 size_t page_cache_writeback(vfs_page_cache_object_t* object);

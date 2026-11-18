@@ -85,7 +85,7 @@ handler_common:
     iretq
 .size handler_common, . - handler_common
 
-// @safety: see src/arch/x86_64/userspace/syscall.S
+/// @safety: See src/arch/x86_64/userspace/syscall.S
 isr_no_error 0
 isr_no_error 1
 isr_no_error 2

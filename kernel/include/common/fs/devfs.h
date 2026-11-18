@@ -23,7 +23,6 @@ typedef struct devfs_device_ops {
  * @p name must be unique, a second bind with the same name returns
  * VFS_RESULT_ERR_EXISTS
  *
- * @param name The device entry name
  * @param ops Pointer to the device operation table (must remain valid)
  * @param ctx Opaque pointer forwarded to every ops callback
  * @return VFS_RESULT_OK on success
@@ -32,8 +31,7 @@ vfs_result_t devfs_bind(const char* name, const devfs_device_ops_t* ops, void* c
 
 /**
  * @brief Unbind a device from devfs
- * @note any vnodes that are still open will function until their last reference is dropped, new lookups for the name will fail
- * @param name The device entry name to remove
  * @return VFS_RESULT_OK if the entry was found and removed, VFS_RESULT_ERR_NOT_FOUND if no such entry exists
+ * @note Any vnodes that are still open will function until their last reference is dropped, new lookups for the name will fail
  */
 vfs_result_t devfs_unbind(const char* name);

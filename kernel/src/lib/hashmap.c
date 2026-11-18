@@ -1,7 +1,7 @@
 #include <common/assert.h>
 #include <lib/hashmap.h>
 
-/// @brief Returns the index of the bucket a key hashes to.
+/// @brief Returns the index of the bucket a key hashes to
 static size_t hashmap_bucket(const hashmap_t* map, const void* key) {
     return map->hash(key) & (map->bucket_count - 1);
 }
