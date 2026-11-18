@@ -1,5 +1,6 @@
 #include <arch/riscv64/cpu_local.h>
 #include <arch/riscv64/hardware/sbi.h>
+#include <arch/riscv64/internal/ap_info.h>
 #include <arch/riscv64/internal/csr.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>
@@ -23,18 +24,7 @@
 extern uint8_t g_apinit_start[]; // NOLINT
 extern uint8_t g_apinit_end[]; // NOLINT
 
-// @note: Has to match `boot_info` in apinit.S
-typedef struct {
-    uint64_t core_id;
-    uint64_t stack;
-    uint64_t satp;
-    uint64_t entry;
-
-    uint64_t sstatus;
-    uint64_t stvec;
-    uint64_t sie;
-    uint64_t booted_flag;
-} ap_info_t;
+extern char __global_pointer[] __asm__("__global_pointer$"); // NOLINT
 
 void arch_start_aps() {
     uint64_t core_count = g_init_boot_info->core_count;
@@ -49,11 +39,11 @@ void arch_start_aps() {
     phys_addr_t trampoline_phys = pmm_alloc_page(PMM_FLAG_ZERO | PMM_FLAG_PANIC);
 
     size_t apinit_size = (uintptr_t) g_apinit_end - (uintptr_t) g_apinit_start;
-    if(apinit_size % _Alignof(ap_info_t) != 0) {
+    if(apinit_size % _Alignof(arch_ap_info_t) != 0) {
         arch_panic("AP trampoline is not aligned for ap_info_t\n");
     }
 
-    if(apinit_size + sizeof(ap_info_t) > PAGE_SIZE_DEFAULT) {
+    if(apinit_size + sizeof(arch_ap_info_t) > PAGE_SIZE_DEFAULT) {
         arch_panic("AP trampoline does not fit in a single page\n");
     }
 
@@ -63,12 +53,13 @@ void arch_start_aps() {
     // the trampoline starts executing with no paging off, so the low physical page it runs from has to be identity mapped
     ptm_map(g_vm_global_address_space, trampoline_phys, trampoline_phys, PAGE_SIZE_DEFAULT, VM_PROT_RWX, VM_CACHE_NORMAL, VM_PRIVILEGE_KERNEL, true, true);
 
-    ap_info_t* ap_info = (ap_info_t*) (trampoline_virt + apinit_size);
+    arch_ap_info_t* ap_info = (arch_ap_info_t*) (trampoline_virt + apinit_size);
     ap_info->entry = (uintptr_t) init_kernel_entry_ap;
     ap_info->satp = ARCH_CSR_READ(satp);
     ap_info->sstatus = ARCH_CSR_READ(sstatus);
     ap_info->stvec = ARCH_CSR_READ(stvec);
     ap_info->sie = ARCH_CSR_READ(sie);
+    ap_info->global_pointer = (uintptr_t) __global_pointer;
 
     LOG_INFO("starting %lu application processor(s)\n", core_count - 1);
     LOG_INFO("bsp hart id=%u, trampoline=0x%lx, satp=0x%lx, sstatus=0x%lx, stvec=0x%lx, sie=0x%lx\n", CPU_LOCAL_READ(hart_id), (uintptr_t) trampoline_phys, (uintptr_t) ap_info->satp, ap_info->sstatus, ap_info->stvec, ap_info->sie);

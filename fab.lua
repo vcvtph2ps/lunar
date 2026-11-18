@@ -91,7 +91,7 @@ elseif opt_arch == "riscv64" then
         "--target=riscv64-none-elf",
         "-march=rv64imac_zicsr_zifencei_zihintpause",
         "-mabi=lp64",
-        "-mcmodel=medany"
+        "-mcmodel=medlow"
     })
 end
 
