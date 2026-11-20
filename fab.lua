@@ -125,11 +125,15 @@ table.extend(other_flags, {
     "-Wextra",
 })
 
+local flanterm_flags = {}
+table.extend(flanterm_flags, c_flags)
+table.insert(flanterm_flags, "-DFLANTERM_FB_DISABLE_BUMP_ALLOC")
+
 local flanterm_sources = {}
 table.extend(flanterm_sources, sources(flanterm:glob("src/*.c")))
 local flanterm_objects = generate(flanterm_sources, {
     c = function(sources)
-        return clang:generate(sources, c_flags, c.include_dir(flanterm / "src"))
+        return clang:generate(sources, flanterm_flags, c.include_dir(flanterm / "src"))
     end
 })
 table.extend(objects, flanterm_objects)
