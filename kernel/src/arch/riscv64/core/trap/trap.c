@@ -1,5 +1,4 @@
 #include <arch/riscv64/internal/csr.h>
-#include <arch/riscv64/internal/asm_offsets.h>
 #include <arch/riscv64/interrupts/interrupt.h>
 #include <common/arch.h>
 #include <common/cpu_local.h>

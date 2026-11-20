@@ -48,7 +48,7 @@ ASM_OFFSET_CHECK(GDT_SEGMENT_KERNEL_CODE, arch_gdt_t, kernel_code);
 ASM_OFFSET_CHECK(GDT_SEGMENT_KERNEL_DATA, arch_gdt_t, kernel_data);
 ASM_OFFSET_CHECK(GDT_SEGMENT_USER_CODE_32, arch_gdt_t, user_code_32);
 ASM_OFFSET_CHECK(GDT_SEGMENT_USER_DATA, arch_gdt_t, user_data);
-ASM_OFFSET_CHECK(GDT_SEGMENT_USER_CODE, arch_gdt_t, user_code)
+ASM_OFFSET_CHECK(GDT_SEGMENT_USER_CODE, arch_gdt_t, user_code);
 
 #undef ASM_OFFSET_CHECK
 
