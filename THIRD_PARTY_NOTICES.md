@@ -47,3 +47,12 @@ See: https://github.com/dgibson/dtc/blob/main/README.license
 - Upstream: https://github.com/charlesnicholson/nanoprintf
 - License: [BSD Zero Clause / Unlicense](https://github.com/charlesnicholson/nanoprintf/blob/bebaecbeaf430e36a2d30d31a2fed4e098388c93/LICENSE)
 - License text: `LICENSES/nanoprintf-0BSD.txt`
+
+---
+
+## zstd
+
+- Upstream: https://github.com/facebook/zstd
+- Version: v1.5.7 (commit f8745da6ff1ad1e7bab384bd1f9d742439278e99)
+- License: [BSD 3-Clause](https://github.com/facebook/zstd/blob/v1.5.7/LICENSE) / GPL-2.0 (dual licensed)
+- License text: `LICENSES/zstd-BSD-3-Clause.txt`

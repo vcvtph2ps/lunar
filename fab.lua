@@ -16,8 +16,25 @@ assert(ld ~= nil, "No ld.lld found")
 local prekernel_protocol = fab.dependency("prekernel-protocol")
 local flanterm = fab.dependency("flanterm")
 local uacpi = fab.dependency("uacpi")
+local zstd = fab.dependency("zstd")
 
-local function get_kernel_objs(kernel_flags)
+local python = fab.which("python3")
+assert(python ~= nil, "No python3 found")
+
+local zstd_gen_rule = fab.define_rule(
+    "gen_zstd_decoder",
+    python.path:gsub("@", "@@") .. " @IN@ " .. tostring(zstd) .. " @OUT@",
+    "Generating freestanding zstd decoder @OUT@"
+)
+local zstd_gen_script = fab.resolve_source(project_dir / "scripts/zstd/gen-decoder.py")
+local zstd_decoder = zstd_gen_rule:build("zstddeclib.c", { zstd_gen_script }, {}, {
+    fab.resolve_source(zstd / "lib/common/zstd_deps.h"),
+    fab.resolve_source(zstd / "lib/common/xxhash.h"),
+    fab.resolve_source(zstd / "build/single_file_libs/zstddeclib-in.c"),
+    fab.resolve_source(zstd / "build/single_file_libs/combine.py"),
+})
+
+local function get_kernel_objs(kernel_flags, zstd_flags)
     local kernel_sources = sources(project_dir:glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
     table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/" .. opt_arch .. "/**/*.c")))
     table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/" .. opt_arch .. "/**/*.S")))
@@ -26,6 +43,7 @@ local function get_kernel_objs(kernel_flags)
     local include_dirs = {
         c.include_dir(project_dir / "kernel/include"),
         c.include_dir(project_dir / "third_party"),
+        c.include_dir(zstd / "lib"),
     }
     table.insert(include_dirs, c.include_dir(prekernel_protocol / "pre_kernel/public"))
     table.insert(include_dirs, c.include_dir(flanterm / "src"))
@@ -45,7 +63,10 @@ local function get_kernel_objs(kernel_flags)
 
     generators.S = function(sources) return clang:generate(sources, kernel_flags, include_dirs) end
 
-    return generate(kernel_sources, generators)
+    local objects = generate(kernel_sources, generators)
+    table.insert(objects,
+        clang:compile_object("zstddeclib.o", zstd_decoder, include_dirs, zstd_flags, "zstddeclib.o.d"))
+    return objects
 end
 
 local c_flags = {
@@ -141,7 +162,17 @@ elseif opt_build_type == "release" then
     })
 end
 
-table.extend(objects, get_kernel_objs(kernel_flags))
+local zstd_flags = {}
+table.extend(zstd_flags, c_flags)
+table.extend(zstd_flags, {
+    "-Os",
+    "-g0",
+    "-fomit-frame-pointer",
+    "-fno-sanitize=undefined",
+    "-fno-stack-protector",
+})
+
+table.extend(objects, get_kernel_objs(kernel_flags, zstd_flags))
 
 local linker_script = fab.resolve_source(project_dir / ("support/" .. opt_arch .. ".lds"))
 local kernel = ld:link("kernel.elf", objects, {

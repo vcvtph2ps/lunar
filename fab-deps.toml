@@ -17,3 +17,8 @@ revision = "686a9a52d9ad72690406d7cada82801377d5e2fa"
 type = "git"
 url = "https://github.com/dgibson/dtc.git"
 revision = "8f48565e5cfedc74d3f7512f1e0188e9d85dc1de"
+
+[zstd]
+type = "git"
+url = "https://github.com/facebook/zstd.git"
+revision = "f8745da6ff1ad1e7bab384bd1f9d742439278e99"

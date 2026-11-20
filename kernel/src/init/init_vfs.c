@@ -5,8 +5,8 @@
 #include <common/fs/tmpfs.h>
 #include <common/fs/vfs.h>
 #include <common/init.h>
-#include <common/kgz.h>
 #include <common/log.h>
+#include <common/zstd.h>
 #include <lib/math.h>
 #include <lib/string.h>
 #include <lib/types.h>
@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 typedef enum {
-    INITRAMFS_TYPE_GZIP,
+    INITRAMFS_TYPE_ZSTD,
     INITRAMFS_TYPE_RDSK,
     INITRAMFS_TYPE_UNKNOWN
 } initramfs_type_t;
@@ -29,8 +29,8 @@ static initramfs_type_t determine_initramfs_type(void* initramfs_data) {
     if(signature[0] == 'R' && signature[1] == 'D' && signature[2] == 'S' && signature[3] == 'K') {
         return INITRAMFS_TYPE_RDSK;
     }
-    if(signature[0] == 0x1F && signature[1] == 0x8B) {
-        return INITRAMFS_TYPE_GZIP;
+    if(signature[0] == 0x28 && signature[1] == 0xB5 && signature[2] == 0x2F && signature[3] == 0xFD) {
+        return INITRAMFS_TYPE_ZSTD;
     }
     return INITRAMFS_TYPE_UNKNOWN;
 }
@@ -38,12 +38,12 @@ static initramfs_type_t determine_initramfs_type(void* initramfs_data) {
 static void* try_decompress(void* initramfs_data, size_t size) {
     uint8_t* signature = (uint8_t*) initramfs_data;
 
-    if(signature[0] != 0x1F || signature[1] != 0x8B) {
+    if(signature[0] != 0x28 || signature[1] != 0xB5 || signature[2] != 0x2F || signature[3] != 0xFD) {
         arch_panic("Unknown initramfs compression type\n");
     }
 
     LOG_INFO("Decompressing initramfs...\n");
-    void* decompressed_buffer = kgz_gzip_decompress((void*) initramfs_data, size, nullptr, nullptr);
+    void* decompressed_buffer = zstd_decompress(initramfs_data, size, nullptr);
     if(decompressed_buffer == nullptr) {
         arch_panic("Failed to decompress initramfs file\n");
     }
@@ -85,7 +85,7 @@ void init_stage_vfs(uint32_t core_id) {
 
     void* initramfs_data = (void*) (initramfs_module->phys_addr + g_init_boot_info->hhdm_offset);
     initramfs_type_t type = determine_initramfs_type(initramfs_data);
-    if(type == INITRAMFS_TYPE_GZIP) {
+    if(type == INITRAMFS_TYPE_ZSTD) {
         initramfs_data = try_decompress(initramfs_data, initramfs_module->size);
         type = determine_initramfs_type(initramfs_data);
     } else {
