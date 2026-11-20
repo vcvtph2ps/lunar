@@ -20,12 +20,9 @@ static wait_obj_t g_reap_event = WAIT_OBJ_INIT_SYNCHRONIZATION();
 static void reaper_process_thread(thread_t* thread) {
     assert(ATOMIC_LOAD(&thread->sched.state, ATOMIC_ACQUIRE) == THREAD_STATE_TERMINATED);
 
-    uint32_t tid = thread->tid;
-    int32_t exit_code = ATOMIC_LOAD(&thread->exit_code, ATOMIC_RELAXED);
     process_t* process = thread->process;
-
     if(process == nullptr) {
-        LOG_OKAY("reaper: processed thread %u (exit code %d)\n", tid, exit_code);
+        LOG_KTRC("reaper: processed thread %u (exit code %d)\n", thread->tid, ATOMIC_LOAD(&thread->exit_code, ATOMIC_RELAXED));
         thread_deref(thread);
         return;
     }
@@ -35,10 +32,10 @@ static void reaper_process_thread(thread_t* thread) {
     bool last_thread = process->thread_list.count == 0;
     spinlock_no_dpc_unlock(&process->thread_list_lock);
 
-    LOG_OKAY("reaper: processed thread %u of process %u (exit code %d, %zu threads left)\n", tid, process->process_id, exit_code, process->thread_list.count);
+    LOG_KTRC("reaper: processed thread %u of process %u (exit code %d, %zu threads left)\n", thread->tid, process->process_id, ATOMIC_LOAD(&thread->exit_code, ATOMIC_RELAXED), process->thread_list.count);
 
     if(last_thread) {
-        LOG_OKAY("reaper: process %u has no threads left\n", process->process_id);
+        LOG_KTRC("reaper: process %u has no threads left\n", process->process_id);
 
         /// The process has fully exited, wake its parent in case it is blocked in waitpid
         process_t* parent = process->parent;

@@ -335,7 +335,7 @@ void process_kill(process_t* process, process_status_state_t state, int32_t exit
         case PROCESS_TERMINATED: process->status.terminated.signal_number = exit_code; break;
         default:                 ASSERT_UNREACHABLE();
     }
-    LOG_INFO("process %u was killed\n", process->process_id);
+    LOG_KTRC("process %u was killed\n", process->process_id);
     spinlock_no_dpc_unlock(&process->status.lock);
 
     /// Kill every thread of this process
