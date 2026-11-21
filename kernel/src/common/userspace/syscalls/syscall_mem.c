@@ -90,18 +90,22 @@ static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, s
         if(fd == (size_t) -1)
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
 
-        fd_store_entry_t* entry = fd_store_get_fd(current_process->fd_store, (uint32_t) fd);
-        if(entry == nullptr)
+        fd_store_file_t* file = fd_store_get_fd(current_process->fd_store, (uint32_t) fd, nullptr);
+        if(file == nullptr)
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
 
-        vfs_inode_t* inode = vfs_node_get_inode(entry->node);
-        if(inode == nullptr)
+        vfs_inode_t* inode = vfs_node_get_inode(file->node);
+        if(inode == nullptr) {
+            fd_store_file_put(file);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
-        if(offset % PAGE_SIZE_DEFAULT != 0 || offset >= inode->size)
+        }
+        if(offset % PAGE_SIZE_DEFAULT != 0 || offset >= inode->size) {
+            fd_store_file_put(file);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
-
+        }
 
         vaddr = (virt_addr_t) vm_map_file(current_process->address_space, (void*) hint, aligned_size, vm_prot, VM_CACHE_NORMAL, vm_flags, vfs_inode_cache(inode), offset);
+        fd_store_file_put(file);
     }
 
     if(vaddr == 0) {

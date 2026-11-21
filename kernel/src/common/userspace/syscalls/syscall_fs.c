@@ -66,9 +66,9 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
     fd_store_access_t fd_access = (fd_store_access_t) { .read = (flags & UAPI_O_RDONLY) != 0, .write = (flags & UAPI_O_WRONLY) != 0 };
     fd_store_flags_t fd_flags = (fd_store_flags_t) {
         .non_blocking = (flags & UAPI_O_NONBLOCK) != 0,
-        .close_on_execute = (flags & UAPI_O_CLOEXEC) != 0,
         .append = (flags & UAPI_O_APPEND) != 0,
     };
+    bool close_on_execute = (flags & UAPI_O_CLOEXEC) != 0;
 
     if(result == VFS_RESULT_OK && create && exclusive) {
         /// The entry already exists and O_EXCL was passed
@@ -94,7 +94,7 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
         return syscall_from_vfs_result(result);
     }
 
-    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, fd_access, fd_flags);
+    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, fd_access, fd_flags, close_on_execute);
     // @note: Since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
     vfs_node_put(out_result_node);
 
@@ -107,13 +107,14 @@ static syscall_ret_t syscall_fs_close(syscall_args_t* argument_data, uint32_t fd
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d | result=EBADFD\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     fd_store_free_fd(process->fd_store, fd);
+    fd_store_file_put(file);
     LOG_UTRC("fd=%d | result=0\n", fd);
     return SYSCALL_RET_VALUE(0);
 }
@@ -124,8 +125,8 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
@@ -133,6 +134,7 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
     fd_store_access_t access;
     if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.read) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.read=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
@@ -142,16 +144,18 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
     io_req.type = IO_REQUEST_READ;
     io_req.read.buffer = IO_BUFFER_CREATE_KERNEL(buffer, count);
     io_req.read.count = count;
-    io_req.read.offset = entry->offset;
+    io_req.read.offset = file->offset;
     io_req.read.bytes_read = 0;
-    io_req.no_block = entry->flags.non_blocking;
+    io_req.no_block = file->flags.non_blocking;
 
-    vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
+    vfs_result_t result = vfs_perform_io_node(file->node, &io_req);
     if(syscall_from_vfs_result(result).is_error) {
+        fd_store_file_put(file);
         return syscall_from_vfs_result(result);
     }
 
-    entry->offset += io_req.read.bytes_read;
+    file->offset += io_req.read.bytes_read;
+    fd_store_file_put(file);
 
     vm_copy_to(process->address_space, (uintptr_t) buffer_ptr, buffer, io_req.read.bytes_read);
     heap_free(buffer, count);
@@ -166,8 +170,8 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
@@ -175,6 +179,7 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     fd_store_access_t access;
     if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.write) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.write=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
@@ -182,31 +187,34 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     vm_copy_from(buffer, process->address_space, (uintptr_t) buffer_ptr, count);
 
     /// With O_APPEND every write goes to the current end of the file
-    if(entry->flags.append) {
+    if(file->flags.append) {
         vfs_node_attr_t attr = { 0 };
-        vfs_result_t attr_result = vfs_get_attributes_node(entry->node, &attr);
+        vfs_result_t attr_result = vfs_get_attributes_node(file->node, &attr);
         if(syscall_from_vfs_result(attr_result).is_error) {
             heap_free(buffer, count);
+            fd_store_file_put(file);
             return syscall_from_vfs_result(attr_result);
         }
-        entry->offset = attr.size;
+        file->offset = attr.size;
     }
 
     io_request_t io_req;
     io_req.type = IO_REQUEST_WRITE;
     io_req.write.buffer = IO_BUFFER_CREATE_KERNEL(buffer, count);
     io_req.write.count = count;
-    io_req.write.offset = entry->offset;
+    io_req.write.offset = file->offset;
     io_req.write.bytes_written = 0;
-    io_req.no_block = entry->flags.non_blocking;
+    io_req.no_block = file->flags.non_blocking;
 
-    vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
+    vfs_result_t result = vfs_perform_io_node(file->node, &io_req);
     if(syscall_from_vfs_result(result).is_error) {
         heap_free(buffer, count);
+        fd_store_file_put(file);
         return syscall_from_vfs_result(result);
     }
 
-    entry->offset += io_req.write.bytes_written;
+    file->offset += io_req.write.bytes_written;
+    fd_store_file_put(file);
 
     heap_free(buffer, count);
     LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, io_req.write.offset, io_req.write.bytes_written);
@@ -231,16 +239,17 @@ static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd,
         return SYSCALL_RET_VALUE(0);
     }
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d | result=EBADF\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     vfs_node_attr_t attr;
-    vfs_result_t res = entry->node->ops->get_attributes(entry->node, &attr);
+    vfs_result_t res = file->node->ops->get_attributes(file->node, &attr);
     if(res != VFS_RESULT_OK) {
         assert(false);
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
 
@@ -248,16 +257,18 @@ static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd,
 
     switch(whence) {
         case SEEK_SET: new_offset = offset; break;
-        case SEEK_CUR: new_offset = entry->offset + offset; break;
+        case SEEK_CUR: new_offset = file->offset + offset; break;
         case SEEK_END: new_offset = attr.size + offset; break;
         default:       {
             LOG_UTRC("fd=%d offset=%ld whence=%d | result=EINVAL\n", fd, offset, whence);
+            fd_store_file_put(file);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
         }
     }
 
-    entry->offset = new_offset;
+    file->offset = new_offset;
     LOG_UTRC("fd=%d offset=%ld whence=%d | result=%ld\n", fd, offset, whence, new_offset);
+    fd_store_file_put(file);
     return SYSCALL_RET_VALUE(0);
 }
 
@@ -426,14 +437,15 @@ static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd,
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d | result=EBADF\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    vfs_node_get(entry->node);
-    return stat_internal(stat_buf, entry->node);
+    vfs_node_t* node = vfs_node_get(file->node);
+    fd_store_file_put(file);
+    return stat_internal(stat_buf, node);
 }
 
 SYSCALL_DEFINE_TRACED(syscall_fs_stat_at, SYSCALL_FS_STAT_AT, void, syscall_fs_stat_at_trace, uint32_t, fd, void*, path, void*, stat, uint32_t, flags);
@@ -485,13 +497,14 @@ static syscall_ret_t syscall_fs_stat_at(syscall_args_t* argument_data, uint32_t 
         vfs_node_get(process->current_working_dir);
         vfs_path.node = process->current_working_dir;
     } else {
-        fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-        if(entry == nullptr) {
+        fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+        if(file == nullptr) {
             LOG_UTRC("fd=%d | result=EBADF\n", fd);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
         }
-        vfs_node_get(entry->node);
-        vfs_path.node = entry->node;
+        vfs_node_get(file->node);
+        vfs_path.node = file->node;
+        fd_store_file_put(file);
     }
 
     vfs_node_t* result_node;
@@ -542,29 +555,32 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d | result=EBADF\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    if(entry->node->type != VFS_NODE_TYPE_DIR) {
+    if(file->node->type != VFS_NODE_TYPE_DIR) {
         LOG_UTRC("fd=%d | result=NOTDIR\n", fd);
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
     }
 
     if(count == 0) {
+        fd_store_file_put(file);
         return SYSCALL_RET_VALUE(0);
     }
 
     char* buffer = heap_alloc(count);
     if(buffer == nullptr) {
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
     }
     memory_set(buffer, 0, count);
 
-    vfs_path_t dir_path = VFS_MAKE_REL_PATH(entry->node, "");
-    size_t offset = entry->offset;
+    vfs_path_t dir_path = VFS_MAKE_REL_PATH(file->node, "");
+    size_t offset = file->offset;
     size_t used = 0;
 
     while(used < count) {
@@ -573,6 +589,7 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
         vfs_result_t result = vfs_read_dir(&dir_path, &offset, &child);
         if(result != VFS_RESULT_OK) {
             heap_free(buffer, count);
+            fd_store_file_put(file);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
         }
 
@@ -596,6 +613,7 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
 
             if(used == 0) {
                 heap_free(buffer, count);
+                fd_store_file_put(file);
                 return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
             }
             break;
@@ -630,7 +648,8 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
         used += reclen;
     }
 
-    entry->offset = offset;
+    file->offset = offset;
+    fd_store_file_put(file);
 
     if(used == 0) {
         heap_free(buffer, count);
@@ -640,7 +659,7 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
     vm_copy_to(process->address_space, (uintptr_t) buffer_ptr, buffer, used);
     heap_free(buffer, count);
 
-    LOG_UTRC("fd=%d, buffer=0x%lx, max_size=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, entry->offset, used);
+    LOG_UTRC("fd=%d, buffer=0x%lx, max_size=%ld, offset=%ld | result=%ld\n", fd, (uintptr_t) buffer_ptr, count, offset, used);
     return SYSCALL_RET_VALUE(used);
 }
 
@@ -680,7 +699,7 @@ static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32
         vfs_node_get(process->current_working_dir);
         vfs_path.node = process->current_working_dir;
     } else {
-        fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
+        fd_store_file_t* entry = fd_store_get_fd(process->fd_store, fd, nullptr);
         if(entry == nullptr) {
             LOG_UTRC("fd=%d | result=EBADF\n", fd);
             heap_free(pathname, path_size);
@@ -688,6 +707,7 @@ static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32
         }
         vfs_node_get(entry->node);
         vfs_path.node = entry->node;
+        fd_store_file_put(entry);
     }
 
     vfs_node_t* node;
@@ -759,8 +779,8 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         LOG_UTRC("fd=%d, size=%ld | result=EBADF\n", fd, size);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
@@ -768,17 +788,19 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
     fd_store_access_t access;
     if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.write) {
         LOG_UTRC("fd=%d, size=%ld, access.write=false | result=EBADF\n", fd, size);
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     if(size < 0) {
         LOG_UTRC("fd=%d, size=%ld | result=EINVAL\n", fd, size);
+        fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
-    vfs_result_t result = vfs_truncate_node(entry->node, (size_t) size);
+    vfs_result_t result = vfs_truncate_node(file->node, (size_t) size);
     LOG_UTRC("fd=%d, size=%ld | result=%d\n", fd, size, result);
-
+    fd_store_file_put(file);
     /// posix wants EINVAL when the fd does not refer to a regular file
     if(result == VFS_RESULT_ERR_UNSUPPORTED)
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
@@ -792,8 +814,8 @@ static syscall_ret_t syscall_sys_ioctl(syscall_args_t* argument_data, int fd, un
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    fd_store_entry_t* entry = fd_store_get_fd(process->fd_store, fd);
-    if(entry == nullptr) {
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+    if(file == nullptr) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
@@ -802,9 +824,11 @@ static syscall_ret_t syscall_sys_ioctl(syscall_args_t* argument_data, int fd, un
     // we don't actually know the size of the ioctl until the device processes it.... posix <3
     io_req.ioctl.request = request;
     io_req.ioctl.buffer = IO_BUFFER_CREATE_USER(process->address_space, buffer, 0);
-    io_req.no_block = entry->flags.non_blocking;
+    io_req.no_block = file->flags.non_blocking;
 
-    vfs_result_t result = vfs_perform_io_node(entry->node, &io_req);
+    vfs_result_t result = vfs_perform_io_node(file->node, &io_req);
+    fd_store_file_put(file);
+
     if(syscall_from_vfs_result(result).is_error) {
         return syscall_from_vfs_result(result);
     }

@@ -6,6 +6,24 @@
 #include <lib/string.h>
 #include <memory/heap.h>
 
+
+fd_store_file_t* fd_store_file_get(fd_store_file_t* file) {
+    if(file != nullptr) {
+        ATOMIC_LOAD_ADD(&file->refcount, 1, ATOMIC_ACQUIRE);
+    }
+    return file;
+}
+
+void fd_store_file_put(fd_store_file_t* file) {
+    if(file != nullptr) {
+        size_t previous = ATOMIC_LOAD_SUB(&file->refcount, 1, ATOMIC_RELEASE);
+        if(previous == 1) {
+            vfs_node_put(file->node);
+            heap_free(file, sizeof(fd_store_file_t));
+        }
+    }
+}
+
 fd_store_t* fd_store_create() {
     fd_store_t* store = heap_alloc(sizeof(fd_store_t));
     store->lock = SPINLOCK_INIT;
@@ -19,8 +37,8 @@ void fd_store_free(fd_store_t* store) {
     if(store->fds != nullptr) {
         /// Release every node the store referenced
         for(size_t i = 0; i < store->fds_elements_count; i++) {
-            if(bitmap_get(store->bitmap, i) && store->fds[i].node != nullptr) {
-                vfs_node_put(store->fds[i].node);
+            if(bitmap_get(store->bitmap, i) && store->fds[i].file != nullptr) {
+                fd_store_file_put(store->fds[i].file);
             }
         }
         heap_free(store->fds, store->fds_elements_count * sizeof(fd_store_entry_t));
@@ -45,8 +63,8 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store) {
             continue;
         }
 
-        /// Bump node refcount
-        vfs_node_get(parent_store->fds[i].node);
+        /// Bump file refcount
+        fd_store_file_get(parent_store->fds[i].file);
         memory_copy(&store->fds[i], &parent_store->fds[i], sizeof(fd_store_entry_t));
     }
 
@@ -55,7 +73,7 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store) {
 }
 
 
-uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags) {
+uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags, bool close_on_execute) {
     spinlock_lock(&store->lock);
 
     size_t fd = bitmap_find_free(store->bitmap);
@@ -64,10 +82,14 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access
         user_assert(false && "fd_store out of size");
     }
 
-    store->fds[fd].node = vfs_node_get(node);
-    store->fds[fd].offset = 0;
-    store->fds[fd].access = access;
-    store->fds[fd].flags = flags;
+    fd_store_file_t* file = heap_alloc(sizeof(fd_store_file_t));
+    ATOMIC_STORE(&file->refcount, 1, ATOMIC_RELAXED);
+    file->node = vfs_node_get(node);
+    file->offset = 0;
+    file->access = access;
+    file->flags = flags;
+    store->fds[fd].file = file;
+    store->fds[fd].close_on_execute = close_on_execute;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
@@ -79,12 +101,18 @@ uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd,
     spinlock_lock(&store->lock);
 
     user_assert(fd < store->fds_elements_count && "fd out of range");
+    // @todo: we shouldn't assert here?
     user_assert(!bitmap_get(store->bitmap, fd) && "fd already in use");
 
-    store->fds[fd].node = vfs_node_get(node);
-    store->fds[fd].offset = 0;
-    store->fds[fd].access = access;
-    store->fds[fd].flags = flags;
+    fd_store_file_t* file = heap_alloc(sizeof(fd_store_file_t));
+
+    ATOMIC_STORE(&file->refcount, 1, ATOMIC_RELAXED);
+    file->node = vfs_node_get(node);
+    file->offset = 0;
+    file->access = access;
+    file->flags = flags;
+    store->fds[fd].file = file;
+    store->fds[fd].close_on_execute = false;
 
     bitmap_set(store->bitmap, true, fd);
     spinlock_unlock(&store->lock);
@@ -92,7 +120,7 @@ uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd,
     return fd;
 }
 
-fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd) {
+fd_store_file_t* fd_store_get_fd(fd_store_t* store, uint32_t fd, bool* out_close_on_execute) {
     spinlock_lock(&store->lock);
 
     bool valid = bitmap_get(store->bitmap, fd);
@@ -101,8 +129,13 @@ fd_store_entry_t* fd_store_get_fd(fd_store_t* store, uint32_t fd) {
         return nullptr;
     }
 
+    if(out_close_on_execute != nullptr)
+        *out_close_on_execute = store->fds[fd].close_on_execute;
+
+    fd_store_file_t* file = store->fds[fd].file;
+    fd_store_file_get(file);
     spinlock_unlock(&store->lock);
-    return &store->fds[fd];
+    return file;
 }
 
 vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access) {
@@ -113,7 +146,7 @@ vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access
         return VFS_RESULT_ERR_NOT_FOUND;
     }
 
-    *out_access = store->fds[fd].access;
+    *out_access = store->fds[fd].file->access;
     spinlock_unlock(&store->lock);
     return VFS_RESULT_OK;
 }
@@ -126,13 +159,13 @@ static vfs_result_t fd_store_free_fd_lockless(fd_store_t* store, uint32_t fd) {
     }
 
     fd_store_entry_t* node = &store->fds[fd];
-    if(node->node == nullptr) {
+    if(node->file == nullptr) {
         bitmap_set(store->bitmap, false, fd);
         spinlock_unlock(&store->lock);
         return false;
     }
 
-    vfs_node_put(node->node);
+    fd_store_file_put(node->file);
     bitmap_set(store->bitmap, false, fd);
     return VFS_RESULT_OK;
 }
@@ -145,8 +178,9 @@ bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
 }
 
 vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd) {
-    fd_store_entry_t* entry = fd_store_get_fd(store, fd);
-    if(entry == nullptr) {
+    // @note: we "leak" the ref here, since we do the deref on close
+    fd_store_file_t* file = fd_store_get_fd(store, fd, nullptr);
+    if(file == nullptr) {
         return VFS_RESULT_ERR_NOT_FOUND;
     }
 
@@ -158,8 +192,8 @@ vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_ne
         user_assert(false && "fd_store out of size");
     }
 
-    vfs_node_get(entry->node);
-    memory_copy(&store->fds[new_fd], entry, sizeof(fd_store_entry_t));
+    store->fds[new_fd].file = file;
+    store->fds[new_fd].close_on_execute = false; // POSIX dup clears cloexec
 
     bitmap_set(store->bitmap, true, new_fd);
     spinlock_unlock(&store->lock);
@@ -169,7 +203,8 @@ vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_ne
 }
 
 vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute) {
-    fd_store_entry_t* entry = fd_store_get_fd(store, fd);
+    // @note: we "leak" the ref here, since we do the deref on close
+    fd_store_file_t* entry = fd_store_get_fd(store, fd, nullptr);
     if(entry == nullptr) {
         return VFS_RESULT_ERR_NOT_FOUND;
     }
@@ -179,27 +214,30 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
         fd_store_free_fd_lockless(store, target);
     }
 
-    vfs_node_get(entry->node);
-
-    memory_copy(&store->fds[target], entry, sizeof(fd_store_entry_t));
     bitmap_set(store->bitmap, true, target);
 
+    store->fds[target].file = entry;
     if(fd == target) {
-        store->fds[target].flags.close_on_execute = false;
+        store->fds[target].close_on_execute = false;
     } else {
-        store->fds[target].flags.close_on_execute = close_on_execute;
+        store->fds[target].close_on_execute = close_on_execute;
     }
 
     spinlock_unlock(&store->lock);
+
+    if(fd == target) {
+        fd_store_file_put(entry);
+    }
+
     return VFS_RESULT_OK;
 }
 
 void fd_store_handle_execute(fd_store_t* store) {
     if(store->fds != nullptr) {
         for(size_t i = 0; i < store->fds_elements_count; i++) {
-            if(bitmap_get(store->bitmap, i) && store->fds[i].node != nullptr) {
-                if(store->fds[i].flags.close_on_execute) {
-                    LOG_INFO("closing cloexec fd %ld\n", i);
+            if(bitmap_get(store->bitmap, i) && store->fds[i].file != nullptr) {
+                if(store->fds[i].close_on_execute) {
+                    LOG_KTRC("closing cloexec fd %ld\n", i);
                     fd_store_free_fd_lockless(store, i);
                 }
             }
