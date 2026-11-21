@@ -14,14 +14,65 @@ typedef struct {
     bool append       : 1;
 } fd_store_flags_t;
 
-typedef struct {
+typedef struct fd_store_file fd_store_file_t;
+typedef struct fd_store_file_ops fd_store_file_ops_t;
+
+/// @brief The backend kind of a file descriptor
+typedef enum : uint8_t {
+    /// @brief Backed by a vfs node (regular file, directory, device, ...)
+    FD_STORE_FILE_TYPE_VFS_NODE
+} fd_store_file_type_t;
+
+/**
+ * @brief Operations implemented by a file descriptor backend
+ * @note Any operation may be nullptr if the backend does not support it
+ */
+struct fd_store_file_ops {
+    /// @brief Performs IO on the file
+    vfs_result_t (*perform_io)(fd_store_file_t* file, io_request_t* request);
+
+    /// @brief Gets the attributes of the file
+    vfs_result_t (*get_attributes)(fd_store_file_t* file, vfs_node_attr_t* out_attr);
+
+    /// @brief Resizes the file
+    vfs_result_t (*truncate)(fd_store_file_t* file, size_t size);
+
+    /// @brief Gets the inode backing the file for memory mapping
+    vfs_inode_t* (*get_inode)(fd_store_file_t* file);
+
+    /// @brief Reads the next entry in a directory file
+    vfs_result_t (*read_dir)(fd_store_file_t* file, size_t* offset, vfs_dentry_t** out_dentry);
+
+    /// @brief Gets the vfs node backing the file, or nullptr if the file is not vfs backed
+    /// @note Returns a borrowed pointer, the file's reference keeps the node alive
+    vfs_node_t* (*get_node)(fd_store_file_t* file);
+
+    /// @brief Releases backend's private state when the last reference to the file is dropped
+    void (*release)(fd_store_file_t* file);
+};
+
+/// @brief The state shared by all file descriptors referring to the same open file
+struct fd_store_file {
     ATOMIC size_t refcount;
-    vfs_node_t* node;
+
+    /// The operations for this file's backend
+    const fd_store_file_ops_t* ops;
+
+    /// The kind of backend this file is backed by
+    fd_store_file_type_t type;
+
+    /// The current file offset
     size_t offset;
 
     fd_store_access_t access;
     fd_store_flags_t flags;
-} fd_store_file_t;
+
+    /// Backend private state
+    union {
+        vfs_node_t* node;
+        void* data;
+    };
+};
 
 typedef struct {
     fd_store_file_t* file;
@@ -49,20 +100,31 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store);
 /// @brief Closes all file descriptors marked as close on execute
 void fd_store_handle_execute(fd_store_t* store);
 
-/// @brief Create a new file descriptor, allocating a free fd number
-/// @return The file descriptor
-uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags, bool close_on_execute);
+/// @brief Creates a new file object with a custom backend
+/// @param data Backend-private state, released through the backend's release operation
+/// @return A file with a reference count of 1
+fd_store_file_t* fd_store_file_create(fd_store_file_type_t type, const fd_store_file_ops_t* ops, void* data, fd_store_access_t access, fd_store_flags_t flags);
 
-/// @brief Create a new file descriptor, at a free fd number
+/// @brief Creates a new file object backed by a vfs node
+/// @return A file with a reference count of 1, owning a reference to node
+fd_store_file_t* fd_store_file_create_vfs_node(vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags);
+
+/// @brief Insert an already-created file into the store at a free fd number
 /// @return The file descriptor
-uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_access_t access, fd_store_flags_t flags);
+/// @note Takes ownership of the caller's reference on success
+uint32_t fd_store_insert_file(fd_store_t* store, fd_store_file_t* file, bool close_on_execute);
+
+/// @brief Insert an already-created file into the store at a specific fd number
+/// @return The file descriptor
+/// @note Takes ownership of the caller's reference on success
+uint32_t fd_store_insert_file_at(fd_store_t* store, fd_store_file_t* file, uint32_t fd);
 
 /// @brief Free an open file descriptor
 bool fd_store_free_fd(fd_store_t* store, uint32_t fd);
 
-/// @brief Get a file decriptor by it's number
+/// @brief Get a file descriptor by its number
 /// @param out_close_on_execute (optional) whether the file descriptor was marked as close on execute
-/// @note Increments the refrence count
+/// @note Increments the reference count
 fd_store_file_t* fd_store_get_fd(fd_store_t* store, uint32_t fd, bool* out_close_on_execute);
 
 /// @brief Increment the reference count of a fd_store_file_t
@@ -78,5 +140,24 @@ vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access
 /// @brief Duplicate a file descriptor, allocating a free fd number
 vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd);
 
-/// @brief Duplicate a file descriptor, at a free fd number
+/// @brief Duplicate a file descriptor, at a given fd number
 vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute);
+
+/// @brief Performs IO on a file descriptor's file
+vfs_result_t fd_store_file_perform_io(fd_store_file_t* file, io_request_t* request);
+
+/// @brief Gets the attributes of a file descriptor's file
+vfs_result_t fd_store_file_get_attributes(fd_store_file_t* file, vfs_node_attr_t* out_attr);
+
+/// @brief Resizes a file descriptor's file
+vfs_result_t fd_store_file_truncate(fd_store_file_t* file, size_t size);
+
+/// @brief Gets the inode backing a file descriptor's file, or nullptr if it has none
+vfs_inode_t* fd_store_file_get_inode(fd_store_file_t* file);
+
+/// @brief Reads the next entry in a directory file descriptor's file
+vfs_result_t fd_store_file_read_dir(fd_store_file_t* file, size_t* offset, vfs_dentry_t** out_dentry);
+
+/// @brief Gets the vfs node backing a file descriptor's file, or nullptr if it is not vfs backed
+/// @note Returns a borrowed pointer; the caller's file reference keeps the node alive
+vfs_node_t* fd_store_file_get_node(fd_store_file_t* file);

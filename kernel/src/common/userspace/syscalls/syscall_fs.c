@@ -94,9 +94,10 @@ static syscall_ret_t syscall_fs_open(syscall_args_t* argument_data, void* path_p
         return syscall_from_vfs_result(result);
     }
 
-    uint32_t fd = fd_store_create_fd(process->fd_store, out_result_node, fd_access, fd_flags, close_on_execute);
-    // @note: Since vfs_lookup and fd_store_create_fd bump ref count, we drop our ref from vfs_lookup
+    fd_store_file_t* file = fd_store_file_create_vfs_node(out_result_node, fd_access, fd_flags);
+    // @note: Since vfs_lookup and fd_store_file_create_vfs_node bump ref count, we drop our ref from vfs_lookup
     vfs_node_put(out_result_node);
+    uint32_t fd = fd_store_insert_file(process->fd_store, file, close_on_execute);
 
     return SYSCALL_RET_VALUE(fd);
 }
@@ -148,7 +149,7 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
     io_req.read.bytes_read = 0;
     io_req.no_block = file->flags.non_blocking;
 
-    vfs_result_t result = vfs_perform_io_node(file->node, &io_req);
+    vfs_result_t result = fd_store_file_perform_io(file, &io_req);
     if(syscall_from_vfs_result(result).is_error) {
         fd_store_file_put(file);
         return syscall_from_vfs_result(result);
@@ -189,7 +190,7 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     /// With O_APPEND every write goes to the current end of the file
     if(file->flags.append) {
         vfs_node_attr_t attr = { 0 };
-        vfs_result_t attr_result = vfs_get_attributes_node(file->node, &attr);
+        vfs_result_t attr_result = fd_store_file_get_attributes(file, &attr);
         if(syscall_from_vfs_result(attr_result).is_error) {
             heap_free(buffer, count);
             fd_store_file_put(file);
@@ -206,7 +207,7 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     io_req.write.bytes_written = 0;
     io_req.no_block = file->flags.non_blocking;
 
-    vfs_result_t result = vfs_perform_io_node(file->node, &io_req);
+    vfs_result_t result = fd_store_file_perform_io(file, &io_req);
     if(syscall_from_vfs_result(result).is_error) {
         heap_free(buffer, count);
         fd_store_file_put(file);
@@ -246,11 +247,10 @@ static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd,
     }
 
     vfs_node_attr_t attr;
-    vfs_result_t res = file->node->ops->get_attributes(file->node, &attr);
+    vfs_result_t res = fd_store_file_get_attributes(file, &attr);
     if(res != VFS_RESULT_OK) {
-        assert(false);
         fd_store_file_put(file);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+        return SYSCALL_RET_ERROR(res == VFS_RESULT_ERR_UNSUPPORTED ? SYSCALL_ERROR_SPIPE : SYSCALL_ERROR_FAULT);
     }
 
     uint64_t new_offset;
@@ -443,7 +443,13 @@ static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd,
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    vfs_node_t* node = vfs_node_get(file->node);
+    vfs_node_t* node = fd_store_file_get_node(file);
+    if(node == nullptr) {
+        fd_store_file_put(file);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    vfs_node_get(node);
     fd_store_file_put(file);
     return stat_internal(stat_buf, node);
 }
@@ -502,8 +508,13 @@ static syscall_ret_t syscall_fs_stat_at(syscall_args_t* argument_data, uint32_t 
             LOG_UTRC("fd=%d | result=EBADF\n", fd);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
         }
-        vfs_node_get(file->node);
-        vfs_path.node = file->node;
+        vfs_node_t* dir_node = fd_store_file_get_node(file);
+        if(dir_node == nullptr) {
+            fd_store_file_put(file);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+        }
+        vfs_node_get(dir_node);
+        vfs_path.node = dir_node;
         fd_store_file_put(file);
     }
 
@@ -561,7 +572,8 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    if(file->node->type != VFS_NODE_TYPE_DIR) {
+    vfs_node_t* dir_node = fd_store_file_get_node(file);
+    if(dir_node == nullptr || dir_node->type != VFS_NODE_TYPE_DIR) {
         LOG_UTRC("fd=%d | result=NOTDIR\n", fd);
         fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTDIR);
@@ -579,14 +591,13 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
     }
     memory_set(buffer, 0, count);
 
-    vfs_path_t dir_path = VFS_MAKE_REL_PATH(file->node, "");
     size_t offset = file->offset;
     size_t used = 0;
 
     while(used < count) {
         size_t prev_offset = offset;
         vfs_dentry_t* child = nullptr;
-        vfs_result_t result = vfs_read_dir(&dir_path, &offset, &child);
+        vfs_result_t result = fd_store_file_read_dir(file, &offset, &child);
         if(result != VFS_RESULT_OK) {
             heap_free(buffer, count);
             fd_store_file_put(file);
@@ -705,8 +716,14 @@ static syscall_ret_t syscall_fs_readlinkat(syscall_args_t* argument_data, uint32
             heap_free(pathname, path_size);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
         }
-        vfs_node_get(entry->node);
-        vfs_path.node = entry->node;
+        vfs_node_t* dir_node = fd_store_file_get_node(entry);
+        if(dir_node == nullptr) {
+            fd_store_file_put(entry);
+            heap_free(pathname, path_size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+        }
+        vfs_node_get(dir_node);
+        vfs_path.node = dir_node;
         fd_store_file_put(entry);
     }
 
@@ -798,7 +815,7 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
-    vfs_result_t result = vfs_truncate_node(file->node, (size_t) size);
+    vfs_result_t result = fd_store_file_truncate(file, (size_t) size);
     LOG_UTRC("fd=%d, size=%ld | result=%d\n", fd, size, result);
     fd_store_file_put(file);
     /// posix wants EINVAL when the fd does not refer to a regular file
@@ -826,7 +843,7 @@ static syscall_ret_t syscall_sys_ioctl(syscall_args_t* argument_data, int fd, un
     io_req.ioctl.buffer = IO_BUFFER_CREATE_USER(process->address_space, buffer, 0);
     io_req.no_block = file->flags.non_blocking;
 
-    vfs_result_t result = vfs_perform_io_node(file->node, &io_req);
+    vfs_result_t result = fd_store_file_perform_io(file, &io_req);
     fd_store_file_put(file);
 
     if(syscall_from_vfs_result(result).is_error) {

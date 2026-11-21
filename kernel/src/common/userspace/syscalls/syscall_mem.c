@@ -94,7 +94,7 @@ static syscall_ret_t syscall_vm_map(syscall_args_t* argument_data, void* hint, s
         if(file == nullptr)
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
 
-        vfs_inode_t* inode = vfs_node_get_inode(file->node);
+        vfs_inode_t* inode = fd_store_file_get_inode(file);
         if(inode == nullptr) {
             fd_store_file_put(file);
             return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);

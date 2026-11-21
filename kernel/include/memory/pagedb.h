@@ -33,11 +33,11 @@ bool pagedb_valid_page(uint64_t pfn);
 pagedb_page_t* pagedb_get_page(uint64_t pfn);
 
 /// @brief Increment the reference count of a pfn
-/// @returns the current refrence count
+/// @returns the current reference count
 uint32_t pagedb_page_ref(uint64_t pfn);
 
 /// @brief Decrement the reference count of a pfn
-/// @returns the current refrence count
+/// @returns the current reference count
 /// @note this does not free the page
 uint32_t pagedb_page_deref(uint64_t pfn);
 

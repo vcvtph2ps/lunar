@@ -7,6 +7,63 @@
 #include <memory/heap.h>
 
 
+static vfs_result_t fd_store_vfs_perform_io(fd_store_file_t* file, io_request_t* request) {
+    return vfs_perform_io_node(file->node, request);
+}
+
+static vfs_result_t fd_store_vfs_get_attributes(fd_store_file_t* file, vfs_node_attr_t* out_attr) {
+    return vfs_get_attributes_node(file->node, out_attr);
+}
+
+static vfs_result_t fd_store_vfs_truncate(fd_store_file_t* file, size_t size) {
+    return vfs_truncate_node(file->node, size);
+}
+
+static vfs_inode_t* fd_store_vfs_get_inode(fd_store_file_t* file) {
+    return vfs_node_get_inode(file->node);
+}
+
+static vfs_result_t fd_store_vfs_read_dir(fd_store_file_t* file, size_t* offset, vfs_dentry_t** out_dentry) {
+    vfs_path_t path = VFS_MAKE_REL_PATH(file->node, "");
+    return vfs_read_dir(&path, offset, out_dentry);
+}
+
+static vfs_node_t* fd_store_vfs_get_node(fd_store_file_t* file) {
+    return file->node;
+}
+
+static void fd_store_vfs_release(fd_store_file_t* file) {
+    vfs_node_put(file->node);
+}
+
+static const fd_store_file_ops_t g_fd_store_vfs_node_ops = {
+    .perform_io = fd_store_vfs_perform_io,
+    .get_attributes = fd_store_vfs_get_attributes,
+    .truncate = fd_store_vfs_truncate,
+    .get_inode = fd_store_vfs_get_inode,
+    .read_dir = fd_store_vfs_read_dir,
+    .get_node = fd_store_vfs_get_node,
+    .release = fd_store_vfs_release,
+};
+
+fd_store_file_t* fd_store_file_create(fd_store_file_type_t type, const fd_store_file_ops_t* ops, void* data, fd_store_access_t access, fd_store_flags_t flags) {
+    fd_store_file_t* file = heap_alloc(sizeof(fd_store_file_t));
+
+    ATOMIC_STORE(&file->refcount, 1, ATOMIC_RELAXED);
+    file->ops = ops;
+    file->type = type;
+    file->offset = 0;
+    file->access = access;
+    file->flags = flags;
+    file->data = data;
+
+    return file;
+}
+
+fd_store_file_t* fd_store_file_create_vfs_node(vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags) {
+    return fd_store_file_create(FD_STORE_FILE_TYPE_VFS_NODE, &g_fd_store_vfs_node_ops, vfs_node_get(node), access, flags);
+}
+
 fd_store_file_t* fd_store_file_get(fd_store_file_t* file) {
     if(file != nullptr) {
         ATOMIC_LOAD_ADD(&file->refcount, 1, ATOMIC_ACQUIRE);
@@ -18,7 +75,9 @@ void fd_store_file_put(fd_store_file_t* file) {
     if(file != nullptr) {
         size_t previous = ATOMIC_LOAD_SUB(&file->refcount, 1, ATOMIC_RELEASE);
         if(previous == 1) {
-            vfs_node_put(file->node);
+            if(file->ops != nullptr && file->ops->release != nullptr) {
+                file->ops->release(file);
+            }
             heap_free(file, sizeof(fd_store_file_t));
         }
     }
@@ -35,7 +94,7 @@ fd_store_t* fd_store_create() {
 
 void fd_store_free(fd_store_t* store) {
     if(store->fds != nullptr) {
-        /// Release every node the store referenced
+        /// Release every file the store referenced
         for(size_t i = 0; i < store->fds_elements_count; i++) {
             if(bitmap_get(store->bitmap, i) && store->fds[i].file != nullptr) {
                 fd_store_file_put(store->fds[i].file);
@@ -73,7 +132,7 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store) {
 }
 
 
-uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access_t access, fd_store_flags_t flags, bool close_on_execute) {
+uint32_t fd_store_insert_file(fd_store_t* store, fd_store_file_t* file, bool close_on_execute) {
     spinlock_lock(&store->lock);
 
     size_t fd = bitmap_find_free(store->bitmap);
@@ -82,12 +141,6 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access
         user_assert(false && "fd_store out of size");
     }
 
-    fd_store_file_t* file = heap_alloc(sizeof(fd_store_file_t));
-    ATOMIC_STORE(&file->refcount, 1, ATOMIC_RELAXED);
-    file->node = vfs_node_get(node);
-    file->offset = 0;
-    file->access = access;
-    file->flags = flags;
     store->fds[fd].file = file;
     store->fds[fd].close_on_execute = close_on_execute;
 
@@ -97,20 +150,13 @@ uint32_t fd_store_create_fd(fd_store_t* store, vfs_node_t* node, fd_store_access
     return fd;
 }
 
-uint32_t fd_store_create_fd_at(fd_store_t* store, vfs_node_t* node, uint32_t fd, fd_store_access_t access, fd_store_flags_t flags) {
+uint32_t fd_store_insert_file_at(fd_store_t* store, fd_store_file_t* file, uint32_t fd) {
     spinlock_lock(&store->lock);
 
     user_assert(fd < store->fds_elements_count && "fd out of range");
     // @todo: we shouldn't assert here?
     user_assert(!bitmap_get(store->bitmap, fd) && "fd already in use");
 
-    fd_store_file_t* file = heap_alloc(sizeof(fd_store_file_t));
-
-    ATOMIC_STORE(&file->refcount, 1, ATOMIC_RELAXED);
-    file->node = vfs_node_get(node);
-    file->offset = 0;
-    file->access = access;
-    file->flags = flags;
     store->fds[fd].file = file;
     store->fds[fd].close_on_execute = false;
 
@@ -243,4 +289,46 @@ void fd_store_handle_execute(fd_store_t* store) {
             }
         }
     }
+}
+
+vfs_result_t fd_store_file_perform_io(fd_store_file_t* file, io_request_t* request) {
+    if(file == nullptr || file->ops == nullptr || file->ops->perform_io == nullptr) {
+        return VFS_RESULT_ERR_UNSUPPORTED;
+    }
+    return file->ops->perform_io(file, request);
+}
+
+vfs_result_t fd_store_file_get_attributes(fd_store_file_t* file, vfs_node_attr_t* out_attr) {
+    if(file == nullptr || file->ops == nullptr || file->ops->get_attributes == nullptr) {
+        return VFS_RESULT_ERR_UNSUPPORTED;
+    }
+    return file->ops->get_attributes(file, out_attr);
+}
+
+vfs_result_t fd_store_file_truncate(fd_store_file_t* file, size_t size) {
+    if(file == nullptr || file->ops == nullptr || file->ops->truncate == nullptr) {
+        return VFS_RESULT_ERR_UNSUPPORTED;
+    }
+    return file->ops->truncate(file, size);
+}
+
+vfs_inode_t* fd_store_file_get_inode(fd_store_file_t* file) {
+    if(file == nullptr || file->ops == nullptr || file->ops->get_inode == nullptr) {
+        return nullptr;
+    }
+    return file->ops->get_inode(file);
+}
+
+vfs_result_t fd_store_file_read_dir(fd_store_file_t* file, size_t* offset, vfs_dentry_t** out_dentry) {
+    if(file == nullptr || file->ops == nullptr || file->ops->read_dir == nullptr) {
+        return VFS_RESULT_ERR_NOT_DIR;
+    }
+    return file->ops->read_dir(file, offset, out_dentry);
+}
+
+vfs_node_t* fd_store_file_get_node(fd_store_file_t* file) {
+    if(file == nullptr || file->ops == nullptr || file->ops->get_node == nullptr) {
+        return nullptr;
+    }
+    return file->ops->get_node(file);
 }

@@ -107,12 +107,15 @@ void init_stage_vfs(uint32_t core_id) {
 
 
     static const uint8_t tmpfs_demo_data[] = ".globl main\n.section .text\nmain:\nsub $8, %rsp\nlea msg(%rip), %rdi\ncall puts@PLT\nxor %eax, %eax\nadd $8, %rsp\nret\n.section .rodata\nmsg: .asciz \"Hello from lunar binutils <3\"\n";
-    static const uint8_t tmpfs_demo_data2[] = ".globl main\n.section .text\nmain:\naddi sp, sp, -16\nsd ra, 8(sp)\nla a0, msg\ncall puts\nli a0, 0\nld ra, 8(sp)\naddi sp, sp, 16\nret\n.section .rodata\nmsg:\n.asciz \"Hello from lunar binutils <3\"\n";
+    static const uint8_t tmpfs_demo_data2[] =
+        ".globl main\n.section .text\nmain:\naddi sp, sp, -16\nsd ra, 8(sp)\nla a0, msg\ncall puts\nli a0, 0\nld ra, 8(sp)\naddi sp, sp, 16\nret\n.section .rodata\nmsg:\n.asciz \"Hello from lunar binutils <3\"\n";
+    static const uint8_t tmpfs_demo_data3[] = "Hello, world!\n";
     static const tmpfs_mount_file_t tmpfs_demo_files[] = {
         { .name = "hellox86.s",  .data = tmpfs_demo_data,  .size = sizeof(tmpfs_demo_data) - 1  },
         { .name = "hellorv64.s", .data = tmpfs_demo_data2, .size = sizeof(tmpfs_demo_data2) - 1 },
+        { .name = "hello",       .data = tmpfs_demo_data3, .size = sizeof(tmpfs_demo_data3) - 1 },
     };
-    tmpfs_mount_data_t tmpfs_data = { .files = tmpfs_demo_files, .file_count = 2 };
+    tmpfs_mount_data_t tmpfs_data = { .files = tmpfs_demo_files, .file_count = 3 };
 
     vfs_path_t tmp_path = VFS_MAKE_ABS_PATH("/tmp");
     res = vfs_mount(&g_vfs_tmpfs_ops, &tmp_path, &tmpfs_data);
