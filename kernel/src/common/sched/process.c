@@ -13,6 +13,7 @@
 #include <common/userspace/fd_store.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
+#include <lib/math.h>
 #include <lib/string.h>
 #include <memory/heap.h>
 #include <memory/ptm.h>
@@ -262,7 +263,7 @@ bool process_exec_from_file(process_t* current, vfs_node_t* node, const ldr_proc
 
     spinlock_no_dpc_lock(&current->thread_list_lock);
     size_t sibling_count = current->thread_list.count - 1;
-    size_t sibling_capacity = sibling_count > 0 ? sibling_count : 1;
+    size_t sibling_capacity = MATH_MAX(sibling_count, 1);
     wait_obj_t** thread_wait_objs = __builtin_alloca(sizeof(wait_obj_t*) * sibling_capacity);
     thread_t** sibling_threads = __builtin_alloca(sizeof(thread_t*) * sibling_capacity);
     size_t i = 0;

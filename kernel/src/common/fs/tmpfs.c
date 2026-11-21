@@ -2,6 +2,7 @@
 #include <common/fs/vfs_inode.h>
 #include <common/log.h>
 #include <common/sync/spinlock.h>
+#include <lib/math.h>
 #include <lib/string.h>
 #include <memory/heap.h>
 
@@ -89,7 +90,7 @@ static bool tmpfs_resize(vfs_inode_t* inode, size_t new_size) {
     spinlock_lock(&file->lock);
 
     bool success = true;
-    size_t new_capacity = new_size == 0 ? 1 : new_size;
+    size_t new_capacity = MATH_MAX(new_size, 1);
     if(new_capacity > file->capacity) {
         uint8_t* content = heap_realloc(file->content, file->capacity, new_capacity);
         if(content == nullptr) {
@@ -142,7 +143,7 @@ static tmpfs_file_t* tmpfs_file_create(tmpfs_info_t* info, const char* name, con
     memory_copy(file->name, name, file->name_length + 1);
 
     file->size = size;
-    file->capacity = size == 0 ? 1 : size;
+    file->capacity = MATH_MAX(size, 1);
     file->content = heap_alloc(file->capacity);
     if(size != 0 && data != nullptr)
         memory_copy(file->content, data, size);

@@ -1,6 +1,7 @@
 #include <arch/x86_64/hardware/time/pit.h>
 #include <arch/x86_64/io.h>
 #include <common/arch.h>
+#include <lib/math.h>
 #include <memory/heap.h>
 #include <stdint.h>
 
@@ -29,7 +30,7 @@ static void pit_sleep(time_timer_t* self, uint64_t microseconds) {
         total_ticks = 1;
 
     while(total_ticks > 0) {
-        uint16_t chunk = (total_ticks > 0xFFFF) ? 0xFFFF : (uint16_t) total_ticks;
+        uint16_t chunk = (uint16_t) MATH_MIN(total_ticks, 0xFFFF);
         total_ticks -= chunk;
 
         pit_set_reload(chunk);

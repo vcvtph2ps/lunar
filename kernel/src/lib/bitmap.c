@@ -1,4 +1,5 @@
 #include <lib/bitmap.h>
+#include <lib/math.h>
 #include <memory/heap.h>
 
 #include "lib/string.h"
@@ -26,7 +27,7 @@ void bitmap_resize(bitmap_t* bitmap, size_t new_bit_count) {
     size_t new_word_count = (new_bit_count + 63) / 64;
 
     uint64_t* words = heap_zalloc(new_word_count * sizeof(uint64_t));
-    size_t copy_count = bitmap->word_count < new_word_count ? bitmap->word_count : new_word_count;
+    size_t copy_count = MATH_MIN(bitmap->word_count, new_word_count);
     memory_copy(words, bitmap->words, copy_count * sizeof(uint64_t));
     heap_free(bitmap->words, bitmap->word_count * sizeof(uint64_t));
 

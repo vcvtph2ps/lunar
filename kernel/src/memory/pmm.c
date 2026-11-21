@@ -4,6 +4,7 @@
 #include <common/log.h>
 #include <common/memory.h>
 #include <common/sync/spinlock.h>
+#include <lib/math.h>
 #include <lib/string.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
@@ -65,12 +66,12 @@ static void populate_global() {
         uintptr_t end = entry->phys_base + entry->length;
 
         // carve off the first megabyte into its own freelist
-        uintptr_t low_end = end < PMM_LOW_MEMORY_END ? end : PMM_LOW_MEMORY_END;
+        uintptr_t low_end = MATH_MIN(end, PMM_LOW_MEMORY_END);
         if(start < low_end) {
             populate_list(&g_pmm_low, start, low_end);
         }
 
-        uintptr_t high_start = start > PMM_LOW_MEMORY_END ? start : PMM_LOW_MEMORY_END;
+        uintptr_t high_start = MATH_MAX(start, PMM_LOW_MEMORY_END);
         if(high_start < end) {
             populate_list(&g_pmm, high_start, end);
         }

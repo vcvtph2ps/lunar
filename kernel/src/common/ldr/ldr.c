@@ -42,7 +42,7 @@ static bool ldr_setup_process_shebang(vm_address_space_t* address_space, vfs_nod
 
     assert(attributes.type == VFS_NODE_TYPE_FILE);
 
-    size_t read_size = attributes.size < (size_t) LDR_SHEBANG_MAX_SIZE ? attributes.size : (size_t) LDR_SHEBANG_MAX_SIZE;
+    size_t read_size = MATH_MIN(attributes.size, (size_t) LDR_SHEBANG_MAX_SIZE);
     if(read_size <= 2) {
         LOG_FAIL("ldr: shebang file is too small\n");
         return false;
@@ -137,7 +137,7 @@ static bool ldr_setup_process_shebang(vm_address_space_t* address_space, vfs_nod
 
     /// argv becomes: [interpreter] [optional-arg] [script-path] [original argv[1]..argv[argc-1]]
     /// Drop the original argv[0] as it is replaced by the interpreter path.
-    int tail_argc = load_info->argc > 1 ? load_info->argc - 1 : 0;
+    int tail_argc = MATH_MAX(load_info->argc - 1, 0);
     int new_argc = 2 + (optional_arg != nullptr ? 1 : 0) + tail_argc;
 
     const char** new_argv = heap_alloc(sizeof(const char*) * new_argc);
