@@ -521,8 +521,8 @@ static syscall_ret_t syscall_proc_execve(syscall_args_t* argument_data, void* pa
     LOG_UTRC("exec'ing %s\n", path);
 
     vfs_node_t* node;
-    // @todo: this probably shouldn't be VFS_MAKE_ABS_PATH
-    vfs_result_t result = vfs_lookup(&VFS_MAKE_ABS_PATH(path), true, &node);
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, path), true, &node);
     heap_free(path, path_size);
 
     if(result != VFS_RESULT_OK) {
