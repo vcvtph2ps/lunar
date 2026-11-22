@@ -16,6 +16,18 @@ typedef struct devfs_device_ops {
     vfs_result_t (*get_attributes)(void* ctx, vfs_node_attr_t* out_attr);
 } devfs_device_ops_t;
 
+/// @brief Describes the kind of device a devfs entry exposes
+typedef struct {
+    /// @brief The node type presented to userspace
+    vfs_node_type_t type;
+
+    /// @brief The device major number
+    uint32_t major;
+
+    /// @brief The device minor number
+    uint32_t minor;
+} devfs_device_info_t;
+
 /**
  * @brief Bind a device to devfs, making it accessible as /dev/<name>
  *
@@ -23,11 +35,12 @@ typedef struct devfs_device_ops {
  * @p name must be unique, a second bind with the same name returns
  * VFS_RESULT_ERR_EXISTS
  *
+ * @param info The device's type and major/minor numbers
  * @param ops Pointer to the device operation table (must remain valid)
  * @param ctx Opaque pointer forwarded to every ops callback
  * @return VFS_RESULT_OK on success
  */
-vfs_result_t devfs_bind(const char* name, const devfs_device_ops_t* ops, void* ctx);
+vfs_result_t devfs_bind(const char* name, devfs_device_info_t info, const devfs_device_ops_t* ops, void* ctx);
 
 /**
  * @brief Unbind a device from devfs

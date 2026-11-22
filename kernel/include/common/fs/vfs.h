@@ -34,7 +34,8 @@ typedef enum : uint8_t {
     VFS_NODE_TYPE_DIR,
     VFS_NODE_TYPE_FILE,
     VFS_NODE_TYPE_LINK,
-    VFS_NODE_TYPE_FIFO
+    VFS_NODE_TYPE_FIFO,
+    VFS_NODE_TYPE_CHAR_DEVICE
 } vfs_node_type_t;
 
 typedef struct vfs vfs_t;
@@ -50,6 +51,18 @@ typedef uint8_t vfs_permissions_t;
 #define VFS_PERM_READ (1 << 2)
 #define VFS_PERM_WRITE (1 << 1)
 #define VFS_PERM_EXECUTE (1 << 0)
+
+/// @brief A device number, encoding a (major, minor) pair
+typedef uint64_t vfs_dev_t;
+
+/// @brief Packs a major/minor pair into a device number
+#define VFS_DEV_MAKE(MAJOR_NUM, MINOR_NUM) ((vfs_dev_t) ((MINOR_NUM) & 0xffu) | ((vfs_dev_t) ((MAJOR_NUM) & 0xfffu) << 8) | ((vfs_dev_t) ((MINOR_NUM) & ~0xffu) << 12) | ((vfs_dev_t) ((MAJOR_NUM) & ~0xfffu) << 32))
+
+/// @brief Extracts the major number from a device number
+#define VFS_DEV_MAJOR(NUM) ((((vfs_dev_t) (NUM) >> 8) & 0xfffu) | (((vfs_dev_t) (NUM) >> 32) & ~0xfffu))
+
+/// @brief Extracts the minor number from a device number
+#define VFS_DEV_MINOR(NUM) (((vfs_dev_t) (NUM) & 0xffu) | (((vfs_dev_t) (NUM) >> 12) & ~0xffu))
 
 /// @brief The permission bits of a node, split by the class they apply to
 typedef struct {
@@ -67,6 +80,9 @@ typedef struct {
 
     /// The filesystem's inode number for this vnode
     uint64_t inode;
+
+    /// The device number of a device node, 0 for non devices
+    vfs_dev_t rdev;
 
     vfs_node_permissions_t permissions;
 } vfs_node_attr_t;

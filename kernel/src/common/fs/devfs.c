@@ -20,6 +20,9 @@ typedef struct devfs_entry {
     char* name;
     size_t name_len;
 
+    vfs_node_type_t type;
+    vfs_dev_t rdev;
+
     const devfs_device_ops_t* ops;
     void* ctx;
 
@@ -67,7 +70,7 @@ static vfs_result_t root_lookup(vfs_node_t* node, const char* name, vfs_node_t**
     memory_zero(dev_node, sizeof(vfs_node_t));
     dev_node->lock = LOCK_INIT;
     ATOMIC_STORE(&dev_node->refcount, 1, ATOMIC_RELAXED);
-    dev_node->type = VFS_NODE_TYPE_FILE;
+    dev_node->type = entry->type;
     dev_node->current_vfs = g_devfs_vfs;
     dev_node->ops = &g_device_ops;
 
@@ -149,16 +152,17 @@ static vfs_result_t device_get_attributes(vfs_node_t* node, vfs_node_attr_t* out
     devfs_node_priv_t* priv = (devfs_node_priv_t*) node->private_data;
 
     out_attr->inode = priv->entry->inode;
+    out_attr->type = priv->entry->type;
+    out_attr->rdev = priv->entry->rdev;
+    out_attr->size = 0;
+    out_attr->permissions.user = VFS_PERM_READ | VFS_PERM_WRITE;
+    out_attr->permissions.group = VFS_PERM_READ | VFS_PERM_WRITE;
+    out_attr->permissions.other = VFS_PERM_READ | VFS_PERM_WRITE;
 
     if(priv->entry->ops != nullptr && priv->entry->ops->get_attributes != nullptr) {
         return priv->entry->ops->get_attributes(priv->entry->ctx, out_attr);
     }
 
-    out_attr->size = 0;
-    out_attr->type = VFS_NODE_TYPE_FILE;
-    out_attr->permissions.user = VFS_PERM_READ | VFS_PERM_WRITE;
-    out_attr->permissions.group = VFS_PERM_READ | VFS_PERM_WRITE;
-    out_attr->permissions.other = VFS_PERM_READ | VFS_PERM_WRITE;
     return VFS_RESULT_OK;
 }
 
@@ -216,7 +220,7 @@ const vfs_ops_t g_vfs_devfs_ops = {
     .dentry_ops = nullptr,
 };
 
-vfs_result_t devfs_bind(const char* name, const devfs_device_ops_t* ops, void* ctx) {
+vfs_result_t devfs_bind(const char* name, devfs_device_info_t info, const devfs_device_ops_t* ops, void* ctx) {
     spinlock_lock(&g_devfs_lock);
 
     if(find_entry_locked(name) != nullptr) {
@@ -229,6 +233,8 @@ vfs_result_t devfs_bind(const char* name, const devfs_device_ops_t* ops, void* c
     entry->name_len = (size_t) string_length(name);
     entry->name = heap_alloc(entry->name_len + 1);
     memory_copy(entry->name, name, entry->name_len + 1);
+    entry->type = info.type;
+    entry->rdev = VFS_DEV_MAKE(info.major, info.minor);
     entry->ops = ops;
     entry->ctx = ctx;
 

@@ -39,7 +39,7 @@ void init_stage_tty(uint32_t core_id) {
     tty->flush_ctx = nullptr;
     tty->on_flush = tty_uart_flush;
 
-    vfs_result_t result = devfs_bind("tty", &g_tty_devfs_ops, tty);
+    vfs_result_t result = devfs_bind("tty", (devfs_device_info_t) { .type = VFS_NODE_TYPE_CHAR_DEVICE, .major = 5, .minor = 0 }, &g_tty_devfs_ops, tty);
     if(result != VFS_RESULT_OK) {
         arch_panic("init_tty: failed to bind /dev/tty (%d)\n", result);
     }

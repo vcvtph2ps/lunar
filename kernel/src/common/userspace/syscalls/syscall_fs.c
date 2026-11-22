@@ -237,18 +237,14 @@ static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd,
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
 
-    if(fd == 0 || fd == 1 || fd == 2) {
-        return SYSCALL_RET_VALUE(0);
-    }
-
     fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
     if(file == nullptr) {
         LOG_UTRC("fd=%d | result=EBADF\n", fd);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    /// Pipes are not seekable
-    if(file->type == FD_STORE_FILE_TYPE_PIPE) {
+    /// Pipes and anything not backed by a cacheable inode (devices, the tty, directories, ...) are not seekable
+    if(file->type == FD_STORE_FILE_TYPE_PIPE || fd_store_file_get_inode(file) == nullptr) {
         LOG_UTRC("fd=%d | result=ESPIPE\n", fd);
         fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_SPIPE);
@@ -365,17 +361,19 @@ static syscall_ret_t stat_from_attributes(userptr_t* stat_buf, const vfs_node_at
     stat.st_size = attr->size;
     stat.st_nlink = 1; // @todo: implement hardlink support
     switch(attr->type) {
-        case VFS_NODE_TYPE_DIR:  stat.st_mode = UAPI_STAT_IFDIR; break;
-        case VFS_NODE_TYPE_FILE: stat.st_mode = UAPI_STAT_IFREG; break;
-        case VFS_NODE_TYPE_LINK: stat.st_mode = UAPI_STAT_IFLNK; break;
-        case VFS_NODE_TYPE_FIFO: stat.st_mode = UAPI_STAT_IFIFO; break;
-        default:                 user_assert(false && "Invalid return value");
+        case VFS_NODE_TYPE_DIR:         stat.st_mode = UAPI_STAT_IFDIR; break;
+        case VFS_NODE_TYPE_FILE:        stat.st_mode = UAPI_STAT_IFREG; break;
+        case VFS_NODE_TYPE_LINK:        stat.st_mode = UAPI_STAT_IFLNK; break;
+        case VFS_NODE_TYPE_FIFO:        stat.st_mode = UAPI_STAT_IFIFO; break;
+        case VFS_NODE_TYPE_CHAR_DEVICE: stat.st_mode = UAPI_STAT_IFCHR; break;
+        default:                        user_assert(false && "Invalid return value");
     }
 
     stat.st_mode |= (attr->permissions.user) << 6;
     stat.st_mode |= (attr->permissions.group) << 3;
     stat.st_mode |= (attr->permissions.other) << 0;
     stat.st_ino = attr->inode;
+    stat.st_rdev = attr->rdev;
 
     if(!userptr_write_full(stat_buf, &stat)) {
         heap_free(stat_buf, sizeof(userptr_t));
@@ -657,10 +655,12 @@ static syscall_ret_t syscall_fs_getdents(syscall_args_t* argument_data, uint32_t
             dent->d_ino = res == VFS_RESULT_OK ? attr.inode : 0;
 
             switch(child->node->type) {
-                case VFS_NODE_TYPE_DIR:  dent->d_type = UAPI_DIRENT_DIR; break;
-                case VFS_NODE_TYPE_FILE: dent->d_type = UAPI_DIRENT_REG; break;
-                case VFS_NODE_TYPE_LINK: dent->d_type = UAPI_DIRENT_LNK; break;
-                default:                 dent->d_type = UAPI_DIRENT_UNKNOWN; break;
+                case VFS_NODE_TYPE_DIR:         dent->d_type = UAPI_DIRENT_DIR; break;
+                case VFS_NODE_TYPE_FILE:        dent->d_type = UAPI_DIRENT_REG; break;
+                case VFS_NODE_TYPE_LINK:        dent->d_type = UAPI_DIRENT_LNK; break;
+                case VFS_NODE_TYPE_FIFO:        dent->d_type = UAPI_DIRENT_FIFO; break;
+                case VFS_NODE_TYPE_CHAR_DEVICE: dent->d_type = UAPI_DIRENT_CHR; break;
+                default:                        dent->d_type = UAPI_DIRENT_UNKNOWN; break;
             }
         } else {
             dent->d_ino = 0;
