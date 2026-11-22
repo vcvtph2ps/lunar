@@ -8,6 +8,7 @@
 #include <common/sched/sched.h>
 #include <common/sched/thread.h>
 #include <common/sync/spinlock.h>
+#include <common/userspace/fd_store.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userptr.h>
@@ -541,11 +542,28 @@ static syscall_ret_t syscall_proc_execve(syscall_args_t* argument_data, void* pa
 SYSCALL_DEFINE(syscall_proc_fexecve, SYSCALL_PROC_FEXECVE, void, int32_t, fd, void*, argv, void*, envp);
 static syscall_ret_t syscall_proc_fexecve(syscall_args_t* argument_data, int32_t fd, void* argv_ptr, void* envp_ptr) {
     (void) argument_data;
-    (void) fd;
-    (void) argv_ptr;
-    (void) envp_ptr;
-    ASSERT_TODO();
-    // int fd = args->arg1;
 
-    // return execve_internal(node, args->arg2, args->arg3);
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    fd_store_file_t* file = fd_store_get_fd(process->fd_store, (uint32_t) fd, nullptr);
+    if(file == nullptr) {
+        LOG_UTRC("fd=%d | result=EBADF\n", fd);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    vfs_node_t* node = fd_store_file_get_node(file);
+    if(node == nullptr) {
+        LOG_UTRC("fd=%d, not vfs backed | result=EBADF\n", fd);
+        fd_store_file_put(file);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    vfs_node_get(node);
+    fd_store_file_put(file);
+
+    LOG_UTRC("exec'ing fd %d\n", fd);
+
+    syscall_ret_t ret = execve_internal(node, (uintptr_t) argv_ptr, (uintptr_t) envp_ptr);
+    vfs_node_put(node);
+    return ret;
 }
