@@ -8,14 +8,15 @@
 
 typedef struct process process_t; // NOLINT
 
+/// @note: Signals are one based, but the bit representing a signal in the set is zero based
 static inline uapi_signal_set_t signal_mask_set(uapi_signal_set_t set, int signal_number) {
     assert(signal_number > 0 && signal_number <= UAPI_SIGNAL_MAX_SIGNAL);
-    return set | ((uapi_signal_set_t) 1 << signal_number);
+    return set | ((uapi_signal_set_t) 1 << (signal_number - 1));
 }
 
 static inline uapi_signal_set_t signal_mask_clear(uapi_signal_set_t set, int signal_number) {
     assert(signal_number > 0 && signal_number <= UAPI_SIGNAL_MAX_SIGNAL);
-    return set & ~((uapi_signal_set_t) 1 << signal_number);
+    return set & ~((uapi_signal_set_t) 1 << (signal_number - 1));
 }
 
 /// @brief Removes the signals that can never be blocked (SIGKILL and SIGSTOP)
@@ -66,7 +67,7 @@ static inline int signal_queue_dequeue(signal_queue_t* queue, uapi_signal_set_t 
         return -1;
     }
 
-    int signal_number = COUNT_TRAILING_ZEROS(set);
+    int signal_number = COUNT_TRAILING_ZEROS(set) + 1;
     memory_copy(out_info, &queue->info[signal_number], sizeof(uapi_signal_info_t));
     queue->pending = signal_mask_clear(queue->pending, signal_number);
 
