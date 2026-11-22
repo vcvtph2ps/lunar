@@ -86,7 +86,7 @@ void fd_store_file_put(fd_store_file_t* file) {
 fd_store_t* fd_store_create() {
     fd_store_t* store = heap_alloc(sizeof(fd_store_t));
     store->lock = SPINLOCK_INIT;
-    store->fds_elements_count = 64;
+    store->fds_elements_count = FD_STORE_INITIAL_CAPACITY;
     store->fds = heap_reallocarray(nullptr, sizeof(fd_store_entry_t), 0, store->fds_elements_count);
     store->bitmap = bitmap_create(store->fds_elements_count);
     return store;
@@ -132,13 +132,53 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store) {
 }
 
 
+/// @brief Grows the descriptor table so that it can hold at least min_capacity entries
+/// @note The caller must hold store->lock
+static bool fd_store_resize_lockless(fd_store_t* store, size_t min_capacity) {
+    if(min_capacity <= store->fds_elements_count) {
+        return true;
+    }
+
+    if(min_capacity > FD_STORE_MAX_FDS) {
+        return false;
+    }
+
+    size_t new_count = store->fds_elements_count;
+    while(new_count < min_capacity) {
+        if(new_count > FD_STORE_MAX_FDS / 2) {
+            new_count = FD_STORE_MAX_FDS;
+            break;
+        }
+        new_count *= 2;
+    }
+
+    if(new_count < min_capacity) {
+        return false;
+    }
+
+    size_t old_count = store->fds_elements_count;
+    fd_store_entry_t* fds = heap_reallocarray(store->fds, sizeof(fd_store_entry_t), old_count, new_count);
+    if(fds == nullptr) {
+        return false;
+    }
+
+    memory_set(&fds[old_count], 0, (new_count - old_count) * sizeof(fd_store_entry_t));
+    store->fds = fds;
+    bitmap_resize(store->bitmap, new_count);
+    store->fds_elements_count = new_count;
+
+    return true;
+}
+
 uint32_t fd_store_insert_file(fd_store_t* store, fd_store_file_t* file, bool close_on_execute) {
     spinlock_lock(&store->lock);
 
     size_t fd = bitmap_find_free(store->bitmap);
     if(fd == SIZE_MAX) {
-        // @todo: reallocate
-        user_assert(false && "fd_store out of size");
+        bool resized = fd_store_resize_lockless(store, store->fds_elements_count * 2);
+        user_assert(resized && "fd_store out of size");
+
+        fd = bitmap_find_free(store->bitmap);
     }
 
     store->fds[fd].file = file;
@@ -153,7 +193,11 @@ uint32_t fd_store_insert_file(fd_store_t* store, fd_store_file_t* file, bool clo
 uint32_t fd_store_insert_file_at(fd_store_t* store, fd_store_file_t* file, uint32_t fd) {
     spinlock_lock(&store->lock);
 
-    user_assert(fd < store->fds_elements_count && "fd out of range");
+    if(fd >= store->fds_elements_count) {
+        bool resized = fd_store_resize_lockless(store, (size_t) fd + 1);
+        user_assert(resized && "fd out of range");
+    }
+
     // @todo: we shouldn't assert here?
     user_assert(!bitmap_get(store->bitmap, fd) && "fd already in use");
 
@@ -230,7 +274,7 @@ syscall_ret_t fd_store_duplicate(fd_store_t* store, uint32_t fd) {
 }
 
 syscall_ret_t fd_store_duplicate_from(fd_store_t* store, uint32_t fd, int32_t min_fd, bool close_on_execute) {
-    if(min_fd < 0) {
+    if(min_fd < 0 || (size_t) min_fd >= FD_STORE_MAX_FDS) {
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
@@ -241,15 +285,25 @@ syscall_ret_t fd_store_duplicate_from(fd_store_t* store, uint32_t fd, int32_t mi
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    if((size_t) min_fd >= store->fds_elements_count) {
-        spinlock_unlock(&store->lock);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
-    }
-
     size_t new_fd = SIZE_MAX;
-    for(size_t i = (size_t) min_fd; i < store->fds_elements_count; i++) {
-        if(!bitmap_get(store->bitmap, i)) {
-            new_fd = i;
+    while(true) {
+        for(size_t i = (size_t) min_fd; i < store->fds_elements_count; i++) {
+            if(!bitmap_get(store->bitmap, i)) {
+                new_fd = i;
+                break;
+            }
+        }
+
+        if(new_fd != SIZE_MAX || store->fds_elements_count >= FD_STORE_MAX_FDS) {
+            break;
+        }
+
+        size_t min_capacity = (size_t) min_fd + 1;
+        if(min_capacity < store->fds_elements_count * 2) {
+            min_capacity = store->fds_elements_count * 2;
+        }
+
+        if(!fd_store_resize_lockless(store, min_capacity)) {
             break;
         }
     }
@@ -271,6 +325,10 @@ syscall_ret_t fd_store_duplicate_from(fd_store_t* store, uint32_t fd, int32_t mi
 }
 
 syscall_ret_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute) {
+    if(target >= FD_STORE_MAX_FDS) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
     spinlock_lock(&store->lock);
 
     if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
@@ -279,8 +337,10 @@ syscall_ret_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t tar
     }
 
     if(target >= store->fds_elements_count) {
-        spinlock_unlock(&store->lock);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+        if(!fd_store_resize_lockless(store, (size_t) target + 1)) {
+            spinlock_unlock(&store->lock);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_MFILE);
+        }
     }
 
     if(fd == target) {

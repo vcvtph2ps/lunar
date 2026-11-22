@@ -90,6 +90,12 @@ typedef struct {
     size_t fds_elements_count;
 } fd_store_t;
 
+/// @brief Number of descriptors a newly created store can hold
+#define FD_STORE_INITIAL_CAPACITY 64
+
+/// @brief Upper bound on the number of descriptors a store may grow to
+#define FD_STORE_MAX_FDS (1 << 20)
+
 /// @brief Creates a new empty file descriptor store
 fd_store_t* fd_store_create();
 
