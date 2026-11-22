@@ -197,30 +197,32 @@ vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access
     return VFS_RESULT_OK;
 }
 
-static vfs_result_t fd_store_free_fd_lockless(fd_store_t* store, uint32_t fd) {
-    bool valid = bitmap_get(store->bitmap, fd);
-    if(!valid) {
-        spinlock_unlock(&store->lock);
-        return false;
+/// @brief Removes a file descriptor from the store
+/// @return The file that was removed, or nullptr
+/// @note the files reference must be dropped once the store lock is released
+/// @note The caller must hold store->lock
+static fd_store_file_t* fd_store_free_fd_lockless(fd_store_t* store, uint32_t fd) {
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        return nullptr;
     }
 
-    fd_store_entry_t* node = &store->fds[fd];
-    if(node->file == nullptr) {
-        bitmap_set(store->bitmap, false, fd);
-        spinlock_unlock(&store->lock);
-        return false;
-    }
-
-    fd_store_file_put(node->file);
+    fd_store_file_t* file = store->fds[fd].file;
+    store->fds[fd].file = nullptr;
     bitmap_set(store->bitmap, false, fd);
-    return VFS_RESULT_OK;
+    return file;
 }
 
 bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
     spinlock_lock(&store->lock);
-    bool res = fd_store_free_fd_lockless(store, fd);
+    fd_store_file_t* file = fd_store_free_fd_lockless(store, fd);
     spinlock_unlock(&store->lock);
-    return res;
+
+    if(file == nullptr) {
+        return false;
+    }
+
+    fd_store_file_put(file);
+    return true;
 }
 
 vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd) {
@@ -256,8 +258,10 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
     }
 
     spinlock_lock(&store->lock);
+
+    fd_store_file_t* replaced = nullptr;
     if(fd != target) {
-        fd_store_free_fd_lockless(store, target);
+        replaced = fd_store_free_fd_lockless(store, target);
     }
 
     bitmap_set(store->bitmap, true, target);
@@ -271,6 +275,10 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
 
     spinlock_unlock(&store->lock);
 
+    if(replaced != nullptr) {
+        fd_store_file_put(replaced);
+    }
+
     if(fd == target) {
         fd_store_file_put(entry);
     }
@@ -279,14 +287,23 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
 }
 
 void fd_store_handle_execute(fd_store_t* store) {
-    if(store->fds != nullptr) {
-        for(size_t i = 0; i < store->fds_elements_count; i++) {
-            if(bitmap_get(store->bitmap, i) && store->fds[i].file != nullptr) {
-                if(store->fds[i].close_on_execute) {
-                    LOG_KTRC("closing cloexec fd %ld\n", i);
-                    fd_store_free_fd_lockless(store, i);
-                }
-            }
+    if(store->fds == nullptr) {
+        return;
+    }
+
+    for(size_t i = 0; i < store->fds_elements_count; i++) {
+        spinlock_lock(&store->lock);
+
+        fd_store_file_t* file = nullptr;
+        if(bitmap_get(store->bitmap, i) && store->fds[i].file != nullptr && store->fds[i].close_on_execute) {
+            LOG_KTRC("closing cloexec fd %ld\n", i);
+            file = fd_store_free_fd_lockless(store, i);
+        }
+
+        spinlock_unlock(&store->lock);
+
+        if(file != nullptr) {
+            fd_store_file_put(file);
         }
     }
 }

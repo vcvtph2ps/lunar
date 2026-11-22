@@ -20,6 +20,8 @@ typedef enum : uint8_t {
     VFS_RESULT_ERR_WOULD_BLOCK,
     VFS_RESULT_ERR_NO_SPACE,
 
+    VFS_RESULT_ERR_PIPE,
+
     VFS_RESULT_ERR_INTERRUPTED,
 
     VFS_RESULT_ERR_UNSUPPORTED,
@@ -31,7 +33,8 @@ typedef enum : uint8_t {
 typedef enum : uint8_t {
     VFS_NODE_TYPE_DIR,
     VFS_NODE_TYPE_FILE,
-    VFS_NODE_TYPE_LINK
+    VFS_NODE_TYPE_LINK,
+    VFS_NODE_TYPE_FIFO
 } vfs_node_type_t;
 
 typedef struct vfs vfs_t;

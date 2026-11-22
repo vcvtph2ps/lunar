@@ -20,7 +20,9 @@ typedef struct fd_store_file_ops fd_store_file_ops_t;
 /// @brief The backend kind of a file descriptor
 typedef enum : uint8_t {
     /// @brief Backed by a vfs node (regular file, directory, device, ...)
-    FD_STORE_FILE_TYPE_VFS_NODE
+    FD_STORE_FILE_TYPE_VFS_NODE,
+    /// @brief Backed by an unnamed pipe
+    FD_STORE_FILE_TYPE_PIPE
 } fd_store_file_type_t;
 
 /**

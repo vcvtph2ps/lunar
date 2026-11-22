@@ -48,6 +48,8 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_FS_CHDIR:      return "SYSCALL_FS_CHDIR";
         case SYSCALL_FS_GETDENTS:   return "SYSCALL_FS_GETDENTS";
         case SYSCALL_FS_READLINKAT: return "SYSCALL_FS_READLINKAT";
+        case SYSCALL_FS_FTRUNCATE:  return "SYSCALL_FS_FTRUNCATE";
+        case SYSCALL_FS_PIPE:       return "SYSCALL_FS_PIPE";
 
         default: return "Unknown syscall";
     }
@@ -77,6 +79,7 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_NOSPC:    return "ERROR_NOSPC";
         case SYSCALL_ERROR_SPIPE:    return "ERROR_SPIPE";
         case SYSCALL_ERROR_ROFS:     return "ERROR_ROFS";
+        case SYSCALL_ERROR_PIPE:     return "ERROR_PIPE";
         case SYSCALL_ERROR_RANGE:    return "ERROR_RANGE";
         case SYSCALL_ERROR_LOOP:     return "ERROR_LOOP";
         case SYSCALL_ERROR_BADFD:    return "ERROR_BADFD";
@@ -96,6 +99,7 @@ syscall_ret_t syscall_from_vfs_result(vfs_result_t result) {
         case VFS_RESULT_ERR_READ_ONLY:         return SYSCALL_RET_ERROR(SYSCALL_ERROR_ROFS);
         case VFS_RESULT_ERR_WOULD_BLOCK:       return SYSCALL_RET_ERROR(SYSCALL_ERROR_AGAIN);
         case VFS_RESULT_ERR_NO_SPACE:          return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSPC);
+        case VFS_RESULT_ERR_PIPE:              return SYSCALL_RET_ERROR(SYSCALL_ERROR_PIPE);
         case VFS_RESULT_ERR_INTERRUPTED:       return SYSCALL_RET_ERROR(SYSCALL_ERROR_INTR);
         case VFS_RESULT_ERR_UNSUPPORTED:       return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOSYS);
         case VFS_RESULT_ERR_UNSUPPORTED_IOCTL: return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOTTY);

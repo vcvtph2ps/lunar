@@ -2,6 +2,7 @@
 #include <common/fs/vfs.h>
 #include <common/log.h>
 #include <common/userspace/fd_store.h>
+#include <common/userspace/pipe.h>
 #include <common/userspace/syscall.h>
 #include <common/userspace/syscall_defs.h>
 #include <common/userspace/userptr.h>
@@ -246,6 +247,13 @@ static syscall_ret_t syscall_fs_seek(syscall_args_t* argument_data, uint32_t fd,
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
+    /// Pipes are not seekable
+    if(file->type == FD_STORE_FILE_TYPE_PIPE) {
+        LOG_UTRC("fd=%d | result=ESPIPE\n", fd);
+        fd_store_file_put(file);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_SPIPE);
+    }
+
     vfs_node_attr_t attr;
     vfs_result_t res = fd_store_file_get_attributes(file, &attr);
     if(res != VFS_RESULT_OK) {
@@ -352,38 +360,44 @@ static syscall_ret_t syscall_fs_chdir(syscall_args_t* argument_data, void* path_
     return SYSCALL_RET_VALUE(0);
 }
 
-static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
-    vfs_node_attr_t attr = { 0 };
-    vfs_result_t res = target->ops->get_attributes(target, &attr);
-    if(res != VFS_RESULT_OK) {
-        assert(false);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
-    }
-
+static syscall_ret_t stat_from_attributes(userptr_t* stat_buf, const vfs_node_attr_t* attr) {
     uapi_stat_t stat = { 0 };
-    stat.st_size = attr.size;
+    stat.st_size = attr->size;
     stat.st_nlink = 1; // @todo: implement hardlink support
-    switch(attr.type) {
+    switch(attr->type) {
         case VFS_NODE_TYPE_DIR:  stat.st_mode = UAPI_STAT_IFDIR; break;
         case VFS_NODE_TYPE_FILE: stat.st_mode = UAPI_STAT_IFREG; break;
         case VFS_NODE_TYPE_LINK: stat.st_mode = UAPI_STAT_IFLNK; break;
+        case VFS_NODE_TYPE_FIFO: stat.st_mode = UAPI_STAT_IFIFO; break;
         default:                 user_assert(false && "Invalid return value");
     }
 
-    stat.st_mode |= (attr.permissions.user) << 6;
-    stat.st_mode |= (attr.permissions.group) << 3;
-    stat.st_mode |= (attr.permissions.other) << 0;
-    stat.st_ino = attr.inode;
+    stat.st_mode |= (attr->permissions.user) << 6;
+    stat.st_mode |= (attr->permissions.group) << 3;
+    stat.st_mode |= (attr->permissions.other) << 0;
+    stat.st_ino = attr->inode;
 
     if(!userptr_write_full(stat_buf, &stat)) {
-        vfs_node_put(target);
-        heap_free(stat_buf, sizeof(userptr_t*));
+        heap_free(stat_buf, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
     }
 
-    vfs_node_put(target);
-    heap_free(stat_buf, sizeof(userptr_t*));
+    heap_free(stat_buf, sizeof(userptr_t));
     return SYSCALL_RET_VALUE(0);
+}
+
+static syscall_ret_t stat_internal(userptr_t* stat_buf, vfs_node_t* target) {
+    vfs_node_attr_t attr = { 0 };
+    vfs_result_t res = target->ops->get_attributes(target, &attr);
+    vfs_node_put(target);
+
+    if(res != VFS_RESULT_OK) {
+        assert(false);
+        heap_free(stat_buf, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    return stat_from_attributes(stat_buf, &attr);
 }
 
 static void log_dir_fd(uint32_t fd) {
@@ -440,18 +454,20 @@ static syscall_ret_t syscall_fs_stat(syscall_args_t* argument_data, uint32_t fd,
     fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
     if(file == nullptr) {
         LOG_UTRC("fd=%d | result=EBADF\n", fd);
+        heap_free(stat_buf, sizeof(userptr_t));
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    vfs_node_t* node = fd_store_file_get_node(file);
-    if(node == nullptr) {
-        fd_store_file_put(file);
-        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    vfs_node_attr_t attr = { 0 };
+    vfs_result_t res = fd_store_file_get_attributes(file, &attr);
+    fd_store_file_put(file);
+
+    if(syscall_from_vfs_result(res).is_error) {
+        heap_free(stat_buf, sizeof(userptr_t));
+        return syscall_from_vfs_result(res);
     }
 
-    vfs_node_get(node);
-    fd_store_file_put(file);
-    return stat_internal(stat_buf, node);
+    return stat_from_attributes(stat_buf, &attr);
 }
 
 SYSCALL_DEFINE_TRACED(syscall_fs_stat_at, SYSCALL_FS_STAT_AT, void, syscall_fs_stat_at_trace, uint32_t, fd, void*, path, void*, stat, uint32_t, flags);
@@ -823,6 +839,50 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
 
     return syscall_from_vfs_result(result);
+}
+
+SYSCALL_DEFINE(syscall_fs_pipe, SYSCALL_FS_PIPE, void, void*, fds, int, flags);
+static syscall_ret_t syscall_fs_pipe(syscall_args_t* argument_data, void* fds_ptr, int flags) {
+    (void) argument_data;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    if((flags & ~(UAPI_O_NONBLOCK | UAPI_O_CLOEXEC)) != 0) {
+        LOG_UTRC("fds=0x%lx, flags=%x | result=EINVAL\n", (uintptr_t) fds_ptr, flags);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    userptr_t* ufds = userptr_create((uintptr_t) fds_ptr, sizeof(int) * 2);
+    if(ufds == nullptr) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    pipe_t* pipe = pipe_create();
+    if(pipe == nullptr) {
+        heap_free(ufds, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    fd_store_flags_t fd_flags = (fd_store_flags_t) { .non_blocking = (flags & UAPI_O_NONBLOCK) != 0 };
+    bool close_on_execute = (flags & UAPI_O_CLOEXEC) != 0;
+
+    fd_store_file_t* read_file = fd_store_file_create(FD_STORE_FILE_TYPE_PIPE, &g_pipe_file_ops, pipe, (fd_store_access_t) { .read = true }, fd_flags);
+    fd_store_file_t* write_file = fd_store_file_create(FD_STORE_FILE_TYPE_PIPE, &g_pipe_file_ops, pipe, (fd_store_access_t) { .write = true }, fd_flags);
+
+    uint32_t read_fd = fd_store_insert_file(process->fd_store, read_file, close_on_execute);
+    uint32_t write_fd = fd_store_insert_file(process->fd_store, write_file, close_on_execute);
+
+    int fds[2] = { (int) read_fd, (int) write_fd };
+    if(!userptr_write_full(ufds, fds)) {
+        fd_store_free_fd(process->fd_store, read_fd);
+        fd_store_free_fd(process->fd_store, write_fd);
+        heap_free(ufds, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    heap_free(ufds, sizeof(userptr_t));
+    LOG_UTRC("fds=0x%lx, flags=%x | result=%d,%d\n", (uintptr_t) fds_ptr, flags, fds[0], fds[1]);
+    return SYSCALL_RET_VOID();
 }
 
 SYSCALL_DEFINE(syscall_sys_ioctl, SYSCALL_FS_IOCTL, void, int, fd, unsigned long, request, void*, buffer);

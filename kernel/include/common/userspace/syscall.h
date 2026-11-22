@@ -55,6 +55,7 @@ typedef enum : uint64_t {
     SYSCALL_FS_GETDENTS = 54,
     SYSCALL_FS_READLINKAT = 55,
     SYSCALL_FS_FTRUNCATE = 56,
+    SYSCALL_FS_PIPE = 57,
 
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;
@@ -77,8 +78,9 @@ typedef enum : int64_t {
     SYSCALL_ERROR_NOSYS = 38, // Function not implemented.
     SYSCALL_ERROR_NOTTY = 25, // Inappropriate I/O control operation
     SYSCALL_ERROR_NOSPC = 28, // No space left on device (ENOSPC)
-    SYSCALL_ERROR_SPIPE = 29, // Illegal seek
+    SYSCALL_ERROR_SPIPE = 29, // Illegal seek (ESPIPE)
     SYSCALL_ERROR_ROFS = 30, // Read-only file system
+    SYSCALL_ERROR_PIPE = 32, // Broken pipe (EPIPE)
     SYSCALL_ERROR_RANGE = 34, // Out of range
     SYSCALL_ERROR_LOOP = 40, // Too many levels of symbolic links
     SYSCALL_ERROR_BADFD = 77, // Bad file descriptor state
