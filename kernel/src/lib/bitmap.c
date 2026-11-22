@@ -56,7 +56,7 @@ bool bitmap_get(bitmap_t* bitmap, size_t bit_index) {
     size_t word_index = bit_index / 64;
     size_t bit_offset = bit_index % 64;
 
-    if(word_index > bitmap->word_count) {
+    if(word_index >= bitmap->word_count) {
         return false;
     }
 

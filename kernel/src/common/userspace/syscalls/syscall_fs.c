@@ -134,7 +134,7 @@ static syscall_ret_t syscall_fs_read(syscall_args_t* argument_data, uint32_t fd,
     }
 
     fd_store_access_t access;
-    if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.read) {
+    if(fd_store_get_access(process->fd_store, fd, &access).is_error || !access.read) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.read=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
         fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
@@ -179,7 +179,7 @@ static syscall_ret_t syscall_fs_write(syscall_args_t* argument_data, uint32_t fd
     }
 
     fd_store_access_t access;
-    if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.write) {
+    if(fd_store_get_access(process->fd_store, fd, &access).is_error || !access.write) {
         LOG_UTRC("fd=%d, buffer=0x%lx, count=%ld, access.write=false | result=EBADF\n", fd, (uintptr_t) buffer_ptr, count);
         fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
@@ -552,13 +552,7 @@ static syscall_ret_t syscall_fs_dup(syscall_args_t* argument_data, uint32_t fd) 
     // uint32_t flags = args->arg2;
     //
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    uint32_t new_fd;
-    vfs_result_t result = fd_store_duplicate(process->fd_store, fd, &new_fd);
-    if(syscall_from_vfs_result(result).is_error) {
-        return syscall_from_vfs_result(result);
-    }
-
-    return SYSCALL_RET_VALUE(new_fd);
+    return fd_store_duplicate(process->fd_store, fd);
 }
 
 SYSCALL_DEFINE(syscall_fs_dup2, SYSCALL_FS_DUP2, void, uint32_t, fd, uint32_t, flags, uint32_t, newfd);
@@ -566,12 +560,69 @@ static syscall_ret_t syscall_fs_dup2(syscall_args_t* argument_data, uint32_t fd,
     (void) argument_data;
 
     process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
-    vfs_result_t result = fd_store_duplicate_to(process->fd_store, fd, newfd, (flags & UAPI_O_CLOEXEC) != 0);
-    if(syscall_from_vfs_result(result).is_error) {
-        return syscall_from_vfs_result(result);
-    }
+    return fd_store_duplicate_to(process->fd_store, fd, newfd, (flags & UAPI_O_CLOEXEC) != 0);
+}
 
-    return SYSCALL_RET_VALUE(0);
+SYSCALL_DEFINE(syscall_fs_fcntl, SYSCALL_FS_FCNTL, int32_t, int32_t, fd, int32_t, command, int64_t, argument);
+static syscall_ret_t syscall_fs_fcntl(syscall_args_t* argument_data, int32_t fd, int32_t command, int64_t argument) {
+    (void) argument_data;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    switch(command) {
+        case UAPI_F_DUPFD:
+        case UAPI_F_DUPFD_CLOEXEC: {
+            if(argument < 0 || argument > INT32_MAX) {
+                return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+            }
+
+            return fd_store_duplicate_from(process->fd_store, (uint32_t) fd, (int32_t) argument, command == UAPI_F_DUPFD_CLOEXEC);
+        }
+        case UAPI_F_GETFD: {
+            bool close_on_execute;
+            syscall_ret_t result = fd_store_get_close_on_execute(process->fd_store, (uint32_t) fd, &close_on_execute);
+            if(result.is_error) {
+                return result;
+            }
+
+            return SYSCALL_RET_VALUE(close_on_execute ? UAPI_FD_CLOEXEC : 0);
+        }
+        case UAPI_F_SETFD: return fd_store_set_close_on_execute(process->fd_store, (uint32_t) fd, (argument & UAPI_FD_CLOEXEC) != 0);
+        case UAPI_F_GETFL: {
+            fd_store_access_t access;
+            fd_store_flags_t flags;
+            syscall_ret_t result = fd_store_get_status_flags(process->fd_store, (uint32_t) fd, &access, &flags);
+            if(result.is_error) {
+                return result;
+            }
+
+            int32_t status = 0;
+            if(access.read && access.write) {
+                status |= UAPI_O_RDWR;
+            } else if(access.write) {
+                status |= UAPI_O_WRONLY;
+            } else {
+                status |= UAPI_O_RDONLY;
+            }
+            if(flags.append) {
+                status |= UAPI_O_APPEND;
+            }
+            if(flags.non_blocking) {
+                status |= UAPI_O_NONBLOCK;
+            }
+
+            return SYSCALL_RET_VALUE(status);
+        }
+        case UAPI_F_SETFL: {
+            fd_store_flags_t flags = {
+                .non_blocking = (argument & UAPI_O_NONBLOCK) != 0,
+                .append = (argument & UAPI_O_APPEND) != 0,
+            };
+
+            return fd_store_set_status_flags(process->fd_store, (uint32_t) fd, flags);
+        }
+        default: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
 }
 
 SYSCALL_DEFINE(syscall_fs_getdents, SYSCALL_FS_GETDENTS, uint64_t, uint32_t, fd, void*, buffer, size_t, count);
@@ -819,7 +870,7 @@ static syscall_ret_t syscall_fs_ftruncate(syscall_args_t* argument_data, uint32_
     }
 
     fd_store_access_t access;
-    if(fd_store_get_access(process->fd_store, fd, &access) != VFS_RESULT_OK || !access.write) {
+    if(fd_store_get_access(process->fd_store, fd, &access).is_error || !access.write) {
         LOG_UTRC("fd=%d, size=%ld, access.write=false | result=EBADF\n", fd, size);
         fd_store_file_put(file);
         return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);

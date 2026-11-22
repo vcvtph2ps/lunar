@@ -1,6 +1,7 @@
 #pragma once
 #include <common/fs/vfs.h>
 #include <common/sync/spinlock.h>
+#include <common/userspace/syscall.h>
 #include <lib/bitmap.h>
 #include <stdint.h>
 
@@ -140,13 +141,28 @@ fd_store_file_t* fd_store_file_get(fd_store_file_t* file);
 void fd_store_file_put(fd_store_file_t* file);
 
 /// @brief Get just the access of a file descriptor
-vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access);
+syscall_ret_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access);
 
 /// @brief Duplicate a file descriptor, allocating a free fd number
-vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd);
+syscall_ret_t fd_store_duplicate(fd_store_t* store, uint32_t fd);
+
+/// @brief Duplicate a file descriptor at the lowest free fd number >= min_fd
+syscall_ret_t fd_store_duplicate_from(fd_store_t* store, uint32_t fd, int32_t min_fd, bool close_on_execute);
 
 /// @brief Duplicate a file descriptor, at a given fd number
-vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute);
+syscall_ret_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute);
+
+/// @brief Get whether a file descriptor is marked close on execute
+syscall_ret_t fd_store_get_close_on_execute(fd_store_t* store, uint32_t fd, bool* out_close_on_execute);
+
+/// @brief Set whether a file descriptor is marked close on execute
+syscall_ret_t fd_store_set_close_on_execute(fd_store_t* store, uint32_t fd, bool close_on_execute);
+
+/// @brief Get the status flags and access mode of a file descriptor
+syscall_ret_t fd_store_get_status_flags(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access, fd_store_flags_t* out_flags);
+
+/// @brief Set the status flags of the open file description referred to by a file descriptor
+syscall_ret_t fd_store_set_status_flags(fd_store_t* store, uint32_t fd, fd_store_flags_t flags);
 
 /// @brief Performs IO on a file descriptor's file
 vfs_result_t fd_store_file_perform_io(fd_store_file_t* file, io_request_t* request);

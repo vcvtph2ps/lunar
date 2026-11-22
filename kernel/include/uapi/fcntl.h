@@ -27,6 +27,15 @@
 #define UAPI_O_RSYNC UAPI_O_SYNC
 #define UAPI_O_ACCMODE (UAPI_O_RDWR | UAPI_O_PATH)
 
+#define UAPI_F_DUPFD 0
+#define UAPI_F_GETFD 1
+#define UAPI_F_SETFD 2
+#define UAPI_F_GETFL 3
+#define UAPI_F_SETFL 4
+#define UAPI_F_DUPFD_CLOEXEC 1030
+
+#define UAPI_FD_CLOEXEC 1
+
 #define UAPI_AT_FDCWD (-100)
 
 #define UAPI_AT_SYMLINK_NOFOLLOW (1 << 8)

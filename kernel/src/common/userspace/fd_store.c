@@ -169,7 +169,7 @@ uint32_t fd_store_insert_file_at(fd_store_t* store, fd_store_file_t* file, uint3
 fd_store_file_t* fd_store_get_fd(fd_store_t* store, uint32_t fd, bool* out_close_on_execute) {
     spinlock_lock(&store->lock);
 
-    bool valid = bitmap_get(store->bitmap, fd);
+    bool valid = fd < store->fds_elements_count && bitmap_get(store->bitmap, fd);
     if(!valid) {
         spinlock_unlock(&store->lock);
         return nullptr;
@@ -184,17 +184,17 @@ fd_store_file_t* fd_store_get_fd(fd_store_t* store, uint32_t fd, bool* out_close
     return file;
 }
 
-vfs_result_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access) {
+syscall_ret_t fd_store_get_access(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access) {
     spinlock_lock(&store->lock);
 
     if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
         spinlock_unlock(&store->lock);
-        return VFS_RESULT_ERR_NOT_FOUND;
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
     *out_access = store->fds[fd].file->access;
     spinlock_unlock(&store->lock);
-    return VFS_RESULT_OK;
+    return SYSCALL_RET_VALUE(0);
 }
 
 /// @brief Removes a file descriptor from the store
@@ -225,53 +225,77 @@ bool fd_store_free_fd(fd_store_t* store, uint32_t fd) {
     return true;
 }
 
-vfs_result_t fd_store_duplicate(fd_store_t* store, uint32_t fd, uint32_t* out_new_fd) {
-    // @note: we "leak" the ref here, since we do the deref on close
-    fd_store_file_t* file = fd_store_get_fd(store, fd, nullptr);
-    if(file == nullptr) {
-        return VFS_RESULT_ERR_NOT_FOUND;
+syscall_ret_t fd_store_duplicate(fd_store_t* store, uint32_t fd) {
+    return fd_store_duplicate_from(store, fd, 0, false);
+}
+
+syscall_ret_t fd_store_duplicate_from(fd_store_t* store, uint32_t fd, int32_t min_fd, bool close_on_execute) {
+    if(min_fd < 0) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
 
     spinlock_lock(&store->lock);
 
-    size_t new_fd = bitmap_find_free(store->bitmap);
-    if(new_fd == SIZE_MAX) {
-        // @todo: reallocate
-        user_assert(false && "fd_store out of size");
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
+    if((size_t) min_fd >= store->fds_elements_count) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    size_t new_fd = SIZE_MAX;
+    for(size_t i = (size_t) min_fd; i < store->fds_elements_count; i++) {
+        if(!bitmap_get(store->bitmap, i)) {
+            new_fd = i;
+            break;
+        }
+    }
+
+    if(new_fd == SIZE_MAX) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_MFILE);
+    }
+
+    /// Share the open file description with the new descriptor
+    fd_store_file_t* file = fd_store_file_get(store->fds[fd].file);
     store->fds[new_fd].file = file;
-    store->fds[new_fd].close_on_execute = false; // POSIX dup clears cloexec
+    store->fds[new_fd].close_on_execute = close_on_execute;
 
     bitmap_set(store->bitmap, true, new_fd);
     spinlock_unlock(&store->lock);
 
-    *out_new_fd = (uint32_t) new_fd;
-    return VFS_RESULT_OK;
+    return SYSCALL_RET_VALUE(new_fd);
 }
 
-vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute) {
-    // @note: we "leak" the ref here, since we do the deref on close
-    fd_store_file_t* entry = fd_store_get_fd(store, fd, nullptr);
-    if(entry == nullptr) {
-        return VFS_RESULT_ERR_NOT_FOUND;
-    }
-
+syscall_ret_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t target, bool close_on_execute) {
     spinlock_lock(&store->lock);
 
-    fd_store_file_t* replaced = nullptr;
-    if(fd != target) {
-        replaced = fd_store_free_fd_lockless(store, target);
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
+
+    if(target >= store->fds_elements_count) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    if(fd == target) {
+        /// dup2() leaves the descriptor untouched when both numbers are equal
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    /// Share the open file description with the target descriptor
+    fd_store_file_t* entry = fd_store_file_get(store->fds[fd].file);
+    fd_store_file_t* replaced = fd_store_free_fd_lockless(store, target);
 
     bitmap_set(store->bitmap, true, target);
-
     store->fds[target].file = entry;
-    if(fd == target) {
-        store->fds[target].close_on_execute = false;
-    } else {
-        store->fds[target].close_on_execute = close_on_execute;
-    }
+    store->fds[target].close_on_execute = close_on_execute;
 
     spinlock_unlock(&store->lock);
 
@@ -279,11 +303,60 @@ vfs_result_t fd_store_duplicate_to(fd_store_t* store, uint32_t fd, uint32_t targ
         fd_store_file_put(replaced);
     }
 
-    if(fd == target) {
-        fd_store_file_put(entry);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t fd_store_get_close_on_execute(fd_store_t* store, uint32_t fd, bool* out_close_on_execute) {
+    spinlock_lock(&store->lock);
+
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
     }
 
-    return VFS_RESULT_OK;
+    *out_close_on_execute = store->fds[fd].close_on_execute;
+    spinlock_unlock(&store->lock);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t fd_store_set_close_on_execute(fd_store_t* store, uint32_t fd, bool close_on_execute) {
+    spinlock_lock(&store->lock);
+
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    store->fds[fd].close_on_execute = close_on_execute;
+    spinlock_unlock(&store->lock);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t fd_store_get_status_flags(fd_store_t* store, uint32_t fd, fd_store_access_t* out_access, fd_store_flags_t* out_flags) {
+    spinlock_lock(&store->lock);
+
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    *out_access = store->fds[fd].file->access;
+    *out_flags = store->fds[fd].file->flags;
+    spinlock_unlock(&store->lock);
+    return SYSCALL_RET_VALUE(0);
+}
+
+syscall_ret_t fd_store_set_status_flags(fd_store_t* store, uint32_t fd, fd_store_flags_t flags) {
+    spinlock_lock(&store->lock);
+
+    if(fd >= store->fds_elements_count || !bitmap_get(store->bitmap, fd)) {
+        spinlock_unlock(&store->lock);
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+    }
+
+    store->fds[fd].file->flags = flags;
+    spinlock_unlock(&store->lock);
+    return SYSCALL_RET_VALUE(0);
 }
 
 void fd_store_handle_execute(fd_store_t* store) {

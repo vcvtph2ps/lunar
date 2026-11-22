@@ -74,6 +74,7 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_NOTDIR:   return "ERROR_NOTDIR";
         case SYSCALL_ERROR_ISDIR:    return "ERROR_ISDIR";
         case SYSCALL_ERROR_INVAL:    return "ERROR_INVAL";
+        case SYSCALL_ERROR_MFILE:    return "ERROR_MFILE";
         case SYSCALL_ERROR_NOSYS:    return "ERROR_NOSYS";
         case SYSCALL_ERROR_NOTTY:    return "ERROR_NOTTY";
         case SYSCALL_ERROR_NOSPC:    return "ERROR_NOSPC";
