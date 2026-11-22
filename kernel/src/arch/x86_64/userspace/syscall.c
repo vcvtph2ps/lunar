@@ -73,7 +73,7 @@ syscall_ret_t x86_64_dispatch_syscall(x86_64_syscall_frame_t* frame) {
     };
 
     /// If a signal is pending set up its handler and return to it via iretq instead of sysret
-    if(signal_deliver_pending(&interrupt_frame)) {
+    if(signal_userspace_prepare_return(&interrupt_frame)) {
         signal_arch_enter_handler(&interrupt_frame);
     }
 

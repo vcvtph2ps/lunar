@@ -205,8 +205,7 @@ void riscv64_dispatch_interrupt(arch_interrupt_frame_t* frame) {
         }
 
         if(is_user) {
-            vm_fault_process_pending();
-            signal_deliver_pending(frame);
+            (void) signal_userspace_prepare_return(frame);
         }
     }
 }

@@ -84,6 +84,10 @@ void signal_thread(thread_t* thread, int signal_number, uapi_signal_info_t* info
 /// @brief Delivers a pending signal for the current thread, if any
 /// @return true if a user handler was set up on @p frame, false otherwise
 bool signal_deliver_pending(arch_interrupt_frame_t* frame);
+
+/// @brief Complete pending page fault fix up and deliver any pending signals
+bool signal_userspace_prepare_return(arch_interrupt_frame_t* frame);
+
 void signal_arch_setup_frame(arch_interrupt_frame_t* frame, uapi_signal_info_t* signal_info, uapi_signal_handler_t* handler);
 
 /// @brief Returns to userspace through @p frame (which must have been set up for a handler) via iretq

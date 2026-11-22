@@ -40,11 +40,7 @@ static void handle_page_fault(arch_interrupt_frame_t* frame, uint64_t cause) {
         arch_panic_int(frame);
     }
 
-    vm_fault_process_pending();
-
-    if(signal_deliver_pending(frame)) {
-        signal_arch_enter_handler(frame);
-    }
+    (void) signal_userspace_prepare_return(frame);
 }
 
 void riscv64_trap_dispatch(arch_interrupt_frame_t* frame) {

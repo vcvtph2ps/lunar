@@ -8,6 +8,7 @@
 #include <common/userspace/signal.h>
 #include <lib/helpers.h>
 #include <lib/list.h>
+#include <memory/vm.h>
 
 /// @brief Applies the process wide default action for a signal that has no handler
 static void signal_apply_default_action(process_t* process, int signal_number) {
@@ -101,4 +102,9 @@ bool signal_deliver_pending(arch_interrupt_frame_t* frame) {
     spinlock_unlock(&current_thread->signal.lock);
 
     return true;
+}
+
+bool signal_userspace_prepare_return(arch_interrupt_frame_t* frame) {
+    vm_fault_process_pending();
+    return signal_deliver_pending(frame);
 }

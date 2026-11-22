@@ -45,7 +45,7 @@ syscall_ret_t riscv64_dispatch_syscall(arch_interrupt_regs_t* regs) {
     regs->registers[RISCV64_REG_A1] = ret.is_error;
 
     /// If a signal is pending set up its handler and return to it directly
-    if(signal_deliver_pending(regs)) {
+    if(signal_userspace_prepare_return(regs)) {
         signal_arch_enter_handler(regs);
     }
 
