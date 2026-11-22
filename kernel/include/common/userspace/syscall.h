@@ -21,6 +21,7 @@ typedef enum : int64_t {
     SYSCALL_ERROR_CHILD = 10, // No child processes (ECHILD)
     SYSCALL_ERROR_AGAIN = 11, // Try again (EAGAIN)
     SYSCALL_ERROR_NOMEM = 12, // Out of memory
+    SYSCALL_ERROR_ACCESS = 13, // Permission denied (EACCES)
     SYSCALL_ERROR_FAULT = 14, // Bad address
     SYSCALL_ERROR_EXIST = 17, // File exists (EEXIST)
     SYSCALL_ERROR_NOTDIR = 20, // Not a directory (ENOTDIR)
@@ -103,6 +104,8 @@ typedef enum : uint64_t {
     SYSCALL_FS_FTRUNCATE = 56,
     SYSCALL_FS_PIPE = 57,
     SYSCALL_FS_FCNTL = 58,
+    SYSCALL_FS_ACCESS = 59,
+    SYSCALL_FS_FACCESSAT = 60,
 
     SYSCALL_HIGHEST_NR
 } syscall_nr_t;

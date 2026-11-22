@@ -50,6 +50,8 @@ static const char* userspace_syscall_number_to_string(syscall_nr_t nr) { // NOLI
         case SYSCALL_FS_READLINKAT: return "SYSCALL_FS_READLINKAT";
         case SYSCALL_FS_FTRUNCATE:  return "SYSCALL_FS_FTRUNCATE";
         case SYSCALL_FS_PIPE:       return "SYSCALL_FS_PIPE";
+        case SYSCALL_FS_ACCESS:     return "SYSCALL_FS_ACCESS";
+        case SYSCALL_FS_FACCESSAT:  return "SYSCALL_FS_FACCESSAT";
 
         default: return "Unknown syscall";
     }
@@ -69,6 +71,7 @@ static const char* userspace_syscall_ret_to_string(syscall_ret_t ret) { // NOLIN
         case SYSCALL_ERROR_CHILD:    return "ERROR_CHILD";
         case SYSCALL_ERROR_AGAIN:    return "ERROR_AGAIN";
         case SYSCALL_ERROR_NOMEM:    return "ERROR_NOMEM";
+        case SYSCALL_ERROR_ACCESS:   return "ERROR_ACCESS";
         case SYSCALL_ERROR_FAULT:    return "ERROR_FAULT";
         case SYSCALL_ERROR_EXIST:    return "ERROR_EXIST";
         case SYSCALL_ERROR_NOTDIR:   return "ERROR_NOTDIR";

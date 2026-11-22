@@ -17,6 +17,7 @@
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
 #include <uapi/stat.h>
+#include <uapi/unistd.h>
 
 #include "common/fs/io.h"
 
@@ -623,6 +624,208 @@ static syscall_ret_t syscall_fs_fcntl(syscall_args_t* argument_data, int32_t fd,
         }
         default: return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
     }
+}
+
+/// @brief Convert posix access() mode bits into VFS permission bits
+static vfs_permissions_t permissions_from_access_mode(int mode) {
+    vfs_permissions_t required = 0;
+    if((mode & UAPI_R_OK) != 0) {
+        required |= VFS_PERM_READ;
+    }
+    if((mode & UAPI_W_OK) != 0) {
+        required |= VFS_PERM_WRITE;
+    }
+    if((mode & UAPI_X_OK) != 0) {
+        required |= VFS_PERM_EXECUTE;
+    }
+    return required;
+}
+
+static void log_access_modes(int mode) {
+    static const struct {
+        int bit;
+        const char* name;
+    } access_modes[] = {
+        { UAPI_R_OK, "R_OK" },
+        { UAPI_W_OK, "W_OK" },
+        { UAPI_X_OK, "X_OK" },
+    };
+
+    if(mode == UAPI_F_OK) {
+        log_print_lockless(LOG_LEVEL_STRC, "F_OK");
+        return;
+    }
+
+    bool first = true;
+    for(size_t i = 0; i < sizeof(access_modes) / sizeof(access_modes[0]); i++) {
+        if((mode & access_modes[i].bit) == 0) {
+            continue;
+        }
+        log_print_lockless(LOG_LEVEL_STRC, "%s%s", first ? "" : "|", access_modes[i].name);
+        first = false;
+    }
+}
+
+static syscall_ret_t access_check_node(vfs_node_t* node, int mode) {
+    /// F_OK only checks whether the path resolves to a file
+    if(mode == UAPI_F_OK) {
+        vfs_node_put(node);
+        return SYSCALL_RET_VALUE(0);
+    }
+
+    vfs_node_attr_t attr = { 0 };
+    vfs_result_t result = vfs_get_attributes_node(node, &attr);
+    vfs_node_put(node);
+
+    if(result != VFS_RESULT_OK) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    // @todo: actually implement permissions in a meaningful way
+    vfs_permissions_t required = permissions_from_access_mode(mode);
+    if((attr.permissions.user & required) != required) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_ACCESS);
+    }
+
+    return SYSCALL_RET_VALUE(0);
+}
+
+SYSCALL_DEFINE_TRACED(syscall_fs_access, SYSCALL_FS_ACCESS, void, syscall_fs_access_trace, void*, path, int, mode);
+static void syscall_fs_access_trace(syscall_args_t* argument_data, void* path, int mode) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "path=0x%lx, mode=[", (unsigned long) (uintptr_t) path);
+    log_access_modes(mode);
+    log_print_lockless(LOG_LEVEL_STRC, "]\n");
+}
+
+static syscall_ret_t syscall_fs_access(syscall_args_t* argument_data, void* path_ptr, int mode) {
+    (void) argument_data;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    if((mode & ~(UAPI_R_OK | UAPI_W_OK | UAPI_X_OK)) != 0) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t path_size = upath->size + 1;
+    char* path = heap_alloc(path_size);
+    if(path == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read_full(upath, path)) {
+        heap_free(path, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    path[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
+
+    vfs_node_t* node = nullptr;
+    /// access() follows symlinks, unlike lstat()
+    vfs_result_t result = vfs_lookup(&VFS_MAKE_REL_PATH(process->current_working_dir, path), true, &node);
+    if(syscall_from_vfs_result(result).is_error) {
+        LOG_UTRC("path=%s, mode=%d | result=%d\n", path, mode, result);
+        heap_free(path, path_size);
+        return syscall_from_vfs_result(result);
+    }
+
+    syscall_ret_t ret = access_check_node(node, mode);
+    LOG_UTRC("path=%s, mode=%d | result=%d\n", path, mode, (int) ret.err);
+    heap_free(path, path_size);
+    return ret;
+}
+
+SYSCALL_DEFINE_TRACED(syscall_fs_faccessat, SYSCALL_FS_FACCESSAT, void, syscall_fs_faccessat_trace, uint32_t, fd, void*, path, int, mode, uint32_t, flags);
+static void syscall_fs_faccessat_trace(syscall_args_t* argument_data, uint32_t fd, void* path, int mode, uint32_t flags) {
+    (void) argument_data;
+
+    log_print_lockless(LOG_LEVEL_STRC, "fd=");
+    log_dir_fd(fd);
+    log_print_lockless(LOG_LEVEL_STRC, ", path=0x%lx, mode=[", (unsigned long) (uintptr_t) path);
+    log_access_modes(mode);
+    log_print_lockless(LOG_LEVEL_STRC, "], flags=[");
+    log_at_flags(flags);
+    log_print_lockless(LOG_LEVEL_STRC, "]\n");
+}
+
+static syscall_ret_t syscall_fs_faccessat(syscall_args_t* argument_data, uint32_t fd, void* path_ptr, int mode, uint32_t flags) {
+    (void) argument_data;
+
+    process_t* process = CPU_LOCAL_GET_CURRENT_THREAD()->common.process;
+
+    if((mode & ~(UAPI_R_OK | UAPI_W_OK | UAPI_X_OK)) != 0) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_INVAL);
+    }
+
+    userptr_t* upath = userptr_create_string((uintptr_t) path_ptr, UAPI_LIMITS_PATH_MAX - 1);
+    if(!upath) {
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_TOO_BIG);
+    }
+
+    size_t path_size = upath->size + 1;
+    char* pathname = heap_alloc(path_size);
+    if(pathname == nullptr) {
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_NOMEM);
+    }
+
+    if(upath->size != 0 && !userptr_read_full(upath, pathname)) {
+        heap_free(pathname, path_size);
+        heap_free(upath, sizeof(userptr_t));
+        return SYSCALL_RET_ERROR(SYSCALL_ERROR_FAULT);
+    }
+
+    pathname[upath->size] = '\0';
+    heap_free(upath, sizeof(userptr_t));
+
+    vfs_path_t vfs_path;
+    vfs_path.rel_path = pathname;
+
+    if(pathname[0] == '/') {
+        vfs_path.node = nullptr;
+    } else if(fd == (uint32_t) UAPI_AT_FDCWD) {
+        vfs_node_get(process->current_working_dir);
+        vfs_path.node = process->current_working_dir;
+    } else {
+        fd_store_file_t* file = fd_store_get_fd(process->fd_store, fd, nullptr);
+        if(file == nullptr) {
+            LOG_UTRC("fd=%u | result=EBADF\n", fd);
+            heap_free(pathname, path_size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+        }
+        vfs_node_t* dir_node = fd_store_file_get_node(file);
+        if(dir_node == nullptr) {
+            fd_store_file_put(file);
+            heap_free(pathname, path_size);
+            return SYSCALL_RET_ERROR(SYSCALL_ERROR_BADF);
+        }
+        vfs_node_get(dir_node);
+        vfs_path.node = dir_node;
+        fd_store_file_put(file);
+    }
+
+    vfs_node_t* node = nullptr;
+    /// faccessat() follows symlinks unless AT_SYMLINK_NOFOLLOW is passed
+    vfs_result_t result = vfs_lookup(&vfs_path, (flags & UAPI_AT_SYMLINK_NOFOLLOW) == 0, &node);
+    if(vfs_path.node != nullptr) {
+        vfs_node_put(vfs_path.node);
+    }
+    heap_free(pathname, path_size);
+
+    if(syscall_from_vfs_result(result).is_error) {
+        return syscall_from_vfs_result(result);
+    }
+
+    return access_check_node(node, mode);
 }
 
 SYSCALL_DEFINE(syscall_fs_getdents, SYSCALL_FS_GETDENTS, uint64_t, uint32_t, fd, void*, buffer, size_t, count);
