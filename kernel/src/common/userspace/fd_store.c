@@ -308,6 +308,27 @@ void fd_store_handle_execute(fd_store_t* store) {
     }
 }
 
+void fd_store_close_all(fd_store_t* store) {
+    if(store == nullptr || store->fds == nullptr) {
+        return;
+    }
+
+    for(size_t i = 0; i < store->fds_elements_count; i++) {
+        spinlock_lock(&store->lock);
+
+        fd_store_file_t* file = nullptr;
+        if(bitmap_get(store->bitmap, i) && store->fds[i].file != nullptr) {
+            file = fd_store_free_fd_lockless(store, i);
+        }
+
+        spinlock_unlock(&store->lock);
+
+        if(file != nullptr) {
+            fd_store_file_put(file);
+        }
+    }
+}
+
 vfs_result_t fd_store_file_perform_io(fd_store_file_t* file, io_request_t* request) {
     if(file == nullptr || file->ops == nullptr || file->ops->perform_io == nullptr) {
         return VFS_RESULT_ERR_UNSUPPORTED;

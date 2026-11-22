@@ -353,6 +353,11 @@ void process_kill(process_t* process, process_status_state_t state, int32_t exit
     }
     spinlock_no_dpc_unlock(&process->thread_list_lock);
 
+    /// fds are closed when the process exits
+    if(process->fd_store != nullptr) {
+        fd_store_close_all(process->fd_store);
+    }
+
     /// A killed process leaves its process group, destroying the group once it is the last member
     process_group_leave(process);
 

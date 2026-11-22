@@ -102,6 +102,9 @@ fd_store_t* fd_store_clone(fd_store_t* parent_store);
 /// @brief Closes all file descriptors marked as close on execute
 void fd_store_handle_execute(fd_store_t* store);
 
+/// @brief Closes every file descriptor in the store, releasing their references
+void fd_store_close_all(fd_store_t* store);
+
 /// @brief Creates a new file object with a custom backend
 /// @param data Backend-private state, released through the backend's release operation
 /// @return A file with a reference count of 1
