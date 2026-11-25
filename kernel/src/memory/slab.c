@@ -13,27 +13,33 @@ static list_t g_slab_caches = LIST_INIT;
 static slab_cache_t g_alloc_cache;
 static slab_cache_t g_alloc_magazine;
 
+static inline size_t slab_cache_object_count(const slab_cache_t* cache) {
+    return (cache->slab_size - sizeof(slab_t)) / cache->object_align;
+}
+
 static slab_t* slab_cache_create_slab(slab_cache_t* cache) {
     virt_addr_t block = (virt_addr_t) vm_map_anon_aligned(g_vm_global_address_space, VM_NO_HINT, cache->slab_size, cache->slab_align, VM_PROT_RW, VM_CACHE_NORMAL, VM_FLAG_NONE);
-    slab_t* slab = (slab_t*) ((block + cache->slab_size) - sizeof(slab_t));
+    if(block == 0) {
+        return nullptr;
+    }
+
+    slab_t* slab = (slab_t*) ALIGN_DOWN(block + cache->slab_size - sizeof(slab_t), alignof(slab_t));
     slab->cache = cache;
     slab->buffer = block;
     slab->free_list = nullptr;
     slab->free_count = 0;
 
-    size_t slab_size = cache->slab_size - sizeof(slab_t);
-    assert(slab_size / cache->object_size > 0);
+    size_t object_count = slab_cache_object_count(cache);
+    assert(object_count > 0 && "slab must be able to hold at least one object");
 
     // Initialize the free list for the slab.
-    size_t object_count = slab_size / cache->object_size;
     for(size_t i = 0; i < object_count; i++) {
-        size_t object_offset = i * cache->object_size;
-        void** obj = (void**) (block + object_offset);
+        void** obj = (void**) (block + i * cache->object_align);
         *obj = slab->free_list;
         slab->free_list = obj;
-        assert(slab->free_list != nullptr);
         slab->free_count++;
     }
+    assert(slab->free_count == object_count);
 
     return slab;
 }
@@ -55,6 +61,9 @@ static void* slab_cache_alloc_from_slab_lockless(slab_cache_t* cache) {
             spinlock_no_dpc_unlock(&cache->slab_lock);
             slab_t* new_slab = slab_cache_create_slab(cache);
             spinlock_no_dpc_lock(&cache->slab_lock);
+            if(new_slab == nullptr) {
+                return nullptr;
+            }
             list_push(&cache->slab_partial_list, &new_slab->list_node);
         }
     }
@@ -100,13 +109,14 @@ static size_t slab_cache_alloc_many_from_slab(slab_cache_t* cache, void** object
 /// @safety: Assumes cache->slab_lock is held
 static void slab_cache_free_to_slab_lockless(slab_cache_t* cache, void* object) {
     slab_t* slab = (slab_t*) (ALIGN_DOWN((uintptr_t) object, cache->slab_align) + cache->slab_size - sizeof(slab_t));
+    assert(slab->cache == cache);
 
     if(slab->free_count == 0) {
         list_node_delete(&cache->slab_full_list, &slab->list_node);
         list_push(&cache->slab_partial_list, &slab->list_node);
     }
 
-    if(slab->free_count + 1 == (cache->slab_size - sizeof(slab_t)) / cache->object_size) {
+    if(slab->free_count + 1 == slab_cache_object_count(cache)) {
         list_node_delete(&cache->slab_partial_list, &slab->list_node);
 
         if(cache->slab_empty) {
@@ -137,9 +147,41 @@ static void slab_cache_free_many_to_slab(slab_cache_t* cache, void** objects, si
     spinlock_no_dpc_unlock(&cache->slab_lock);
 }
 
+static slab_magazine_t* slab_cache_create_magazine(slab_cache_t* cache, bool full) {
+    slab_magazine_t* magazine = slab_cache_alloc_from_slab(&g_alloc_magazine);
+    if(magazine == nullptr) {
+        return nullptr;
+    }
+
+    magazine->rounds = full ? SLAB_MAGAZINE_SIZE : 0;
+    for(size_t i = 0; i < SLAB_MAGAZINE_SIZE; i++) {
+        if(full) {
+            void* object = slab_cache_alloc_from_slab(cache);
+            if(object == nullptr) {
+                magazine->rounds = i;
+                for(size_t j = i; j < SLAB_MAGAZINE_SIZE; j++) magazine->objects[j] = nullptr;
+                return magazine;
+            }
+            magazine->objects[i] = object;
+        } else {
+            magazine->objects[i] = nullptr;
+        }
+    }
+
+    return magazine;
+}
+
+static void slab_cache_destroy_magazine(slab_cache_t* cache, slab_magazine_t* magazine) {
+    for(size_t i = 0; i < magazine->rounds; i++) {
+        slab_cache_free_to_slab(cache, magazine->objects[i]);
+    }
+    slab_cache_free_to_slab(&g_alloc_magazine, magazine);
+}
+
 /// @safety: We call this function with dpcs and preemption already disabled
 static inline void* slab_cpu_alloc(slab_cpu_cache_t* cc) {
-    if(cc->primary->rounds == 0 && cc->secondary->rounds == SLAB_MAGAZINE_SIZE) {
+    /// swap whenever secondary has anything in it to keep it empty on an allocation miss
+    if(cc->primary->rounds == 0 && cc->secondary->rounds != 0) {
         slab_magazine_t* temp = cc->secondary;
         cc->secondary = cc->primary;
         cc->primary = temp;
@@ -159,7 +201,8 @@ static inline bool slab_cpu_free(slab_cpu_cache_t* cc, void* ptr) {
         return true;
     }
 
-    if(cc->secondary->rounds == 0) {
+    /// swap with a partially filled secondary so it ends up full on a free overflow
+    if(cc->secondary->rounds != SLAB_MAGAZINE_SIZE) {
         slab_magazine_t* temp = cc->secondary;
         cc->secondary = cc->primary;
         cc->primary = temp;
@@ -172,15 +215,35 @@ static inline bool slab_cpu_free(slab_cpu_cache_t* cc, void* ptr) {
 }
 
 slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t alignment) {
-    assert(object_size >= 8 && "object_size must be greater than 8 bytes");
-    assert(alignment > 0 && "alignment must be greater than 0");
+    assert(object_size >= sizeof(void*) && "object_size must be at least one pointer");
+    assert(IS_POWER_OF_TWO(alignment) && "alignment must be a power of two");
+
+    if(object_size > SIZE_MAX - (alignment - 1)) {
+        return nullptr;
+    }
+    size_t object_align = ALIGN_UP(object_size, alignment);
+
+    size_t slab_size = PAGE_SIZE_DEFAULT * 4;
+    while(slab_size < alignment || slab_size - sizeof(slab_t) < object_align) {
+        if(slab_size > SIZE_MAX / 2) {
+            return nullptr;
+        }
+        slab_size <<= 1;
+    }
 
     slab_cache_t* cache = slab_cache_alloc_from_slab(&g_alloc_cache);
+    if(cache == nullptr) {
+        return nullptr;
+    }
+
     cache->name = name;
     cache->object_size = object_size;
-    cache->slab_size = PAGE_SIZE_DEFAULT * 4;
-    cache->slab_align = PAGE_SIZE_DEFAULT * 4;
-    cache->cpu_cached = true;
+    cache->object_align = object_align;
+    cache->slab_size = slab_size;
+    cache->slab_align = slab_size;
+
+    /// Disable cpu caching for large objects
+    cache->cpu_cached = (object_align <= PAGE_SIZE_DEFAULT) && (slab_cache_object_count(cache) >= SLAB_MAGAZINE_SIZE / 4);
 
     cache->slab_lock = SPINLOCK_NO_DPC_INIT;
     cache->slab_full_list = LIST_INIT;
@@ -191,33 +254,101 @@ slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t ali
     cache->magazine_full_list = LIST_INIT;
     cache->magazine_empty_list = LIST_INIT;
 
-    for(size_t i = 0; i < SLAB_MAGAZINE_EXTRA; i++) {
-        slab_magazine_t* magazine = slab_cache_alloc_from_slab(&g_alloc_magazine);
-        magazine->rounds = 0;
-        for(size_t j = 0; j < SLAB_MAGAZINE_SIZE; j++) magazine->objects[j] = nullptr;
-        list_push(&cache->magazine_empty_list, &magazine->list_node);
-    }
-
-    if(cache->cpu_cached) {
-        for(size_t i = 0; i < g_init_boot_info->core_count; i++) {
-            slab_magazine_t* magazine_primary = slab_cache_alloc_from_slab(&g_alloc_magazine);
-            magazine_primary->rounds = SLAB_MAGAZINE_SIZE;
-            for(size_t j = 0; j < SLAB_MAGAZINE_SIZE; j++) magazine_primary->objects[j] = slab_cache_alloc_from_slab(cache);
-
-            slab_magazine_t* magazine_secondary = slab_cache_alloc_from_slab(&g_alloc_magazine);
-            magazine_secondary->rounds = 0;
-            for(size_t j = 0; j < SLAB_MAGAZINE_SIZE; j++) magazine_secondary->objects[j] = nullptr;
-
-            cache->cpu_caches[i].primary = magazine_primary;
-            cache->cpu_caches[i].secondary = magazine_secondary;
-        }
-    }
+    memory_zero(cache->cpu_caches, g_init_boot_info->core_count * sizeof(cache->cpu_caches[0]));
 
     spinlock_no_dpc_lock(&g_slab_caches_lock);
     list_push(&g_slab_caches, &cache->list_node);
     spinlock_no_dpc_unlock(&g_slab_caches_lock);
 
+    if(cache->cpu_cached) {
+        for(size_t i = 0; i < SLAB_MAGAZINE_EXTRA; i++) {
+            slab_magazine_t* magazine = slab_cache_create_magazine(cache, false);
+            if(magazine == nullptr) {
+                goto fail;
+            }
+            list_push(&cache->magazine_empty_list, &magazine->list_node);
+        }
+
+        for(size_t i = 0; i < g_init_boot_info->core_count; i++) {
+            slab_magazine_t* magazine_primary = slab_cache_create_magazine(cache, true);
+            cache->cpu_caches[i].primary = magazine_primary;
+            if(magazine_primary == nullptr || magazine_primary->rounds == 0) {
+                goto fail;
+            }
+
+            slab_magazine_t* magazine_secondary = slab_cache_create_magazine(cache, false);
+            cache->cpu_caches[i].secondary = magazine_secondary;
+            if(magazine_secondary == nullptr) {
+                goto fail;
+            }
+        }
+    }
+
     return cache;
+
+fail:
+    slab_cache_destroy(cache);
+    return nullptr;
+}
+
+void slab_cache_destroy(slab_cache_t* cache) {
+    if(cache == nullptr) {
+        return;
+    }
+
+    spinlock_no_dpc_lock(&g_slab_caches_lock);
+    list_node_delete(&g_slab_caches, &cache->list_node);
+    spinlock_no_dpc_unlock(&g_slab_caches_lock);
+
+    if(cache->cpu_cached) {
+        for(size_t i = 0; i < g_init_boot_info->core_count; i++) {
+            slab_cpu_cache_t* cc = &cache->cpu_caches[i];
+            if(cc->primary != nullptr) {
+                slab_cache_destroy_magazine(cache, cc->primary);
+            }
+            if(cc->secondary != nullptr) {
+                slab_cache_destroy_magazine(cache, cc->secondary);
+            }
+        }
+    }
+
+    spinlock_no_dpc_lock(&cache->magazine_lock);
+    while(cache->magazine_full_list.count > 0) {
+        slab_magazine_t* magazine = CONTAINER_OF(list_pop_front(&cache->magazine_full_list), slab_magazine_t, list_node);
+        slab_cache_destroy_magazine(cache, magazine);
+    }
+    while(cache->magazine_empty_list.count > 0) {
+        slab_magazine_t* magazine = CONTAINER_OF(list_pop_front(&cache->magazine_empty_list), slab_magazine_t, list_node);
+        slab_cache_destroy_magazine(cache, magazine);
+    }
+    spinlock_no_dpc_unlock(&cache->magazine_lock);
+
+    spinlock_no_dpc_lock(&cache->slab_lock);
+    assert(cache->slab_full_list.count == 0 && "cannot destroy a cache with full slabs");
+    assert(cache->slab_partial_list.count == 0 && "cannot destroy a cache with partial slabs");
+    if(cache->slab_empty != nullptr) {
+        slab_cache_destroy_slab(cache, cache->slab_empty);
+        cache->slab_empty = nullptr;
+    }
+    spinlock_no_dpc_unlock(&cache->slab_lock);
+
+    slab_cache_free(&g_alloc_cache, cache);
+}
+
+void slab_reclaim() {
+    spinlock_no_dpc_lock(&g_slab_caches_lock);
+    LIST_FOR_EACH(&g_slab_caches, node) {
+        slab_cache_t* cache = CONTAINER_OF(node, slab_cache_t, list_node);
+        spinlock_no_dpc_lock(&cache->slab_lock);
+        slab_t* slab = cache->slab_empty;
+        cache->slab_empty = nullptr;
+        spinlock_no_dpc_unlock(&cache->slab_lock);
+
+        if(slab != nullptr) {
+            slab_cache_destroy_slab(cache, slab);
+        }
+    }
+    spinlock_no_dpc_unlock(&g_slab_caches_lock);
 }
 
 void* slab_cache_alloc(slab_cache_t* cache) {
@@ -312,8 +443,10 @@ void slab_cache_free(slab_cache_t* cache, void* ptr) {
 }
 
 void slab_init() {
+    size_t cache_object_size = sizeof(slab_cache_t) + (g_init_boot_info->core_count * sizeof(slab_cpu_cache_t));
     g_alloc_cache = (slab_cache_t) { .name = "slab-cache",
-                                     .object_size = sizeof(slab_cache_t) + (g_init_boot_info->core_count * sizeof(slab_cpu_cache_t)),
+                                     .object_size = cache_object_size,
+                                     .object_align = ALIGN_UP(cache_object_size, alignof(slab_cache_t)),
                                      .slab_size = PAGE_SIZE_DEFAULT * 4,
                                      .slab_align = PAGE_SIZE_DEFAULT * 4,
                                      .slab_lock = SPINLOCK_NO_DPC_INIT,
@@ -325,8 +458,10 @@ void slab_init() {
                                      .magazine_empty_list = LIST_INIT,
                                      .cpu_cached = false };
 
+    size_t magazine_object_size = sizeof(slab_magazine_t);
     g_alloc_magazine = (slab_cache_t) { .name = "slab-magazine",
-                                        .object_size = sizeof(slab_magazine_t) + (SLAB_MAGAZINE_SIZE * sizeof(void*)),
+                                        .object_size = magazine_object_size,
+                                        .object_align = ALIGN_UP(magazine_object_size, alignof(slab_magazine_t)),
                                         .slab_size = PAGE_SIZE_DEFAULT * 2,
                                         .slab_align = PAGE_SIZE_DEFAULT * 2,
                                         .slab_lock = SPINLOCK_NO_DPC_INIT,

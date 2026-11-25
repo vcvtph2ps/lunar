@@ -38,6 +38,7 @@ struct slab {
 struct slab_cache {
     const char* name;
     size_t object_size;
+    size_t object_align;
     size_t slab_size;
     size_t slab_align;
 
@@ -69,14 +70,15 @@ void slab_reclaim();
 /**
  * @brief Create a slab cache for objects of a certain size and alignment
  * @param name Name of the cache (for debugging purposes)
- * @param object_size Size of objects in this cache (must be > 0)
+ * @param object_size Size of objects in this cache (must be at least sizeof(void*))
  * @param alignment Alignment of objects in this cache (must be a power of two)
  * @return Pointer to the created slab cache, or nullptr on failure
  */
 slab_cache_t* slab_cache_create(const char* name, size_t object_size, size_t alignment);
 
 /**
- * @brief Destroy a slab cache and free all associated memory. The caller must ensure that no objects allocated from this cache are still in use, as this function will not check for outstanding allocations
+ * @brief Destroy a slab cache and free all associated memory
+ * @note The caller must ensure that no objects allocated from this cache are still in use and that the cache is not accessed concurrently, as this function will not check for existing allocations
  */
 void slab_cache_destroy(slab_cache_t* cache);
 
