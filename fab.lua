@@ -2,10 +2,7 @@ local opt_arch = fab.option("arch", { "x86_64", "riscv64" }) or "x86_64"
 local opt_build_type = fab.option("buildtype", { "debug", "release" }) or "debug"
 
 local c = require("lang_c")
-local asm = require("lang_nasm")
 local linker = require("ld")
-
-local project_dir = fab.project_dir
 
 local clang = c.get_clang()
 assert(clang ~= nil, "No clang compiler found")
@@ -13,20 +10,22 @@ assert(clang ~= nil, "No clang compiler found")
 local ld = linker.get_linker("ld.lld")
 assert(ld ~= nil, "No ld.lld found")
 
+local python = fab.which("python3")
+assert(python ~= nil, "No python3 found")
+
 local prekernel_protocol = fab.dependency("prekernel-protocol")
 local flanterm = fab.dependency("flanterm")
 local uacpi = fab.dependency("uacpi")
 local zstd = fab.dependency("zstd")
-
-local python = fab.which("python3")
-assert(python ~= nil, "No python3 found")
+local libfdt = opt_arch == "riscv64" and fab.dependency("libfdt") or nil
 
 local zstd_gen_rule = fab.define_rule(
     "gen_zstd_decoder",
     python.path:gsub("@", "@@") .. " @IN@ " .. tostring(zstd) .. " @OUT@",
     "Generating freestanding zstd decoder @OUT@"
 )
-local zstd_gen_script = fab.resolve_source(project_dir / "scripts/zstd/gen-decoder.py")
+
+local zstd_gen_script = fab.resolve_source(fab.project_dir / "scripts/zstd/gen-decoder.py")
 local zstd_decoder = zstd_gen_rule:build("zstddeclib.c", { zstd_gen_script }, {}, {
     fab.resolve_source(zstd / "lib/common/zstd_deps.h"),
     fab.resolve_source(zstd / "lib/common/xxhash.h"),
@@ -34,113 +33,53 @@ local zstd_decoder = zstd_gen_rule:build("zstddeclib.c", { zstd_gen_script }, {}
     fab.resolve_source(zstd / "build/single_file_libs/combine.py"),
 })
 
-local function get_kernel_objs(kernel_flags, zstd_flags)
-    local kernel_sources = sources(project_dir:glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
-    table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/" .. opt_arch .. "/**/*.c")))
-    table.extend(kernel_sources, sources(project_dir:glob("kernel/src/arch/" .. opt_arch .. "/**/*.S")))
-    table.extend(kernel_sources, sources(uacpi:glob("source/*.c")))
-
-    local include_dirs = {
-        c.include_dir(project_dir / "kernel/include"),
-        c.include_dir(project_dir / "third_party"),
-        c.include_dir(zstd / "lib"),
-    }
-    table.insert(include_dirs, c.include_dir(prekernel_protocol / "pre_kernel/public"))
-    table.insert(include_dirs, c.include_dir(flanterm / "src"))
-    table.insert(include_dirs, c.include_dir(uacpi / "include"))
-
-    if opt_arch == "riscv64" then
-        local libfdt = fab.dependency("libfdt")
-        -- we need to include libfdt c files to override libfdt_env.h :/
-        table.insert(include_dirs, c.include_dir(libfdt / "libfdt"))
-        table.insert(include_dirs, c.include_dir(libfdt))
-    end
-
-
-    local generators = {
-        c = function(sources) return clang:generate(sources, kernel_flags, include_dirs) end
-    }
-
-    generators.S = function(sources) return clang:generate(sources, kernel_flags, include_dirs) end
-
-    local objects = generate(kernel_sources, generators)
-    table.insert(objects,
-        clang:compile_object("zstddeclib.o", zstd_decoder, include_dirs, zstd_flags, "zstddeclib.o.d"))
-    return objects
+-- @brief Return a copy of `flags` with `extra` appended.
+local function with_flags(flags, extra)
+    local result = {}
+    table.extend(result, flags)
+    table.extend(result, extra)
+    return result
 end
 
-local c_flags = {
+local function source_glob(pattern)
+    return sources(fab.project_dir:glob(pattern))
+end
+
+local base_flags = {
     "-std=gnu23",
     "-ffreestanding",
-
     "-fno-strict-aliasing",
     "-Wimplicit-fallthrough",
     "-Wmissing-field-initializers",
-
     "-fdiagnostics-color=always",
-    "-DUACPI_OVERRIDE_CONFIG"
+    "-DUACPI_OVERRIDE_CONFIG",
 }
 
--- Flags
-if opt_build_type == "release" then
-    table.extend(c_flags, {
-        "-O3",
-        "-flto",
-        "-g",
-        "-D__RELEASE__"
-    })
-elseif opt_build_type == "debug" then
-    table.extend(c_flags, {
-        "-Og",
-        "-g",
-        "-fno-lto",
-        "-fno-omit-frame-pointer",
-        "-D__DEBUG__"
-    })
+if opt_build_type == "debug" then
+    table.extend(base_flags, { "-Og", "-g", "-fno-lto", "-fno-omit-frame-pointer", "-D__DEBUG__" })
+else
+    table.extend(base_flags, { "-O3", "-flto", "-g", "-D__RELEASE__" })
 end
 
-if opt_arch == "x86_64" then
-    table.extend(c_flags, {
+local target_flags
+if opt_arch == "riscv64" then
+    target_flags = {
+        "--target=riscv64-none-elf",
+        "-march=rv64imac_zicsr_zifencei_zihintpause",
+        "-mabi=lp64",
+        "-mcmodel=medlow",
+    }
+else
+    target_flags = {
         "--target=x86_64-none-elf",
         "-mno-red-zone",
         "-mgeneral-regs-only",
         "-mabi=sysv",
-        "-mcmodel=kernel"
-    })
-elseif opt_arch == "riscv64" then
-    table.extend(c_flags, {
-        "--target=riscv64-none-elf",
-        "-march=rv64imac_zicsr_zifencei_zihintpause",
-        "-mabi=lp64",
-        "-mcmodel=medlow"
-    })
+        "-mcmodel=kernel",
+    }
 end
 
-local objects = {}
-
-local other_flags = {}
-table.extend(other_flags, c_flags)
-table.extend(other_flags, {
-    "-Wall",
-    "-Wextra",
-})
-
-local flanterm_flags = {}
-table.extend(flanterm_flags, c_flags)
-table.insert(flanterm_flags, "-DFLANTERM_FB_DISABLE_BUMP_ALLOC")
-
-local flanterm_sources = {}
-table.extend(flanterm_sources, sources(flanterm:glob("src/*.c")))
-local flanterm_objects = generate(flanterm_sources, {
-    c = function(sources)
-        return clang:generate(sources, flanterm_flags, c.include_dir(flanterm / "src"))
-    end
-})
-table.extend(objects, flanterm_objects)
-
-local kernel_flags = {}
-table.extend(kernel_flags, c_flags)
-table.extend(kernel_flags, {
+local warning_flags = {
     "-Wall",
     "-Wextra",
     "-Wvla",
@@ -153,22 +92,19 @@ table.extend(kernel_flags, {
     "-Wmissing-prototypes",
     "-Wdocumentation",
     "-Wmissing-noreturn",
-})
+}
+
+local kernel_base_flags = with_flags(base_flags, target_flags)
+local kernel_flags = with_flags(kernel_base_flags, warning_flags)
 
 if opt_build_type == "debug" then
-    table.extend(kernel_flags, {
-        "-fsanitize=undefined",
-        "-fstack-protector-all"
-    })
-elseif opt_build_type == "release" then
-    table.extend(kernel_flags, {
-        "-fstack-protector-strong"
-    })
+    table.extend(kernel_flags, { "-fsanitize=undefined", "-fstack-protector-all" })
+else
+    table.extend(kernel_flags, { "-fstack-protector-strong" })
 end
 
-local zstd_flags = {}
-table.extend(zstd_flags, c_flags)
-table.extend(zstd_flags, {
+local flanterm_flags = with_flags(kernel_base_flags, { "-DFLANTERM_FB_DISABLE_BUMP_ALLOC" })
+local zstd_kernel_flags = with_flags(kernel_base_flags, {
     "-Os",
     "-g0",
     "-fomit-frame-pointer",
@@ -176,13 +112,65 @@ table.extend(zstd_flags, {
     "-fno-stack-protector",
 })
 
-table.extend(objects, get_kernel_objs(kernel_flags, zstd_flags))
+local function include_dirs(extra)
+    local result = {
+        c.include_dir(fab.project_dir / "kernel/include"),
+        c.include_dir(fab.project_dir / "third_party"),
+        c.include_dir(prekernel_protocol / "pre_kernel/public"),
+        c.include_dir(flanterm / "src"),
+        c.include_dir(uacpi / "include"),
+        c.include_dir(zstd / "lib"),
+    }
+    if libfdt ~= nil then
+        table.extend(result, { c.include_dir(libfdt / "libfdt"), c.include_dir(libfdt) })
+    end
+    table.extend(result, extra)
+    return result
+end
 
-local linker_script = fab.resolve_source(project_dir / ("support/" .. opt_arch .. ".lds"))
+local kernel_include_dirs = include_dirs({})
+
+local function compile_sources(srcs, flags, directories, prefix)
+    local objects = {}
+    for _, source in ipairs(srcs) do
+        local name = prefix .. generator_artifact_name(source) .. ".o"
+        table.insert(objects, clang:compile_object(name, source, directories, flags, name .. ".d"))
+    end
+    return objects
+end
+
+local common_sources = {}
+for _, pattern in ipairs({
+    "kernel/src/common/**/*.c",
+    "kernel/src/fdt/**/*.c",
+    "kernel/src/init/**/*.c",
+    "kernel/src/lib/**/*.c",
+    "kernel/src/memory/**/*.c",
+    "kernel/src/runtime/**/*.c",
+}) do
+    table.extend(common_sources, source_glob(pattern))
+end
+
+local arch_sources = source_glob("kernel/src/arch/" .. opt_arch .. "/**/*.c")
+local arch_asm_sources = source_glob("kernel/src/arch/" .. opt_arch .. "/**/*.S")
+local uacpi_sources = sources(uacpi:glob("source/*.c"))
+local flanterm_sources = sources(flanterm:glob("src/*.c"))
+
+local kernel_sources = {}
+table.extend(kernel_sources, common_sources)
+table.extend(kernel_sources, arch_sources)
+table.extend(kernel_sources, arch_asm_sources)
+table.extend(kernel_sources, uacpi_sources)
+
+local objects = compile_sources(kernel_sources, kernel_flags, kernel_include_dirs, "")
+table.extend(objects, compile_sources(flanterm_sources, flanterm_flags, { c.include_dir(flanterm / "src") }, ""))
+table.insert(objects,
+    clang:compile_object("zstddeclib.o", zstd_decoder, kernel_include_dirs, zstd_kernel_flags, "zstddeclib.o.d"))
+
 local kernel = ld:link("kernel.elf", objects, {
-    "-znoexecstack"
-}, linker_script)
+    "-znoexecstack",
+}, fab.resolve_source(fab.project_dir / ("support/" .. opt_arch .. ".lds")))
 
 return {
-    ["kernel.elf"] = kernel
+    ["kernel.elf"] = kernel,
 }

@@ -61,6 +61,20 @@ def replace_once(path: Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new))
 
 
+def ensure_deps_include(path: Path) -> None:
+    text = path.read_text()
+    include = '#include "common/zstd_deps.h"\n'
+    first_source = '#include "common/debug.c"'
+
+    if first_source not in text:
+        print(f"gen-decoder: missing {first_source!r} in {path}", file=sys.stderr)
+        raise SystemExit(1)
+
+    text = text.replace(include, "")
+    text = text.replace(first_source, include + "\n" + first_source, 1)
+    path.write_text(text)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("zstd_src", type=Path)
@@ -81,11 +95,9 @@ def main() -> None:
         replace_once(work / "lib/common/zstd_deps.h", DEPS_STRING_OLD, DEPS_STRING_NEW)
         replace_once(work / "lib/common/zstd_deps.h", DEPS_MALLOC_OLD, DEPS_MALLOC_NEW)
         replace_once(work / "lib/common/xxhash.h", XXHASH_OLD, XXHASH_NEW)
-        replace_once(
-            work / "build/single_file_libs/zstddeclib-in.c",
-            DECODER_IN_OLD,
-            DECODER_IN_NEW,
-        )
+        decoder_in = work / "build/single_file_libs/zstddeclib-in.c"
+        replace_once(decoder_in, DECODER_IN_OLD, DECODER_IN_NEW)
+        ensure_deps_include(decoder_in)
 
         combined = Path(tmp) / "zstddeclib.c"
         subprocess.run(
