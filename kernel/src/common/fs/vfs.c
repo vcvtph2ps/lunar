@@ -549,7 +549,10 @@ vfs_result_t vfs_path_to(vfs_node_t* node, char** out_buf, size_t* out_size) {
     buf[end] = '\0';
 
     size_t pos = end;
-    for(vfs_dentry_t* d = dentry; d != nullptr && d->name_length > 0; d = d->parent) {
+    for(vfs_dentry_t* d = dentry; d != nullptr; d = d->parent) {
+        if(d->name_length == 0)
+            continue;
+
         pos -= d->name_length;
         memory_copy(buf + pos, d->name, d->name_length);
         buf[--pos] = '/';
