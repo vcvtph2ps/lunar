@@ -300,6 +300,7 @@ static syscall_ret_t syscall_fs_getcwd(syscall_args_t* argument_data, void* buff
     size_t path_size;
     vfs_result_t result = vfs_path_to(cwd, &path, &path_size);
     if(syscall_from_vfs_result(result).is_error) {
+        heap_free(upath, sizeof(userptr_t));
         return syscall_from_vfs_result(result);
     }
 
