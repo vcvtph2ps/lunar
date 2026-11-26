@@ -36,7 +36,7 @@ typedef struct {
     uapi_gid_t st_gid;
     uint64_t st_rdev;
     uint64_t st_size;
-    uint64_t st_blksize;
+    int64_t st_blksize;
     int64_t st_blocks;
     uapi_timespec_t st_atim;
     uapi_timespec_t st_mtim;
