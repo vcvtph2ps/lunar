@@ -14,6 +14,7 @@
 #include <memory/heap.h>
 #include <uapi/ioctls.h>
 #include <uapi/signal.h>
+#include <uapi/termios.h>
 
 // default input characters handled by the canonical mode
 // probably gonna forgot what these mean in like, a few days
@@ -58,16 +59,18 @@ tty_t* tty_create() {
     tty->eof = false;
     ATOMIC_STORE(&tty->foreground_pgid, 0, ATOMIC_RELAXED);
 
-    tty->mode.canonical = true;
-    tty->mode.echo = true;
-    tty->mode.echo_ctrl = true;
+    tty->current_mode.canonical = true;
+    tty->current_mode.echo = true;
+    tty->current_mode.echo_ctrl = true;
+    tty->current_mode.signal = true;
+    ATOMIC_STORE(&tty->line_count, 0, ATOMIC_RELAXED);
 
-    tty->mode.control_chars.backspace = CHAR_BACKSPACE;
-    tty->mode.control_chars.intr = CHAR_INTR;
-    tty->mode.control_chars.eof = CHAR_EOF;
-    tty->mode.control_chars.kill = CHAR_KILL;
-    tty->mode.control_chars.erase_word = CHAR_ERASE_WORD;
-    tty->mode.control_chars.del = CHAR_DEL;
+    tty->current_mode.control_chars.backspace = CHAR_BACKSPACE;
+    tty->current_mode.control_chars.intr = CHAR_INTR;
+    tty->current_mode.control_chars.eof = CHAR_EOF;
+    tty->current_mode.control_chars.kill = CHAR_KILL;
+    tty->current_mode.control_chars.erase_word = CHAR_ERASE_WORD;
+    tty->current_mode.control_chars.del = CHAR_DEL;
 
     tty->on_write = nullptr;
     tty->write_ctx = nullptr;
@@ -120,7 +123,7 @@ void tty_recv_generic(void* ctx, char c) {
 
 /// @brief Echo a single byte to the output if enabled
 static void tty_echo(tty_t* tty, uint8_t c) {
-    if(tty->on_write == nullptr || !tty->mode.echo) {
+    if(tty->on_write == nullptr || !tty->current_mode.echo) {
         return;
     }
     if(c == '\n') {
@@ -131,7 +134,7 @@ static void tty_echo(tty_t* tty, uint8_t c) {
 
 /// @brief Echo a control character as ^X if enabled
 static void tty_echo_ctrl(tty_t* tty, uint8_t c) {
-    if(tty->on_write == nullptr || !tty->mode.echo || !tty->mode.echo_ctrl) {
+    if(tty->on_write == nullptr || !tty->current_mode.echo || !tty->current_mode.echo_ctrl) {
         return;
     }
     tty->on_write(tty->write_ctx, '^');
@@ -141,7 +144,7 @@ static void tty_echo_ctrl(tty_t* tty, uint8_t c) {
 
 /// @brief Echo a line ending, moving the cursor back to column 0 on the next line
 static void tty_echo_newline(tty_t* tty) {
-    if(tty->on_write == nullptr || !tty->mode.echo) {
+    if(tty->on_write == nullptr || !tty->current_mode.echo) {
         return;
     }
     tty->on_write(tty->write_ctx, '\r');
@@ -150,7 +153,7 @@ static void tty_echo_newline(tty_t* tty) {
 
 /// @brief Echo an input byte the way it should appear on screen
 static void tty_echo_char(tty_t* tty, uint8_t c) {
-    if(!tty->mode.echo) {
+    if(!tty->current_mode.echo) {
         return;
     }
     if(c == '\n') {
@@ -187,7 +190,7 @@ static void tty_erase_one(tty_t* tty) {
     }
     uint8_t last = tty->buf[ring_prev(tty->head)];
     tty->head = ring_prev(tty->head);
-    if(tty->on_write == nullptr || !tty->mode.echo) {
+    if(tty->on_write == nullptr || !tty->current_mode.echo) {
         return;
     }
     int cols = tty_echo_cols(last);
@@ -248,11 +251,12 @@ static void tty_handle_eof(tty_t* tty) {
 }
 
 /// @note Must hold the tty lock
-static void tty_handle_intr(tty_t* tty) {
+static void tty_handle_intr(tty_t* tty, uint8_t c) {
     tty_kill_line(tty);
-    tty_echo_ctrl(tty, CHAR_INTR);
+    tty_echo_ctrl(tty, c);
     tty_echo_newline(tty);
-    tty_signal_foreground(tty, UAPI_SIGNAL_INT);
+    if(tty->current_mode.signal)
+        tty_signal_foreground(tty, UAPI_SIGNAL_INT);
 }
 
 static bool tty_put_canonical(tty_t* tty, uint8_t c) {
@@ -262,34 +266,31 @@ static bool tty_put_canonical(tty_t* tty, uint8_t c) {
         c = '\n';
     }
 
+    const tty_mode_t* mode = &tty->current_mode;
     bool wake = false;
-    switch(c) {
-        case '\n': {
-            // Commit the current line, making it visible to readers.
-            if(tty_put_raw(tty, '\n')) {
-                tty->commit = tty->head;
-                tty->eof = false;
-                ATOMIC_LOAD_ADD(&tty->line_count, 1, ATOMIC_RELEASE);
-                tty_echo_newline(tty);
-                wake = true;
-            }
-            break;
-        }
-        case CHAR_BACKSPACE:
-        case CHAR_DEL:        tty_erase_char(tty); break;
-        case CHAR_KILL:       tty_kill_line(tty); break;
-        case CHAR_ERASE_WORD: tty_erase_word(tty); break;
-        case CHAR_INTR:       tty_handle_intr(tty); break;
-        case CHAR_EOF:
-            tty_handle_eof(tty);
+    if(c == '\n') {
+        // Commit the current line, making it visible to readers.
+        if(tty_put_raw(tty, '\n')) {
+            tty->commit = tty->head;
+            tty->eof = false;
+            ATOMIC_LOAD_ADD(&tty->line_count, 1, ATOMIC_RELEASE);
+            tty_echo_newline(tty);
             wake = true;
-            break;
-        default:
-            if(tty_put_raw(tty, c)) {
-                tty->eof = false;
-                tty_echo_char(tty, c);
-            }
-            break;
+        }
+    } else if(c == mode->control_chars.backspace || c == mode->control_chars.del) {
+        tty_erase_char(tty);
+    } else if(c == mode->control_chars.kill) {
+        tty_kill_line(tty);
+    } else if(c == mode->control_chars.erase_word) {
+        tty_erase_word(tty);
+    } else if(mode->signal && c == mode->control_chars.intr) {
+        tty_handle_intr(tty, c);
+    } else if(c == mode->control_chars.eof) {
+        tty_handle_eof(tty);
+        wake = true;
+    } else if(tty_put_raw(tty, c)) {
+        tty->eof = false;
+        tty_echo_char(tty, c);
     }
 
     if(wake) {
@@ -301,7 +302,7 @@ static bool tty_put_canonical(tty_t* tty, uint8_t c) {
 bool tty_put(tty_t* tty, uint8_t c) {
     lock_acquire(&tty->lock);
 
-    if(tty->mode.canonical) {
+    if(tty->current_mode.canonical) {
         bool res = tty_put_canonical(tty, c);
         lock_release(&tty->lock);
         tty_flush(tty);
@@ -433,12 +434,50 @@ static vfs_result_t tty_vfs_read(tty_t* tty, io_request_t* request) {
         }
     }
 
-    if(tty->mode.canonical && line_done) {
+    if(tty->current_mode.canonical && line_done) {
         ATOMIC_LOAD_SUB(&tty->line_count, 1, ATOMIC_RELEASE);
     }
 
     lock_release(&tty->lock);
     return VFS_RESULT_OK;
+}
+
+static inline uapi_termios_t tty_to_termios(tty_mode_t mode) {
+    uapi_termios_t termios = {};
+    if(mode.canonical)
+        termios.c_lflag |= UAPI_TERMIOS_ICANON;
+    if(mode.echo)
+        termios.c_lflag |= UAPI_TERMIOS_ECHO;
+    if(mode.echo_ctrl)
+        termios.c_lflag |= UAPI_TERMIOS_ECHOCTL;
+    if(mode.signal)
+        termios.c_lflag |= UAPI_TERMIOS_ISIG;
+    termios.c_cc[UAPI_TERMIOS_VINTR] = mode.control_chars.intr;
+    termios.c_cc[UAPI_TERMIOS_VERASE] = mode.control_chars.backspace;
+    termios.c_cc[UAPI_TERMIOS_VKILL] = mode.control_chars.kill;
+    termios.c_cc[UAPI_TERMIOS_VEOF] = mode.control_chars.eof;
+    termios.c_cc[UAPI_TERMIOS_VWERASE] = mode.control_chars.erase_word;
+    return termios;
+}
+
+static inline uint8_t tty_control_char(uint8_t value, uint8_t fallback) {
+    /// @note A zero c_cc entry means the control character is disabled
+    return value == 0 ? fallback : value;
+}
+
+static inline tty_mode_t termios_to_tty(uapi_termios_t termios) {
+    tty_mode_t mode = {};
+    mode.canonical = (termios.c_lflag & UAPI_TERMIOS_ICANON) != 0;
+    mode.echo = (termios.c_lflag & UAPI_TERMIOS_ECHO) != 0;
+    mode.echo_ctrl = (termios.c_lflag & UAPI_TERMIOS_ECHOCTL) != 0;
+    mode.signal = (termios.c_lflag & UAPI_TERMIOS_ISIG) != 0;
+    mode.control_chars.intr = tty_control_char(termios.c_cc[UAPI_TERMIOS_VINTR], CHAR_INTR);
+    mode.control_chars.backspace = tty_control_char(termios.c_cc[UAPI_TERMIOS_VERASE], CHAR_BACKSPACE);
+    mode.control_chars.kill = tty_control_char(termios.c_cc[UAPI_TERMIOS_VKILL], CHAR_KILL);
+    mode.control_chars.eof = tty_control_char(termios.c_cc[UAPI_TERMIOS_VEOF], CHAR_EOF);
+    mode.control_chars.erase_word = tty_control_char(termios.c_cc[UAPI_TERMIOS_VWERASE], CHAR_ERASE_WORD);
+    mode.control_chars.del = CHAR_DEL;
+    return mode;
 }
 
 static vfs_result_t tty_ioctl(tty_t* tty, io_request_t* request) {
@@ -455,8 +494,39 @@ static vfs_result_t tty_ioctl(tty_t* tty, io_request_t* request) {
         }
         request->ioctl.buffer.size = sizeof(winsize);
         return VFS_RESULT_OK;
+    } else if(request->ioctl.request == UAPI_IOCTLS_TCGETS) {
+        lock_acquire(&tty->lock);
+        uapi_termios_t termios = tty_to_termios(tty->current_mode);
+        lock_release(&tty->lock);
+        size_t sz = vm_copy_to(request->ioctl.buffer.address_space, (uintptr_t) request->ioctl.buffer.buffer, &termios, sizeof(termios));
+        if(sz != sizeof(termios)) {
+            return VFS_RESULT_ERR_FAULT;
+        }
+        request->ioctl.buffer.size = sizeof(termios);
+        return VFS_RESULT_OK;
+    } else if(request->ioctl.request == UAPI_IOCTLS_TCSETS || request->ioctl.request == UAPI_IOCTLS_TCSETSW || request->ioctl.request == UAPI_IOCTLS_TCSETSF) {
+        uapi_termios_t termios;
+        size_t sz = vm_copy_from(&termios, request->ioctl.buffer.address_space, (uintptr_t) request->ioctl.buffer.buffer, sizeof(termios));
+        if(sz != sizeof(termios)) {
+            return VFS_RESULT_ERR_FAULT;
+        }
+        tty_mode_t mode = termios_to_tty(termios);
+        lock_acquire(&tty->lock);
+        switch(request->ioctl.request) {
+            case UAPI_IOCTLS_TCSETS:  break;
+            case UAPI_IOCTLS_TCSETSW: /* we need to flush the tty output buffer, tho we never *really* handle that */ break;
+            case UAPI_IOCTLS_TCSETSF:
+                tty->head = 0;
+                tty->tail = 0;
+                tty->commit = 0;
+                tty->eof = false;
+                ATOMIC_STORE(&tty->line_count, 0, ATOMIC_RELEASE);
+                break;
+        }
+        tty->current_mode = mode;
+        lock_release(&tty->lock);
+        return VFS_RESULT_OK;
     }
-
 
     return VFS_RESULT_ERR_UNSUPPORTED_IOCTL;
 }

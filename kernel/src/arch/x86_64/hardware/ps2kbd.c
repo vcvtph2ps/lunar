@@ -42,17 +42,51 @@ static bool g_rctrl_pressed = false;
 
 static dpc_t* g_ps2kbd_dpc;
 
-static char translate_next_scancode() {
-    if(g_scancode_ring_buffer_tail == g_scancode_ring_buffer_head) {
-        return 0;
+#define SCANCODE_SEQ_MAX 4
+
+typedef struct {
+    uint8_t bytes[4];
+    size_t len;
+    bool need_more;
+} scancode_seq_t;
+
+static scancode_seq_t scancode_empty() {
+    return (scancode_seq_t) {};
+}
+
+static scancode_seq_t scancode_pending() {
+    return (scancode_seq_t) { .need_more = true };
+}
+
+static scancode_seq_t scancode_string(const char* str) {
+    scancode_seq_t seq = {};
+    while(*str != '\0') {
+        seq.bytes[seq.len++] = (uint8_t) *str++;
     }
+    return seq;
+}
+
+static scancode_seq_t scancode_char(uint8_t c) {
+    scancode_seq_t seq = {};
+    if(c != 0) {
+        seq.bytes[0] = c;
+        seq.len = 1;
+    }
+    return seq;
+}
+
+static scancode_seq_t translate_next_scancode() {
+    if(g_scancode_ring_buffer_tail == g_scancode_ring_buffer_head) {
+        return scancode_empty();
+    }
+
     bool prefixed = false;
     uint8_t scancode = g_scancode_ring_buffer[g_scancode_ring_buffer_tail];
     if(scancode == 0xE0) {
         prefixed = true;
         size_t next_index = (g_scancode_ring_buffer_tail + 1) % SCANCODE_RING_BUFFER_SIZE;
         if(next_index == g_scancode_ring_buffer_head) {
-            return 0;
+            return scancode_pending();
         }
         scancode = g_scancode_ring_buffer[next_index];
         g_scancode_ring_buffer_tail = next_index;
@@ -60,31 +94,60 @@ static char translate_next_scancode() {
 
     g_scancode_ring_buffer_tail = (g_scancode_ring_buffer_tail + 1) % SCANCODE_RING_BUFFER_SIZE;
 
-    if(!prefixed && scancode == KEY_LSHIFT_PRESSED) {
-        g_lshift_pressed = true;
-    } else if(!prefixed && scancode == KEY_LSHIFT_RELEASED) {
-        g_lshift_pressed = false;
-    } else if(!prefixed && scancode == KEY_RSHIFT_PRESSED) {
-        g_rshift_pressed = true;
-    } else if(!prefixed && scancode == KEY_RSHIFT_RELEASED) {
-        g_rshift_pressed = false;
-    } else if(!prefixed && scancode == KEY_LCTRL_PRESSED) {
-        g_lctrl_pressed = true;
-    } else if(!prefixed && scancode == KEY_LCTRL_RELEASED) {
-        g_lctrl_pressed = false;
-    } else if(prefixed && scancode == KEY_LCTRL_PRESSED) {
-        g_rctrl_pressed = true;
-    } else if(prefixed && scancode == KEY_LCTRL_RELEASED) {
-        g_rctrl_pressed = false;
+    if(prefixed) {
+        if(scancode == KEY_LCTRL_PRESSED) {
+            g_rctrl_pressed = true;
+            return scancode_empty();
+        }
+        if(scancode == KEY_LCTRL_RELEASED) {
+            g_rctrl_pressed = false;
+            return scancode_empty();
+        }
+
+        switch(scancode) {
+            case 0x48: return scancode_string("\e[A"); // up
+            case 0x50: return scancode_string("\e[B"); // down
+            case 0x4D: return scancode_string("\e[C"); // right
+            case 0x4B: return scancode_string("\e[D"); // left
+            case 0x49: return scancode_string("\e[5~"); // page up
+            case 0x51: return scancode_string("\e[6~"); // page down
+            case 0x47: return scancode_string("\e[H"); // home
+            case 0x4F: return scancode_string("\e[F"); // end
+            case 0x52: return scancode_string("\e[2~"); // insert
+            case 0x53: return scancode_string("\e[3~"); // delete
+            case 0x1C: return scancode_char('\n'); // keypad enter
+            case 0x35: return scancode_char('/'); // keypad divide
+            case 0x37: return scancode_char('*'); // keypad multiply
+            case 0x4E: return scancode_char('+'); // keypad add
+            default:   return scancode_empty(); // key releases and unhandled keys
+        }
     }
 
-    if(g_lctrl_pressed || g_rctrl_pressed) {
-        return g_lower_ascii_codes[scancode] & 0x1f;
-    } else if(g_lshift_pressed || g_rshift_pressed) {
-        return g_upper_ascii_codes[scancode];
-    } else {
-        return g_lower_ascii_codes[scancode];
+    if(scancode == KEY_LSHIFT_PRESSED) {
+        g_lshift_pressed = true;
+    } else if(scancode == KEY_LSHIFT_RELEASED) {
+        g_lshift_pressed = false;
+    } else if(scancode == KEY_RSHIFT_PRESSED) {
+        g_rshift_pressed = true;
+    } else if(scancode == KEY_RSHIFT_RELEASED) {
+        g_rshift_pressed = false;
+    } else if(scancode == KEY_LCTRL_PRESSED) {
+        g_lctrl_pressed = true;
+    } else if(scancode == KEY_LCTRL_RELEASED) {
+        g_lctrl_pressed = false;
+    } else if(scancode & 0x80) {
+        return scancode_empty(); // break code for a regular key
     }
+
+    uint8_t c;
+    if(g_lctrl_pressed || g_rctrl_pressed) {
+        c = g_lower_ascii_codes[scancode] & 0x1f;
+    } else if(g_lshift_pressed || g_rshift_pressed) {
+        c = g_upper_ascii_codes[scancode];
+    } else {
+        c = g_lower_ascii_codes[scancode];
+    }
+    return scancode_char(c);
 }
 
 static void ps2kbd_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
@@ -93,7 +156,8 @@ static void ps2kbd_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
 
     uint16_t scancode = arch_i8042_port_read(false);
     if(scancode == ARCH_I8042_READ_FAILED) {
-        LOG_WARN("ps2kbd: failed to read in irq!");
+        LOG_WARN("ps2kbd: failed to read in irq!\n");
+        return;
     }
     g_scancode_ring_buffer[g_scancode_ring_buffer_head] = scancode;
     g_scancode_ring_buffer_head = (g_scancode_ring_buffer_head + 1) % SCANCODE_RING_BUFFER_SIZE;
@@ -102,16 +166,19 @@ static void ps2kbd_interrupt_handler(arch_interrupt_frame_t* frame, void* ctx) {
 
 static void ps2kbd_dpc_handler(void* data) {
     (void) data;
-    if(!tty_get_default()) {
+    tty_t* tty = tty_get_default();
+    if(!tty) {
         g_scancode_ring_buffer_tail = g_scancode_ring_buffer_head;
         return;
     }
 
     while(g_scancode_ring_buffer_tail != g_scancode_ring_buffer_head) {
-        int translated = translate_next_scancode();
-        if(translated == 0)
+        scancode_seq_t seq = translate_next_scancode();
+        if(seq.need_more)
             break;
-        tty_put(tty_get_default(), translated);
+        for(size_t i = 0; i < seq.len; i++) {
+            tty_put(tty, seq.bytes[i]);
+        }
     }
 }
 
